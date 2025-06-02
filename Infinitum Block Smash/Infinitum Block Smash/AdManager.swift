@@ -1,13 +1,21 @@
 import GoogleMobileAds
 import SwiftUI
 
+// MARK: - Ad Configuration
+struct AdConfig {
+    static let bannerAdUnitID = "ca-app-pub-6815311336585204/5099168416"
+    static let interstitialAdUnitID = "ca-app-pub-6815311336585204/3176321467"
+    static let rewardedAdUnitID = "ca-app-pub-6815311336585204/5802484807"
+    
+    #if DEBUG
+    static let testBannerAdUnitID = "ca-app-pub-3940256099942544/2934735716"
+    static let testInterstitialAdUnitID = "ca-app-pub-3940256099942544/4411468910"
+    static let testRewardedAdUnitID = "ca-app-pub-3940256099942544/1712485313"
+    #endif
+}
+
 class AdManager: NSObject, ObservableObject, FullScreenContentDelegate {
     static let shared = AdManager()
-    
-    // Ad Unit IDs
-    private let bannerAdUnitID = "ca-app-pub-6815311336585204/5099168416"
-    private let interstitialAdUnitID = "ca-app-pub-6815311336585204/3176321467"
-    private let rewardedAdUnitID = "ca-app-pub-6815311336585204/5802484807"
     
     // Ad instances
     private var interstitial: InterstitialAd?
@@ -28,7 +36,11 @@ class AdManager: NSObject, ObservableObject, FullScreenContentDelegate {
     // MARK: - Banner Ad Preloading
     func preloadBanner() {
         let banner = BannerView(adSize: AdSizeBanner)
-        banner.adUnitID = bannerAdUnitID
+        #if DEBUG
+        banner.adUnitID = AdConfig.testBannerAdUnitID
+        #else
+        banner.adUnitID = AdConfig.bannerAdUnitID
+        #endif
         banner.rootViewController = UIApplication.shared.connectedScenes
             .compactMap { ($0 as? UIWindowScene)?.windows.first?.rootViewController }
             .first
@@ -39,7 +51,8 @@ class AdManager: NSObject, ObservableObject, FullScreenContentDelegate {
     // MARK: - Interstitial Ads
     func loadInterstitial() {
         let request = Request()
-        InterstitialAd.load(with: interstitialAdUnitID, request: request) { [weak self] ad, error in
+        #if DEBUG
+        InterstitialAd.load(with: AdConfig.testInterstitialAdUnitID, request: request) { [weak self] ad, error in
             if let error = error {
                 print("Failed to load interstitial ad with error: \(error.localizedDescription)")
                 return
@@ -47,6 +60,16 @@ class AdManager: NSObject, ObservableObject, FullScreenContentDelegate {
             self?.interstitial = ad
             self?.interstitial?.fullScreenContentDelegate = self
         }
+        #else
+        InterstitialAd.load(with: AdConfig.interstitialAdUnitID, request: request) { [weak self] ad, error in
+            if let error = error {
+                print("Failed to load interstitial ad with error: \(error.localizedDescription)")
+                return
+            }
+            self?.interstitial = ad
+            self?.interstitial?.fullScreenContentDelegate = self
+        }
+        #endif
     }
     
     func showInterstitial(from root: UIViewController) {
@@ -61,7 +84,8 @@ class AdManager: NSObject, ObservableObject, FullScreenContentDelegate {
     // MARK: - Rewarded Interstitial Ads
     func loadRewardedInterstitial() {
         let request = Request()
-        RewardedInterstitialAd.load(with: rewardedAdUnitID, request: request) { [weak self] ad, error in
+        #if DEBUG
+        RewardedInterstitialAd.load(with: AdConfig.testRewardedAdUnitID, request: request) { [weak self] ad, error in
             if let error = error {
                 print("Failed to load rewarded interstitial ad with error: \(error.localizedDescription)")
                 return
@@ -69,6 +93,16 @@ class AdManager: NSObject, ObservableObject, FullScreenContentDelegate {
             self?.rewardedInterstitial = ad
             self?.rewardedInterstitial?.fullScreenContentDelegate = self
         }
+        #else
+        RewardedInterstitialAd.load(with: AdConfig.rewardedAdUnitID, request: request) { [weak self] ad, error in
+            if let error = error {
+                print("Failed to load rewarded interstitial ad with error: \(error.localizedDescription)")
+                return
+            }
+            self?.rewardedInterstitial = ad
+            self?.rewardedInterstitial?.fullScreenContentDelegate = self
+        }
+        #endif
     }
     
     func showRewardedInterstitial(from root: UIViewController, onReward: @escaping () -> Void) {

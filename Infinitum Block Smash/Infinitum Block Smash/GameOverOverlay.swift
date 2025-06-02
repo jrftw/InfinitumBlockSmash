@@ -16,35 +16,32 @@ struct GameOverOverlay: View {
                         Text("Game Over")
                             .font(.system(size: 36, weight: .bold))
                             .foregroundColor(.white)
+                            .accessibilityAddTraits(.isHeader)
                         
-                        Text("Final Score: \(score)")
-                            .font(.title2)
-                            .foregroundColor(.white)
-                        
-                        Text("Level Reached: \(level)")
-                            .font(.title3)
-                            .foregroundColor(.yellow)
+                        VStack(spacing: 8) {
+                            Text("Final Score: \(score)")
+                                .font(.title2)
+                                .foregroundColor(.white)
+                                .accessibilityLabel("Final score: \(score)")
+                            
+                            Text("Level Reached: \(level)")
+                                .font(.title3)
+                                .foregroundColor(.yellow)
+                                .accessibilityLabel("Level reached: \(level)")
+                        }
                         
                         VStack(spacing: 16) {
                             Button(action: onRetry) {
-                                Text("Try Again")
-                                    .font(.headline)
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 40)
-                                    .padding(.vertical, 14)
-                                    .background(Color.blue)
-                                    .cornerRadius(12)
+                                Label("Try Again", systemImage: "arrow.clockwise")
                             }
+                            .primaryButton()
+                            .accessibilityHint("Start a new game")
                             
                             Button(action: onMainMenu) {
-                                Text("Main Menu")
-                                    .font(.headline)
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 40)
-                                    .padding(.vertical, 14)
-                                    .background(Color.red)
-                                    .cornerRadius(12)
+                                Label("Main Menu", systemImage: "house.fill")
                             }
+                            .secondaryButton()
+                            .accessibilityHint("Return to the main menu")
                         }
                     }
                     .padding(32)

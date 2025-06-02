@@ -2,6 +2,7 @@ import SwiftUI
 import FirebaseFirestore
 
 struct LeaderboardView: View {
+    @Environment(\.dismiss) private var dismiss
     @State private var selectedPeriod = "daily"
     @State private var selectedType: LeaderboardType = .score
     @State private var leaderboardData: [LeaderboardEntry] = []
@@ -12,116 +13,107 @@ struct LeaderboardView: View {
     private let periodNames = ["Daily", "Weekly", "Monthly", "All Time"]
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Leaderboard type selector
-            Picker("Leaderboard Type", selection: $selectedType) {
-                Text("High Scores").tag(LeaderboardType.score)
-                Text("Achievements").tag(LeaderboardType.achievement)
-            }
-            .pickerStyle(SegmentedPickerStyle())
-            .padding()
-            
-            // Period selector
-            HStack {
-                ForEach(0..<periods.count, id: \.self) { index in
-                    Button(action: {
-                        selectedPeriod = periods[index]
-                        loadLeaderboardData()
-                    }) {
-                        Text(periodNames[index])
-                            .font(.headline)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(selectedPeriod == periods[index] ? Color.blue : Color.clear)
-                            .foregroundColor(selectedPeriod == periods[index] ? .white : .primary)
-                            .cornerRadius(8)
-                    }
+        NavigationView {
+            VStack(spacing: 0) {
+                // Leaderboard type selector
+                Picker("Leaderboard Type", selection: $selectedType) {
+                    Text("High Scores").tag(LeaderboardType.score)
+                    Text("Achievements").tag(LeaderboardType.achievement)
                 }
-            }
-            .padding()
-            
-            if isLoading {
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle())
-                    .scaleEffect(1.5)
-                    .frame(maxHeight: .infinity)
-            } else if let error = error {
-                Text(error)
-                    .foregroundColor(.red)
-                    .padding()
-            } else {
-                List {
-                    ForEach(Array(leaderboardData.enumerated()), id: \.element.id) { index, entry in
-                        HStack {
-                            Text("\(index + 1)")
+                .pickerStyle(SegmentedPickerStyle())
+                .padding()
+                
+                // Period selector
+                HStack {
+                    ForEach(0..<periods.count, id: \.self) { index in
+                        Button(action: {
+                            selectedPeriod = periods[index]
+                            Task {
+                                await loadLeaderboardData()
+                            }
+                        }) {
+                            Text(periodNames[index])
                                 .font(.headline)
-                                .foregroundColor(.secondary)
-                                .frame(width: 30)
-                            
-                            Text(entry.username)
-                                .font(.headline)
-                            
-                            Spacer()
-                            
-                            Text("\(entry.score)")
-                                .font(.headline)
-                                .foregroundColor(.blue)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(selectedPeriod == periods[index] ? Color.blue : Color.clear)
+                                .foregroundColor(selectedPeriod == periods[index] ? .white : .primary)
+                                .cornerRadius(8)
                         }
-                        .padding(.vertical, 4)
+                    }
+                }
+                .padding()
+                
+                if isLoading {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle())
+                        .scaleEffect(1.5)
+                        .frame(maxHeight: .infinity)
+                } else if let error = error {
+                    Text(error)
+                        .foregroundColor(.red)
+                        .padding()
+                } else {
+                    List {
+                        ForEach(Array(leaderboardData.enumerated()), id: \.element.id) { index, entry in
+                            HStack {
+                                Text("\(index + 1)")
+                                    .font(.headline)
+                                    .foregroundColor(.secondary)
+                                    .frame(width: 30)
+                                
+                                Text(entry.username)
+                                    .font(.headline)
+                                
+                                Spacer()
+                                
+                                Text(selectedType == .score ? "\(entry.score)" : "\(entry.score) pts")
+                                    .font(.headline)
+                                    .foregroundColor(.blue)
+                            }
+                            .padding(.vertical, 4)
+                        }
                     }
                 }
             }
-        }
-        .navigationTitle(selectedType.title)
-        .onChange(of: selectedType) { _ in
-            loadLeaderboardData()
-        }
-        .onAppear {
-            loadLeaderboardData()
+            .navigationTitle(selectedType.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+            .onChange(of: selectedType) { _ in
+                Task {
+                    await loadLeaderboardData()
+                }
+            }
+            .onChange(of: selectedPeriod) { _ in
+                Task {
+                    await loadLeaderboardData()
+                }
+            }
+            .task {
+                await loadLeaderboardData()
+            }
         }
     }
     
-    private func loadLeaderboardData() {
+    private func loadLeaderboardData() async {
         isLoading = true
         error = nil
         
-        let db = Firestore.firestore()
-        let collectionName = selectedType.collectionName
-        let scoreField = selectedType.scoreField
+        do {
+            leaderboardData = try await LeaderboardService.shared.getLeaderboard(
+                type: selectedType,
+                period: selectedPeriod
+            )
+        } catch {
+            self.error = error.localizedDescription
+        }
         
-        db.collection(collectionName)
-            .document(selectedPeriod)
-            .collection("scores")
-            .order(by: scoreField, descending: true)
-            .limit(to: 100)
-            .getDocuments { snapshot, error in
-                isLoading = false
-                
-                if let error = error {
-                    self.error = "Error loading leaderboard: \(error.localizedDescription)"
-                    return
-                }
-                
-                guard let documents = snapshot?.documents else {
-                    self.error = "No data available"
-                    return
-                }
-                
-                leaderboardData = documents.compactMap { document -> LeaderboardEntry? in
-                    guard let username = document.data()["username"] as? String,
-                          let score = document.data()[scoreField] as? Int,
-                          let timestamp = (document.data()["timestamp"] as? Timestamp)?.dateValue() else {
-                        return nil
-                    }
-                    return LeaderboardEntry(id: document.documentID, username: username, score: score, timestamp: timestamp)
-                }
-            }
+        isLoading = false
     }
 }
-
-#Preview {
-    NavigationView {
-        LeaderboardView()
-    }
-}
-

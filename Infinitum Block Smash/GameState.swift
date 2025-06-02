@@ -1,33 +1,3 @@
-import Foundation
-import Combine
-import SwiftUI
-import FirebaseFirestore
-import FirebaseAuth
-
-// MARK: - Game Types
-struct GameMove {
-    let block: Block
-    let position: CGPoint
-    let timestamp: Date
-}
-
-class GameBoard {
-    var grid: [[Block?]]
-    var tray: [Block]
-    
-    init() {
-        self.grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
-        self.tray = []
-    }
-}
-
-// MARK: - GameState
-protocol GameStateDelegate: AnyObject {
-    func gameStateDidUpdate()
-    func gameStateDidClearLines(at positions: [(Int, Int)])
-    func showScoreAnimation(points: Int, at position: CGPoint)
-}
-
 @MainActor
 final class GameState: ObservableObject {
     // MARK: - Published Properties
@@ -83,6 +53,7 @@ final class GameState: ObservableObject {
     private var lastMove: GameMove?
     private var gameBoard: GameBoard
     private var currentShapes: [any Shape]
+    private var achievementCheckTask: Task<Void, Never>?
     
     // MARK: - Initialization
     init() {
@@ -114,7 +85,7 @@ final class GameState: ObservableObject {
     }
     
     private func setupSubscriptions() {
-        // Only subscribe to necessary publishers
+        // Only subscribe to necessary publishers with debounce
         $score
             .dropFirst()
             .debounce(for: .seconds(0.5), scheduler: RunLoop.main)
@@ -125,7 +96,11 @@ final class GameState: ObservableObject {
     }
     
     private func checkAchievements(for score: Int) {
-        Task {
+        // Cancel any existing achievement check task
+        achievementCheckTask?.cancel()
+        
+        // Create new task for achievement check
+        achievementCheckTask = Task {
             do {
                 let newAchievements = try await achievementsManager.checkAchievementProgress(score: score, level: level)
                 if let achievement = newAchievements.first {
@@ -151,6 +126,9 @@ final class GameState: ObservableObject {
     
     // MARK: - Public Methods
     func resetGame() {
+        // Cancel any ongoing tasks
+        achievementCheckTask?.cancel()
+        
         score = 0
         level = 1
         isGameOver = false
@@ -363,39 +341,6 @@ final class GameState: ObservableObject {
         checkAchievements()
     }
     
-    private func isRowFull(_ row: Int) -> Bool {
-        return !grid[row].contains(where: { $0 == nil })
-    }
-    
-    private func isColumnFull(_ col: Int) -> Bool {
-        return !grid.map({ $0[col] }).contains(where: { $0 == nil })
-    }
-    
-    private func clearRow(_ row: Int) {
-        grid[row] = Array(repeating: nil, count: GameConstants.gridSize)
-    }
-    
-    private func clearColumn(_ col: Int) {
-        for row in 0..<GameConstants.gridSize {
-            grid[row][col] = nil
-        }
-    }
-    
-    private func isTopRowOccupied() -> Bool {
-        return !grid[0].contains(where: { $0 == nil })
-    }
-    
-    private func isGridEmpty() -> Bool {
-        for row in 0..<GameConstants.gridSize {
-            for col in 0..<GameConstants.gridSize {
-                if grid[row][col] != nil {
-                    return false
-                }
-            }
-        }
-        return true
-    }
-    
     func addScore(_ points: Int, at position: CGPoint? = nil) {
         let oldScore = score
         score += points
@@ -527,154 +472,6 @@ final class GameState: ObservableObject {
             }
         }
     }
-
-    private func floodFill(row: Int, col: Int, visited: inout [[Bool]]) -> [(Int, Int)] {
-        let directions = [(-1,0),(1,0),(0,-1),(0,1)]
-        var queue = [(row, col)]
-        var group = [(row, col)]
-        visited[row][col] = true
-        while !queue.isEmpty {
-            let (r, c) = queue.removeFirst()
-            for (dr, dc) in directions {
-                let nr = r + dr, nc = c + dc
-                if nr >= 0 && nr < GameConstants.gridSize && nc >= 0 && nc < GameConstants.gridSize {
-                    if let _ = grid[nr][nc], !visited[nr][nc] {
-                        visited[nr][nc] = true
-                        queue.append((nr, nc))
-                        group.append((nr, nc))
-                    }
-                }
-            }
-        }
-        return group
-    }
-    
-    private func updateLeaderboard() {
-        Task {
-            do {
-                try await LeaderboardService.shared.updateLeaderboard(
-                    type: .score,
-                    score: score,
-                    username: username,
-                    userID: userID
-                )
-            } catch {
-                print("[Leaderboard] Error updating leaderboard: \(error.localizedDescription)")
-            }
-        }
-    }
-    
-    private func loadLastPlayDate() {
-        if let savedDate = userDefaults.object(forKey: "lastPlayDate") as? Date {
-            lastPlayDate = savedDate
-            let calendar = Calendar.current
-            if let days = calendar.dateComponents([.day], from: savedDate, to: Date()).day {
-                if days == 1 {
-                    consecutiveDays += 1
-                    achievementsManager.updateAchievement(id: "login_\(consecutiveDays)", value: consecutiveDays)
-                    achievementsManager.updateAchievement(id: "daily_\(consecutiveDays)", value: consecutiveDays)
-                } else if days > 1 {
-                    consecutiveDays = 0
-                }
-            }
-        } else {
-            // First time playing
-            achievementsManager.updateAchievement(id: "login_1", value: 1)
-        }
-    }
-    
-    private func saveLastPlayDate() {
-        lastPlayDate = Date()
-        userDefaults.set(lastPlayDate, forKey: "lastPlayDate")
-        
-        // Update login achievements
-        if consecutiveDays > 0 {
-            achievementsManager.updateAchievement(id: "login_\(consecutiveDays)", value: consecutiveDays)
-        }
-    }
-    
-    private func showAchievementNotification(_ achievement: Achievement) {
-        // Only show notification if the achievement hasn't been notified before
-        if !achievement.wasNotified {
-            currentAchievement = achievement
-            showingAchievementNotification = true
-            
-            // Mark the achievement as notified immediately
-            achievementsManager.markAsNotified(id: achievement.id)
-            
-            // Hide notification after 3 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
-                self?.showingAchievementNotification = false
-                self?.currentAchievement = nil
-            }
-        }
-    }
-    
-    private func checkAchievements() {
-        // Score achievements
-        achievementsManager.updateAchievement(id: "score_1000", value: score)
-        achievementsManager.updateAchievement(id: "score_5000", value: score)
-        achievementsManager.updateAchievement(id: "score_10000", value: score)
-        achievementsManager.updateAchievement(id: "score_50000", value: score)
-        
-        // Level achievements
-        achievementsManager.updateAchievement(id: "level_5", value: level)
-        achievementsManager.updateAchievement(id: "level_10", value: level)
-        achievementsManager.updateAchievement(id: "level_20", value: level)
-        achievementsManager.updateAchievement(id: "level_50", value: level)
-        
-        // Lines cleared achievements
-        achievementsManager.updateAchievement(id: "lines_10", value: linesCleared)
-        achievementsManager.updateAchievement(id: "lines_50", value: linesCleared)
-        achievementsManager.updateAchievement(id: "lines_100", value: linesCleared)
-        
-        // Blocks placed achievements
-        achievementsManager.updateAchievement(id: "blocks_50", value: blocksPlaced)
-        achievementsManager.updateAchievement(id: "blocks_200", value: blocksPlaced)
-        achievementsManager.updateAchievement(id: "blocks_500", value: blocksPlaced)
-        
-        // Chain achievements
-        achievementsManager.updateAchievement(id: "chain_3", value: currentChain)
-        achievementsManager.updateAchievement(id: "chain_5", value: currentChain)
-        achievementsManager.updateAchievement(id: "chain_10", value: currentChain)
-        
-        // Color achievements
-        achievementsManager.updateAchievement(id: "colors_5", value: usedColors.count)
-        achievementsManager.updateAchievement(id: "colors_8", value: usedColors.count)
-        
-        // Grid fill achievements
-        let gridFillPercentage = Double(blocksPlaced) / Double(GameConstants.gridSize * GameConstants.gridSize) * 100
-        achievementsManager.updateAchievement(id: "grid_25", value: Int(gridFillPercentage))
-        achievementsManager.updateAchievement(id: "grid_50", value: Int(gridFillPercentage))
-        achievementsManager.updateAchievement(id: "grid_75", value: Int(gridFillPercentage))
-        
-        // Perfect level achievements
-        if isPerfectLevel {
-            achievementsManager.updateAchievement(id: "perfect_level", value: 1)
-        }
-        achievementsManager.updateAchievement(id: "perfect_3", value: perfectLevels)
-        
-        // Undo achievements
-        achievementsManager.updateAchievement(id: "undo_5", value: undoCount)
-        achievementsManager.updateAchievement(id: "undo_20", value: undoCount)
-        
-        // Daily login achievements
-        achievementsManager.updateAchievement(id: "login_3", value: consecutiveDays)
-        achievementsManager.updateAchievement(id: "login_7", value: consecutiveDays)
-        achievementsManager.updateAchievement(id: "login_30", value: consecutiveDays)
-        
-        // Games completed achievements
-        achievementsManager.updateAchievement(id: "games_10", value: gamesCompleted)
-        achievementsManager.updateAchievement(id: "games_50", value: gamesCompleted)
-        achievementsManager.updateAchievement(id: "games_100", value: gamesCompleted)
-        
-        // Check for newly unlocked achievements and show notifications
-        for achievement in achievementsManager.getAllAchievements() {
-            if achievement.unlocked && !achievement.wasNotified {
-                showAchievementNotification(achievement)
-            }
-        }
-    }
     
     func gameOver() {
         isGameOver = true
@@ -734,70 +531,10 @@ final class GameState: ObservableObject {
     }
     
     func cleanup() {
+        // Cancel any ongoing tasks
+        achievementCheckTask?.cancel()
         cancellables.removeAll()
         currentAchievement = nil
         lastMove = nil
     }
-}
-
-// Deterministic seeded random generator
-struct SeededGenerator: RandomNumberGenerator {
-    private var state: UInt64
-    init(seed: UInt64) { self.state = seed }
-    mutating func next() -> UInt64 {
-        state = state &* 6364136223846793005 &+ 1
-        return state
-    }
 } 
-
-extension BlockShape {
-    static func availableShapes(for level: Int) -> [BlockShape] {
-        // Level 1: I, L, T, and square shapes (all rotations)
-        let all: [BlockShape] = [
-            .bar2H, .bar2V, .bar3H, .bar3V, .bar4H, .bar4V, .square,
-            .lUp, .lDown, .lLeft, .lRight,
-            .tUp, .tDown, .tLeft, .tRight,
-            .zShape, .plus, .cross, .uShape, .vShape, .wShape, .xShape, .yShape, .zShape2
-        ]
-        if level <= 1 {
-            return [.bar2H, .bar2V, .bar3H, .bar3V, .bar4H, .bar4V, .square, .lUp, .lDown, .lLeft, .lRight, .tUp, .tDown, .tLeft, .tRight]
-        }
-        if level <= 3 {
-            return [.bar2H, .bar2V, .bar3H, .bar3V, .bar4H, .bar4V, .square, .lUp, .lDown, .lLeft, .lRight, .tUp, .tDown, .tLeft, .tRight, .zShape]
-        }
-        if level <= 5 {
-            return [.bar2H, .bar2V, .bar3H, .bar3V, .bar4H, .bar4V, .square, .lUp, .lDown, .lLeft, .lRight, .tUp, .tDown, .tLeft, .tRight, .zShape, .plus]
-        }
-        if level <= 10 { return Array(all.prefix(18)) }
-        if level <= 20 { return Array(all.prefix(20)) }
-        if level <= 50 { return Array(all.prefix(22)) }
-        return all
-    }
-}
-
-extension BlockColor {
-    static func availableColors(for level: Int) -> [BlockColor] {
-        return [.red, .blue, .green, .yellow, .purple, .orange, .pink, .cyan]
-    }
-}
-
-// MARK: - Error Handling
-enum GameError: LocalizedError {
-    case saveFailed(Error)
-    case leaderboardUpdateFailed(Error)
-    case invalidMove
-    case networkError
-    
-    var errorDescription: String? {
-        switch self {
-        case .saveFailed(let error):
-            return "Failed to save game progress: \(error.localizedDescription)"
-        case .leaderboardUpdateFailed(let error):
-            return "Failed to update leaderboard: \(error.localizedDescription)"
-        case .invalidMove:
-            return "Invalid move"
-        case .networkError:
-            return "Network connection error. Please check your internet connection."
-        }
-    }
-}

@@ -114,8 +114,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let trayBackground = SKShapeNode(rectOf: CGSize(width: trayWidth, height: trayHeight))
         trayBackground.fillColor = .black
         trayBackground.alpha = 0.3
-        // Move tray higher (about 22% of the screen height)
-        let trayY = frame.height * 0.22
+        // Move tray higher (about 22% of the screen height) and add extra offset to prevent clipping
+        let trayY = frame.height * 0.22 + blockSize // Move tray up by one block size
         trayBackground.position = CGPoint(x: frame.midX, y: trayY)
         trayBackground.zPosition = -1
         addChild(trayBackground)
@@ -349,8 +349,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let touchPoint = touch.location(in: self)
         let gridPoint = convertToGridCoordinates(touchPoint)
         
-        // Update drag node position to follow touch
-        dragNode.position = touchPoint
+        // Update drag node position to follow touch, but above the finger
+        dragNode.position = CGPoint(x: touchPoint.x, y: touchPoint.y + GameConstants.blockSize * 1.5)
         
         // Remove any existing preview
         previewNode?.removeFromParent()

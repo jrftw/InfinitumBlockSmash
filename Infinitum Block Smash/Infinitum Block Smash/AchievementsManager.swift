@@ -224,26 +224,70 @@ class AchievementsManager: ObservableObject {
     }
     
     private func updateLeaderboard() {
-        let db = Firestore.firestore()
-        let now = Date()
-        let periods = ["daily", "weekly", "monthly", "alltime"]
+        Task {
+            do {
+                guard let userID = UserDefaults.standard.string(forKey: "userID"),
+                      let username = UserDefaults.standard.string(forKey: "username") else {
+                    return
+                }
+                
+                try await LeaderboardService.shared.updateLeaderboard(
+                    type: .achievement,
+                    score: totalPoints,
+                    username: username,
+                    userID: userID
+                )
+            } catch {
+                print("[Achievement Leaderboard] Error updating leaderboard: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    func checkAchievementProgress(score: Int, level: Int) async throws -> [Achievement] {
+        var newlyUnlocked: [Achievement] = []
         
-        guard let userID = UserDefaults.standard.string(forKey: "userID"),
-              let username = UserDefaults.standard.string(forKey: "username"),
-              !userID.isEmpty, !username.isEmpty else { return }
-        
-        for period in periods {
-            let docRef = db.collection("achievement_leaderboard").document(period).collection("scores").document(userID)
-            docRef.getDocument { snapshot, error in
-                let prevPoints = snapshot?.data()?["points"] as? Int ?? 0
-                if self.totalPoints > prevPoints {
-                    docRef.setData([
-                        "username": username,
-                        "points": self.totalPoints,
-                        "timestamp": Timestamp(date: now)
-                    ], merge: true)
+        for achievement in getAllAchievements() {
+            if !achievement.unlocked {
+                let shouldUnlock = checkIfAchievementShouldUnlock(achievement, score: score, level: level)
+                if shouldUnlock {
+                    var updatedAchievement = achievement
+                    updatedAchievement.unlocked = true
+                    updatedAchievement.wasNotified = false
+                    newlyUnlocked.append(updatedAchievement)
+                    saveAchievement(updatedAchievement)
                 }
             }
+        }
+        
+        return newlyUnlocked
+    }
+    
+    private func checkIfAchievementShouldUnlock(_ achievement: Achievement, score: Int, level: Int) -> Bool {
+        switch achievement.id {
+        case "score_1000":
+            return score >= 1000
+        case "score_5000":
+            return score >= 5000
+        case "score_10000":
+            return score >= 10000
+        case "score_50000":
+            return score >= 50000
+        case "level_5":
+            return level >= 5
+        case "level_10":
+            return level >= 10
+        case "level_20":
+            return level >= 20
+        case "level_50":
+            return level >= 50
+        default:
+            return false
+        }
+    }
+    
+    private func saveAchievements() {
+        if let encoded = try? JSONEncoder().encode(Array(achievements.values)) {
+            userDefaults.set(encoded, forKey: "achievements")
         }
     }
 }

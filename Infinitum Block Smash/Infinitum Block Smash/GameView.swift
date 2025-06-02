@@ -2,6 +2,7 @@ import SwiftUI
 import SpriteKit
 import UIKit
 import GoogleMobileAds
+import AppTrackingTransparency
 
 struct GameView: View {
     @StateObject private var gameState = GameState()
@@ -15,6 +16,7 @@ struct GameView: View {
     @State private var isPaused = false
     @Environment(\.presentationMode) var presentationMode
     @State private var scoreAnimator = ScoreAnimationContainer()
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         ZStack {
@@ -30,12 +32,16 @@ struct GameView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Score")
                                     .font(.caption)
-                                    .foregroundColor(.white.opacity(0.7))
+                                    .foregroundColor(.white.opacity(0.9))
                                 Text("\(gameState.score)")
                                     .font(.system(size: 36, weight: .bold, design: .rounded))
                                     .foregroundColor(.white)
                             }
+                            .accessibilityElement(children: .combine)
+                            .accessibilityLabel("Score: \(gameState.score)")
+                            
                             Spacer()
+                            
                             Button(action: { gameState.undoLastMove() }) {
                                 Text("Undo Last Move")
                                     .font(.headline)
@@ -43,48 +49,70 @@ struct GameView: View {
                             }
                             .disabled(!gameState.canUndo)
                             .buttonStyle(PlainButtonStyle())
+                            .accessibilityLabel("Undo Last Move")
+                            .accessibilityHint(gameState.canUndo ? "Tap to undo your last move" : "Undo is not available")
+                            
                             Spacer()
+                            
                             VStack(alignment: .trailing, spacing: 2) {
                                 Text("Level")
                                     .font(.caption)
-                                    .foregroundColor(.white.opacity(0.7))
+                                    .foregroundColor(.white.opacity(0.9))
                                 Text("\(gameState.level)")
                                     .font(.system(size: 36, weight: .bold, design: .rounded))
                                     .foregroundColor(.yellow)
                             }
+                            .accessibilityElement(children: .combine)
+                            .accessibilityLabel("Level: \(gameState.level)")
                         }
                         .padding(.horizontal)
                         .padding(.top, 8)
                         .padding(.bottom, 4)
+                        
                         Spacer(minLength: 0)
+                        
                         HStack {
                             Text("Level High: \(UserDefaults.standard.integer(forKey: "highScore_level_\(gameState.level)"))")
                                 .font(.caption2)
-                                .foregroundColor(.blue)
+                                .foregroundColor(Color.blue.opacity(0.9))
                                 .padding(.leading, 12)
                             Spacer()
                             Text("All-Time High: \(UserDefaults.standard.integer(forKey: "highScore"))")
                                 .font(.caption2)
-                                .foregroundColor(.orange)
+                                .foregroundColor(Color.orange.opacity(0.9))
                                 .padding(.trailing, 12)
                         }
                         .padding(.bottom, 6)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("Level High Score: \(UserDefaults.standard.integer(forKey: "highScore_level_\(gameState.level)")) and All-Time High Score: \(UserDefaults.standard.integer(forKey: "highScore"))")
                     }
                 }
                 .frame(height: 88)
                 .padding(.horizontal, 8)
                 .padding(.top, 8)
+                
                 Spacer()
             }
+            
             // Overlays and modals
             if gameState.showingAchievementNotification, let achievement = gameState.currentAchievement {
-                AchievementNotificationOverlay(showing: $gameState.showingAchievementNotification, achievement: $gameState.currentAchievement)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .zIndex(100)
+                AchievementNotificationOverlay(
+                    showing: .constant(true),
+                    achievement: .constant(achievement)
+                )
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(100)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Achievement Unlocked: \(achievement.name)")
+                .accessibilityHint(achievement.description)
             }
+            
             LevelCompleteOverlay(isPresented: gameState.levelComplete, score: gameState.score, level: gameState.level) {
                 gameState.advanceToNextLevel()
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Level \(gameState.level) Complete! Score: \(gameState.score)")
+            
             GameOverOverlay(
                 isPresented: gameState.isGameOver,
                 score: gameState.score,
@@ -96,6 +124,9 @@ struct GameView: View {
                     presentationMode.wrappedValue.dismiss()
                 }
             )
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Game Over. Final Score: \(gameState.score), Level: \(gameState.level)")
+            
             PauseMenuOverlay(isPresented: isPaused, onResume: { isPaused = false }, onSave: {
                 gameState.saveProgress(); isPaused = false
             }, onRestart: {
@@ -103,6 +134,8 @@ struct GameView: View {
             }, onHome: {
                 presentationMode.wrappedValue.dismiss()
             })
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Pause Menu")
             
             // Score animation container
             scoreAnimator
@@ -123,13 +156,15 @@ struct GameView: View {
         }
         .onChange(of: gameState.levelComplete) { isComplete in
             if isComplete {
-                // Show rewarded interstitial after level completion
                 if let root = getRootViewController() {
                     adManager.showRewardedInterstitial(from: root) {
                         // Optional reward logic here
                     }
                 }
             }
+        }
+        .onDisappear {
+            gameState.cleanup()
         }
     }
     

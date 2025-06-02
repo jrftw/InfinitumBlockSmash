@@ -12,7 +12,7 @@ Features:
 • Score tracking
 • Dark mode support
 • Accessibility features
-• No ads or in-app purchases
+• Free to play with optional ads
 • Works offline
 
 Perfect for quick gaming sessions or extended play, Infinitum Block Smash offers endless entertainment for players of all ages.
@@ -20,9 +20,9 @@ Perfect for quick gaming sessions or extended play, Infinitum Block Smash offers
 Keywords:
 block,break,arcade,game,classic,retro,ball,paddle,bounce,physics,offline,free
 
-Support URL: [Your Support URL]
-Marketing URL: [Your Marketing URL]
-Privacy Policy URL: [Your Privacy Policy URL]
+Support URL: https://infinitumlive.com/support
+Marketing URL: https://infinitumlive.com/apps
+Privacy Policy URL: https://infinitumlive.com/privacy
 
 Screenshots:
 [You'll need to provide 6-8 screenshots showing different aspects of gameplay]

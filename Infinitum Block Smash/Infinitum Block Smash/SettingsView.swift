@@ -1,4 +1,5 @@
 import SwiftUI
+import AppTrackingTransparency
 
 struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
@@ -12,13 +13,17 @@ struct SettingsView: View {
     @AppStorage("difficulty") private var difficulty: String = "normal"
     @AppStorage("theme") private var theme: String = "auto"
     @AppStorage("autoSave") private var autoSave = true
+    @AppStorage("hasAcceptedAds") private var hasAcceptedAds = false
+    @Environment(\.presentationMode) var presentationMode
+    @State private var showingResetConfirmation = false
+    @State private var showingChangelog = false
     
     private let difficulties = ["easy", "normal", "hard", "expert"]
     private let themes = ["light", "dark", "auto"]
     
     var body: some View {
         NavigationView {
-            Form {
+            List {
                 Section(header: Text("Game Settings")) {
                     Picker("Theme", selection: $theme) {
                         ForEach(themes, id: \.self) { theme in
@@ -26,22 +31,7 @@ struct SettingsView: View {
                         }
                     }
                     .onChange(of: theme) { newValue in
-                        if newValue == "auto" {
-                            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                               let window = windowScene.windows.first {
-                                window.overrideUserInterfaceStyle = .unspecified
-                            }
-                        } else if newValue == "dark" {
-                            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                               let window = windowScene.windows.first {
-                                window.overrideUserInterfaceStyle = .dark
-                            }
-                        } else {
-                            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                               let window = windowScene.windows.first {
-                                window.overrideUserInterfaceStyle = .light
-                            }
-                        }
+                        updateTheme(newValue)
                     }
                     
                     Toggle("Show Tutorial", isOn: $showTutorial)
@@ -112,17 +102,37 @@ struct SettingsView: View {
                     .cornerRadius(12)
                 }
                 
-                Section {
-                    Button(action: {
-                        gameState.resetGame()
-                        dismiss()
-                    }) {
-                        HStack {
-                            Image(systemName: "arrow.counterclockwise")
-                            Text("Reset Game")
-                        }
-                        .foregroundColor(.red)
+                Section(header: Text("Data Management")) {
+                    Button("Reset Game Data") {
+                        showingResetConfirmation = true
                     }
+                    .foregroundColor(.red)
+                    
+                    NavigationLink(destination: ChangelogView()) {
+                        Text("Changelog")
+                    }
+                }
+                
+                Section {
+                    VStack(spacing: 8) {
+                        Text(AppVersion.location)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        
+                        Text(AppVersion.formattedVersion)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        
+                        Text(AppVersion.copyright)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Text(AppVersion.credits)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
                 }
             }
             .navigationTitle("Settings")
@@ -130,9 +140,42 @@ struct SettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
-                        dismiss()
+                        presentationMode.wrappedValue.dismiss()
                     }
                 }
+            }
+            .alert("Reset Game Data", isPresented: $showingResetConfirmation) {
+                Button("Cancel", role: .cancel) { }
+                Button("Reset", role: .destructive) {
+                    // Reset game data
+                    UserDefaults.standard.removePersistentDomain(forName: Bundle.main.bundleIdentifier!)
+                }
+            } message: {
+                Text("This will reset all game data including high scores and achievements. This action cannot be undone.")
+            }
+        }
+    }
+    
+    private func updateTheme(_ newValue: String) {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first else { return }
+        
+        switch newValue {
+        case "auto":
+            window.overrideUserInterfaceStyle = .unspecified
+        case "dark":
+            window.overrideUserInterfaceStyle = .dark
+        case "light":
+            window.overrideUserInterfaceStyle = .light
+        default:
+            break
+        }
+    }
+    
+    private func requestTrackingAuthorization() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            ATTrackingManager.requestTrackingAuthorization { status in
+                // Handle tracking authorization status
             }
         }
     }
