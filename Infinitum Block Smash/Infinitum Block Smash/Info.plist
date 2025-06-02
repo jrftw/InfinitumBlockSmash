@@ -23,7 +23,9 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSApplicationQueriesSchemes</key>
-	<array/>
+	<array>
+		<string>https</string>
+	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>
@@ -35,14 +37,12 @@
 	</dict>
 	<key>NSUserTrackingUsageDescription</key>
 	<string>This identifier will be used to deliver personalized ads to you.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>This app requires access to your photo library to allow you to select images. (Remove if not used)</string>
-	<key>NSCameraUsageDescription</key>
-	<string>This app requires access to your camera to take photos. (Remove if not used)</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>This app requires access to your microphone for audio features. (Remove if not used)</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>This app requires access to your location to provide location-based features. (Remove if not used)</string>
+	<key>PrivacyPolicyURL</key>
+	<string>https://infinitumlive.com/privacy</string>
+	<key>SupportURL</key>
+	<string>https://infinitumlive.com/support</string>
+	<key>MarketingURL</key>
+	<string>https://infinitumlive.com/apps</string>
 	<key>SKAdNetworkItems</key>
 	<array>
 		<dict>

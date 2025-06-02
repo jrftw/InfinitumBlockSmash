@@ -1,0 +1,7 @@
+"score" = "Score: %d";
+"reset" = "Reset";
+"reset.accessibility.label" = "Reset Game";
+"reset.accessibility.hint" = "Double tap to reset the current game";
+"game.over" = "Game Over";
+"game.over.accessibility.label" = "Game Over";
+"game.over.accessibility.hint" = "The game has ended. Tap to play again"; 

@@ -16,20 +16,23 @@ struct GameView: View {
         ZStack {
             SpriteView(scene: scene)
                 .ignoresSafeArea()
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(Text("Game Board"))
             
             VStack {
                 HStack {
-                    Text("Score: \(gameState.score)")
+                    Text(String(format: NSLocalizedString("score", comment: ""), gameState.score))
                         .font(.title)
                         .foregroundColor(.white)
                         .padding()
+                        .accessibilityLabel(Text(String(format: NSLocalizedString("score", comment: ""), gameState.score)))
                     
                     Spacer()
                     
                     Button(action: {
                         gameState.resetGame()
                     }) {
-                        Text("Reset")
+                        Text(NSLocalizedString("reset", comment: ""))
                             .font(.title2)
                             .foregroundColor(.white)
                             .padding()
@@ -37,10 +40,13 @@ struct GameView: View {
                             .cornerRadius(10)
                     }
                     .padding()
+                    .accessibilityLabel(Text(NSLocalizedString("reset.accessibility.label", comment: "")))
+                    .accessibilityHint(Text(NSLocalizedString("reset.accessibility.hint", comment: "")))
                 }
                 Spacer()
             }
         }
+        .preferredColorScheme(.dark)
     }
 }
 

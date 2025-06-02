@@ -1,0 +1,34 @@
+App Name: Infinitum Block Smash
+Subtitle: Classic Block Breaking Game
+Category: Games > Arcade
+Age Rating: 4+
+
+Description:
+Infinitum Block Smash is a modern take on the classic block-breaking game. Test your reflexes and precision as you bounce the ball to break blocks and achieve high scores.
+
+Features:
+• Simple and intuitive controls
+• Smooth gameplay with realistic physics
+• Score tracking
+• Dark mode support
+• Accessibility features
+• No ads or in-app purchases
+• Works offline
+
+Perfect for quick gaming sessions or extended play, Infinitum Block Smash offers endless entertainment for players of all ages.
+
+Keywords:
+block,break,arcade,game,classic,retro,ball,paddle,bounce,physics,offline,free
+
+Support URL: [Your Support URL]
+Marketing URL: [Your Marketing URL]
+Privacy Policy URL: [Your Privacy Policy URL]
+
+Screenshots:
+[You'll need to provide 6-8 screenshots showing different aspects of gameplay]
+
+App Icon:
+[You'll need to provide app icons in the following sizes:
+- iPhone: 60pt (@2x, @3x)
+- iPad: 76pt (@2x)
+- App Store: 1024pt (@1x)] 
