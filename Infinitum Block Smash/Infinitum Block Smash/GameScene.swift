@@ -60,43 +60,43 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let totalWidth = CGFloat(gridSize) * blockSize
         let totalHeight = CGFloat(gridSize) * blockSize
         
-        // Calculate center position
-        let centerX = frame.midX - totalWidth / 2
-        let centerY = frame.midY - totalHeight / 2
-        
-        // Create grid background
-        let gridBackground = SKShapeNode(rectOf: CGSize(width: totalWidth, height: totalHeight))
-        gridBackground.fillColor = .black
-        gridBackground.alpha = 0.3
-        gridBackground.position = CGPoint(x: centerX + totalWidth / 2, y: centerY + totalHeight / 2)
-        gridBackground.zPosition = -1
-        addChild(gridBackground)
-        
-        // Draw grid lines
-        for i in 0...gridSize {
-            let x = centerX + CGFloat(i) * blockSize
-            let y = centerY + CGFloat(i) * blockSize
-            
-            // Vertical line
-            let verticalLine = SKShapeNode(rectOf: CGSize(width: 1, height: totalHeight))
-            verticalLine.fillColor = .white
-            verticalLine.alpha = 0.2
-            verticalLine.position = CGPoint(x: x, y: centerY + totalHeight / 2)
-            addChild(verticalLine)
-            
-            // Horizontal line
-            let horizontalLine = SKShapeNode(rectOf: CGSize(width: totalWidth, height: 1))
-            horizontalLine.fillColor = .white
-            horizontalLine.alpha = 0.2
-            horizontalLine.position = CGPoint(x: centerX + totalWidth / 2, y: y)
-            addChild(horizontalLine)
-        }
-        
         // Ensure gridNode is initialized
         if gridNode == nil {
             gridNode = SKNode()
             gridNode.position = CGPoint(x: frame.midX, y: frame.midY)
             addChild(gridNode)
+        }
+        gridNode.removeAllChildren()
+        
+        // Create grid background
+        let gridBackground = SKShapeNode(rectOf: CGSize(width: totalWidth, height: totalHeight))
+        gridBackground.fillColor = .black
+        gridBackground.alpha = 0.3
+        gridBackground.position = CGPoint(x: 0, y: 0)
+        gridBackground.zPosition = -2
+        gridBackground.name = "gridBackground"
+        gridNode.addChild(gridBackground)
+        
+        // Draw grid lines (as children of gridNode)
+        for i in 0...gridSize {
+            let x = -totalWidth / 2 + CGFloat(i) * blockSize
+            let y = -totalHeight / 2 + CGFloat(i) * blockSize
+            // Vertical line
+            let verticalLine = SKShapeNode(rectOf: CGSize(width: 1, height: totalHeight))
+            verticalLine.fillColor = .white
+            verticalLine.alpha = 0.2
+            verticalLine.position = CGPoint(x: x, y: 0)
+            verticalLine.zPosition = 2
+            verticalLine.name = "gridLine"
+            gridNode.addChild(verticalLine)
+            // Horizontal line
+            let horizontalLine = SKShapeNode(rectOf: CGSize(width: totalWidth, height: 1))
+            horizontalLine.fillColor = .white
+            horizontalLine.alpha = 0.2
+            horizontalLine.position = CGPoint(x: 0, y: y)
+            horizontalLine.zPosition = 2
+            horizontalLine.name = "gridLine"
+            gridNode.addChild(horizontalLine)
         }
     }
     
@@ -346,7 +346,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         if gameState.tryPlaceBlockFromTray(draggingBlock, at: gridLocation) {
             playPlacementAnimation(at: gridLocation)
-            renderGrid()
+            renderGrid(gridNode: gridNode, gameState: gameState, blockSize: GameConstants.blockSize)
         }
         
         dragNode?.removeFromParent()
@@ -412,19 +412,21 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func playHaptic(style: UIImpactFeedbackGenerator.FeedbackStyle) {
         #if os(iOS)
         if UserDefaults.standard.bool(forKey: "hapticsEnabled") {
-            let generator = UIImpactFeedbackGenerator(style: style)
-            generator.impactOccurred()
+        let generator = UIImpactFeedbackGenerator(style: style)
+        generator.impactOccurred()
         }
         #endif
     }
 
     // MARK: - Grid Rendering
-    private func renderGrid() {
-        guard let gridNode = gridNode else { return }
-        // Remove all previous placed block nodes (but not grid lines)
-        gridNode.removeAllChildren()
+    private func renderGrid(gridNode: SKNode, gameState: GameState, blockSize: CGFloat) {
+        // Remove all previous placed block nodes (but not grid lines or background)
+        for node in gridNode.children {
+            if node.zPosition == 0 {
+                node.removeFromParent()
+            }
+        }
         // Draw all placed blocks
-        let blockSize = GameConstants.blockSize
         for row in 0..<GameConstants.gridSize {
             for col in 0..<GameConstants.gridSize {
                 if let block = gameState.grid[row][col] {
@@ -460,56 +462,24 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                         x: CGFloat(col) * blockSize - CGFloat(GameConstants.gridSize) * blockSize / 2 + blockSize / 2,
                         y: CGFloat(row) * blockSize - CGFloat(GameConstants.gridSize) * blockSize / 2 + blockSize / 2
                     )
+                    cellNode.zPosition = 0
                     gridNode.addChild(cellNode)
                 }
             }
         }
+        // Do NOT redraw grid lines here!
     }
 }
 
 extension GameScene: GameStateDelegate {
     func gameStateDidUpdate() {
         updateTray()
-        renderGrid()
+        renderGrid(gridNode: gridNode, gameState: gameState, blockSize: GameConstants.blockSize)
     }
     
     func gameStateDidClearLines(at positions: [(Int, Int)]) {
         let points = positions.map { CGPoint(x: $0.1, y: $0.0) }
         playComboAnimation(at: points)
-        renderGrid()
-    }
-}
-
-extension SKColor {
-    convenience init(hex: String) {
-        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        Scanner(string: hex).scanHexInt64(&int)
-        let a, r, g, b: UInt64
-        switch hex.count {
-        case 3: // RGB (12-bit)
-            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
-        case 6: // RGB (24-bit)
-            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
-        case 8: // ARGB (32-bit)
-            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
-        default:
-            (a, r, g, b) = (1, 1, 1, 0)
-        }
-        self.init(
-            red: CGFloat(r) / 255,
-            green: CGFloat(g) / 255,
-            blue: CGFloat(b) / 255,
-            alpha: CGFloat(a) / 255
-        )
-    }
-
-    static func from(_ color: Color) -> SKColor {
-        #if os(iOS)
-        if let cgColor = color.cgColor {
-            return SKColor(cgColor: cgColor)
-        }
-        #endif
-        return SKColor.white
+        renderGrid(gridNode: gridNode, gameState: gameState, blockSize: GameConstants.blockSize)
     }
 } 

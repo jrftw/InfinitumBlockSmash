@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import SwiftUI
+import FirebaseFirestore
 
 protocol GameStateDelegate: AnyObject {
     func gameStateDidUpdate()
@@ -16,6 +17,21 @@ class GameState: ObservableObject {
     @Published var achievementsManager = AchievementsManager()
     @Published var canUndo: Bool = false
     @Published var levelComplete: Bool = false
+    @Published var adUndoCount: Int = 0 // Number of ad-based undos left for current placement
+    @Published var showingAchievementNotification = false
+    @Published var currentAchievement: Achievement?
+    @Published var blocksPlaced: Int = 0
+    @Published var linesCleared: Int = 0
+    @Published var gameStartTime: Date?
+    @Published var lastPlayDate: Date?
+    @Published var consecutiveDays: Int = 0
+    @Published var currentChain: Int = 0
+    @Published var usedColors: Set<BlockColor> = []
+    @Published var usedShapes: Set<BlockShape> = []
+    @Published var perfectLevels: Int = 0
+    @Published var isPerfectLevel: Bool = true
+    @Published var gamesCompleted: Int = 0
+    @Published var undoCount: Int = 0
     
     weak var delegate: GameStateDelegate?
     private var rng: RandomNumberGenerator = SystemRandomNumberGenerator()
@@ -32,9 +48,16 @@ class GameState: ObservableObject {
     private var previousScore: Int = 0
     private var previousLevel: Int = 1
     
+    var canAdUndo: Bool { adUndoCount > 0 }
+    
+    @AppStorage("userID") private var userID: String = ""
+    @AppStorage("username") private var username: String = ""
+    
     init() {
         loadProgress()
         setupGame()
+        gameStartTime = Date()
+        loadLastPlayDate()
     }
     
     private func loadProgress() {
@@ -188,14 +211,18 @@ class GameState: ObservableObject {
     }
 
     func undoLastMove() {
-        guard canUndo else { return }
+        guard canUndo && adUndoCount > 0 else { return }
         print("[Undo] Undoing last move. Restoring previous grid, tray, score, and level.")
         grid = previousGrid.map { $0.map { $0 } }
         tray = previousTray.map { $0 }
         score = previousScore
         level = previousLevel
         canUndo = false
+        adUndoCount -= 1
+        undoCount += 1
+        isPerfectLevel = false
         delegate?.gameStateDidUpdate()
+        checkAchievements()
     }
 
     // In tryPlaceBlockFromTray, save state before placement and reset undo after
@@ -209,7 +236,9 @@ class GameState: ObservableObject {
             refillTray()
             checkMatches()
             checkGameOver()
+            adUndoCount = 2 // Reset ad-based undos for this placement
             delegate?.gameStateDidUpdate()
+            checkAchievements()
             return true
         }
         return false
@@ -248,6 +277,11 @@ class GameState: ObservableObject {
                 grid[y][x] = placedBlock
             }
         }
+        blocksPlaced += 1
+        usedColors.insert(block.color)
+        usedShapes.insert(block.shape)
+        isPerfectLevel = false
+        checkAchievements()
     }
     
     private func checkMatches() {
@@ -300,6 +334,9 @@ class GameState: ObservableObject {
             print("[Level] Grid empty, leveling up.")
             levelUp()
         }
+        linesCleared += linesCleared
+        currentChain += 1
+        checkAchievements()
     }
     
     private func isRowFull(_ row: Int) -> Bool {
@@ -358,6 +395,7 @@ class GameState: ObservableObject {
             print("[Level] Score threshold met for level \(level). Level complete!")
             levelComplete = true
         }
+        checkAchievements()
     }
     
     func levelUp() {
@@ -378,7 +416,15 @@ class GameState: ObservableObject {
         print("[Level] Level \(level) - Available shapes: \(availableShapes.map { String(describing: $0) }.joined(separator: ", "))")
         refillTray()
         levelComplete = false
+        if isPerfectLevel {
+            perfectLevels += 1
+        }
+        isPerfectLevel = true
+        currentChain = 0
+        usedColors.removeAll()
+        usedShapes.removeAll()
         delegate?.gameStateDidUpdate()
+        checkAchievements()
     }
     
     func advanceToNextLevel() {
@@ -398,16 +444,14 @@ class GameState: ObservableObject {
     }
     
     private func checkGameOver() {
-        // Remove the top row check. Only end the game if none of the tray shapes can be placed.
+        // End the game if none of the tray shapes can be placed anywhere
         let canPlaceAny = tray.contains { canPlaceBlockAnywhere($0) }
         if !canPlaceAny {
-            print("[GameOver] No available moves for any tray shape. Game over. Resetting to level 1.")
+            print("[GameOver] No available moves for any tray shape. Game over.")
             isGameOver = true
             saveProgress()
-            // Optionally, reset to level 1 automatically:
-            // level = 1
-            // score = 0
-            // setupGame()
+            if score > 0 { updateLeaderboard() }
+            gameOver()
         }
     }
     
@@ -458,6 +502,263 @@ class GameState: ObservableObject {
         }
         return group
     }
+    
+    private func updateLeaderboard() {
+        let db = Firestore.firestore()
+        let now = Date()
+        let periods = [
+            "daily",
+            "weekly",
+            "yearly",
+            "alltime"
+        ]
+        // Only write to leaderboard if user is not a guest and has a username
+        guard !userID.isEmpty, !username.isEmpty else { return }
+        for period in periods {
+            let periodKey = period
+            let docRef = db.collection("classic_leaderboard").document(periodKey).collection("scores").document(userID)
+            docRef.getDocument { snapshot, error in
+                let prevScore = snapshot?.data()? ["score"] as? Int ?? 0
+                if self.score > prevScore {
+                    docRef.setData([
+                        "username": self.username,
+                        "score": self.score,
+                        "timestamp": Timestamp(date: now)
+                    ], merge: true)
+                }
+            }
+        }
+    }
+    
+    private func loadLastPlayDate() {
+        if let savedDate = userDefaults.object(forKey: "lastPlayDate") as? Date {
+            lastPlayDate = savedDate
+            let calendar = Calendar.current
+            if let days = calendar.dateComponents([.day], from: savedDate, to: Date()).day {
+                if days == 1 {
+                    consecutiveDays += 1
+                    achievementsManager.updateAchievement(id: "login_\(consecutiveDays)", value: consecutiveDays)
+                    achievementsManager.updateAchievement(id: "daily_\(consecutiveDays)", value: consecutiveDays)
+                } else if days > 1 {
+                    consecutiveDays = 0
+                }
+            }
+        } else {
+            // First time playing
+            achievementsManager.updateAchievement(id: "login_1", value: 1)
+        }
+    }
+    
+    private func saveLastPlayDate() {
+        lastPlayDate = Date()
+        userDefaults.set(lastPlayDate, forKey: "lastPlayDate")
+        
+        // Update login achievements
+        if consecutiveDays > 0 {
+            achievementsManager.updateAchievement(id: "login_\(consecutiveDays)", value: consecutiveDays)
+        }
+    }
+    
+    private func showAchievementNotification(_ achievement: Achievement) {
+        currentAchievement = achievement
+        showingAchievementNotification = true
+        
+        // Hide notification after 3 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+            self?.showingAchievementNotification = false
+            self?.currentAchievement = nil
+        }
+    }
+    
+    private func checkAchievements() {
+        // Score achievements
+        if score >= 1000 && !achievementsManager.isUnlocked(id: "score_1000") {
+            achievementsManager.updateAchievement(id: "score_1000", value: 1)
+            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "score_1000" }) {
+                showAchievementNotification(achievement)
+            }
+        }
+        if score >= 5000 && !achievementsManager.isUnlocked(id: "score_5000") {
+            achievementsManager.updateAchievement(id: "score_5000", value: 1)
+            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "score_5000" }) {
+                showAchievementNotification(achievement)
+            }
+        }
+        if score >= 10000 && !achievementsManager.isUnlocked(id: "score_10000") {
+            achievementsManager.updateAchievement(id: "score_10000", value: 1)
+            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "score_10000" }) {
+                showAchievementNotification(achievement)
+            }
+        }
+        
+        // Level achievements
+        if level >= 5 && !achievementsManager.isUnlocked(id: "level_5") {
+            achievementsManager.updateAchievement(id: "level_5", value: 1)
+            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "level_5" }) {
+                showAchievementNotification(achievement)
+            }
+        }
+        if level >= 10 && !achievementsManager.isUnlocked(id: "level_10") {
+            achievementsManager.updateAchievement(id: "level_10", value: 1)
+            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "level_10" }) {
+                showAchievementNotification(achievement)
+            }
+        }
+        if level >= 20 && !achievementsManager.isUnlocked(id: "level_20") {
+            achievementsManager.updateAchievement(id: "level_20", value: 1)
+            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "level_20" }) {
+                showAchievementNotification(achievement)
+            }
+        }
+        
+        // Lines cleared achievements
+        if linesCleared >= 10 && !achievementsManager.isUnlocked(id: "lines_10") {
+            achievementsManager.updateAchievement(id: "lines_10", value: 1)
+            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "lines_10" }) {
+                showAchievementNotification(achievement)
+            }
+        }
+        if linesCleared >= 50 && !achievementsManager.isUnlocked(id: "lines_50") {
+            achievementsManager.updateAchievement(id: "lines_50", value: 1)
+            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "lines_50" }) {
+                showAchievementNotification(achievement)
+            }
+        }
+        if linesCleared >= 100 && !achievementsManager.isUnlocked(id: "lines_100") {
+            achievementsManager.updateAchievement(id: "lines_100", value: 1)
+            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "lines_100" }) {
+                showAchievementNotification(achievement)
+            }
+        }
+        
+        // Blocks placed achievements
+        if blocksPlaced >= 50 && !achievementsManager.isUnlocked(id: "blocks_50") {
+            achievementsManager.updateAchievement(id: "blocks_50", value: 1)
+            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "blocks_50" }) {
+                showAchievementNotification(achievement)
+            }
+        }
+        if blocksPlaced >= 200 && !achievementsManager.isUnlocked(id: "blocks_200") {
+            achievementsManager.updateAchievement(id: "blocks_200", value: 1)
+            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "blocks_200" }) {
+                showAchievementNotification(achievement)
+            }
+        }
+        if blocksPlaced >= 500 && !achievementsManager.isUnlocked(id: "blocks_500") {
+            achievementsManager.updateAchievement(id: "blocks_500", value: 1)
+            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "blocks_500" }) {
+                showAchievementNotification(achievement)
+            }
+        }
+        
+        // Chain achievements
+        if currentChain >= 3 && !achievementsManager.isUnlocked(id: "chain_3") {
+            achievementsManager.updateAchievement(id: "chain_3", value: 1)
+            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "chain_3" }) {
+                showAchievementNotification(achievement)
+            }
+        }
+        if currentChain >= 5 && !achievementsManager.isUnlocked(id: "chain_5") {
+            achievementsManager.updateAchievement(id: "chain_5", value: 1)
+            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "chain_5" }) {
+                showAchievementNotification(achievement)
+            }
+        }
+        
+        // Color achievements
+        if usedColors.count >= 5 && !achievementsManager.isUnlocked(id: "colors_5") {
+            achievementsManager.updateAchievement(id: "colors_5", value: 1)
+            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "colors_5" }) {
+                showAchievementNotification(achievement)
+            }
+        }
+        if usedColors.count >= 8 && !achievementsManager.isUnlocked(id: "colors_8") {
+            achievementsManager.updateAchievement(id: "colors_8", value: 1)
+            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "colors_8" }) {
+                showAchievementNotification(achievement)
+            }
+        }
+        
+        // Grid fill achievements
+        let gridFillPercentage = Double(blocksPlaced) / Double(GameConstants.gridSize * GameConstants.gridSize) * 100
+        if gridFillPercentage >= 25 && !achievementsManager.isUnlocked(id: "grid_25") {
+            achievementsManager.updateAchievement(id: "grid_25", value: 1)
+            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "grid_25" }) {
+                showAchievementNotification(achievement)
+            }
+        }
+        if gridFillPercentage >= 50 && !achievementsManager.isUnlocked(id: "grid_50") {
+            achievementsManager.updateAchievement(id: "grid_50", value: 1)
+            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "grid_50" }) {
+                showAchievementNotification(achievement)
+            }
+        }
+        if gridFillPercentage >= 75 && !achievementsManager.isUnlocked(id: "grid_75") {
+            achievementsManager.updateAchievement(id: "grid_75", value: 1)
+            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "grid_75" }) {
+                showAchievementNotification(achievement)
+            }
+        }
+        
+        // Perfect level achievements
+        if isPerfectLevel && !achievementsManager.isUnlocked(id: "perfect_level") {
+            achievementsManager.updateAchievement(id: "perfect_level", value: 1)
+            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "perfect_level" }) {
+                showAchievementNotification(achievement)
+            }
+        }
+        if perfectLevels >= 3 && !achievementsManager.isUnlocked(id: "perfect_3") {
+            achievementsManager.updateAchievement(id: "perfect_3", value: 1)
+            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "perfect_3" }) {
+                showAchievementNotification(achievement)
+            }
+        }
+        
+        // Undo achievements
+        if undoCount >= 5 && !achievementsManager.isUnlocked(id: "undo_5") {
+            achievementsManager.updateAchievement(id: "undo_5", value: 1)
+            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "undo_5" }) {
+                showAchievementNotification(achievement)
+            }
+        }
+        if undoCount >= 20 && !achievementsManager.isUnlocked(id: "undo_20") {
+            achievementsManager.updateAchievement(id: "undo_20", value: 1)
+            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "undo_20" }) {
+                showAchievementNotification(achievement)
+            }
+        }
+        
+        // Daily login achievements
+        if consecutiveDays >= 3 && !achievementsManager.isUnlocked(id: "login_3") {
+            achievementsManager.updateAchievement(id: "login_3", value: 1)
+            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "login_3" }) {
+                showAchievementNotification(achievement)
+            }
+        }
+        if consecutiveDays >= 7 && !achievementsManager.isUnlocked(id: "login_7") {
+            achievementsManager.updateAchievement(id: "login_7", value: 1)
+            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "login_7" }) {
+                showAchievementNotification(achievement)
+            }
+        }
+        if consecutiveDays >= 30 && !achievementsManager.isUnlocked(id: "login_30") {
+            achievementsManager.updateAchievement(id: "login_30", value: 1)
+            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "login_30" }) {
+                showAchievementNotification(achievement)
+            }
+        }
+    }
+    
+    func gameOver() {
+        isGameOver = true
+        gamesCompleted += 1
+        achievementsManager.updateAchievement(id: "games_10", value: gamesCompleted)
+        achievementsManager.updateAchievement(id: "games_50", value: gamesCompleted)
+        achievementsManager.updateAchievement(id: "games_100", value: gamesCompleted)
+        
+        saveLastPlayDate()
+        checkAchievements()
+    }
 }
 
 // Deterministic seeded random generator
@@ -468,7 +769,7 @@ struct SeededGenerator: RandomNumberGenerator {
         state = state &* 6364136223846793005 &+ 1
         return state
     }
-}
+} 
 
 extension BlockShape {
     static func availableShapes(for level: Int) -> [BlockShape] {
