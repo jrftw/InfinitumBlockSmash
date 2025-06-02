@@ -9,6 +9,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var trayNode: SKNode!
     private var draggingBlock: Block?
     private var dragNode: SKNode?
+    private var previewNode: SKNode?
     
     // Visual effects
     private var particleEmitter: SKEmitterNode?
@@ -19,6 +20,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         view.preferredFramesPerSecond = 60
         view.ignoresSiblingOrder = true
         view.allowsTransparency = true
+        
+        // Set the frame size in GameState
+        gameState.frameSize = size
         
         setupScene()
         setupGrid()
@@ -64,6 +68,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         if gridNode == nil {
             gridNode = SKNode()
             gridNode.position = CGPoint(x: frame.midX, y: frame.midY)
+            gridNode.zPosition = 0 // Set base z-position for grid
             addChild(gridNode)
         }
         gridNode.removeAllChildren()
@@ -259,24 +264,26 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         trayNode.removeAllChildren()
         
         let blockSize = GameConstants.blockSize
-        let spacing: CGFloat = 32 // Slightly more spacing for 3 shapes
+        let spacing: CGFloat = 40 // Increased spacing for better visibility
         var currentX: CGFloat = 0
         
         // Calculate total width needed for all shapes
         var totalWidth: CGFloat = 0
         for block in gameState.tray {
             let shapeWidth = CGFloat(block.shape.cells.map { $0.0 }.max()! + 1) * blockSize
-            totalWidth += shapeWidth + spacing;
+            totalWidth += shapeWidth + spacing
         }
         totalWidth -= spacing // Remove last spacing
         
         // Start position to center the tray
         currentX = -totalWidth / 2
         
-        for block in gameState.tray {
+        for (index, block) in gameState.tray.enumerated() {
             let shapeWidth = CGFloat(block.shape.cells.map { $0.0 }.max()! + 1) * blockSize
             let blockNode = SKNode()
             blockNode.name = "tray_\(block.id.uuidString)"
+            blockNode.zPosition = CGFloat(index) // Set zPosition based on index to prevent overlapping
+            
             // Draw each cell of the block
             for (dx, dy) in block.shape.cells {
                 let cellNode = SKShapeNode(rectOf: CGSize(width: blockSize, height: blockSize))
@@ -306,6 +313,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 cellNode.addChild(shineNode)
                 // Position cell
                 cellNode.position = CGPoint(x: CGFloat(dx) * blockSize, y: CGFloat(dy) * blockSize)
+                cellNode.zPosition = 0 // Ensure cells are above shadow
                 blockNode.addChild(cellNode)
             }
             // Center the block shape vertically in the tray
@@ -324,40 +332,120 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
            let block = gameState.tray.first(where: { $0.id.uuidString == blockId }) {
             draggingBlock = block
             dragNode = createBlockNode(for: block)
-            dragNode?.position = touch.location(in: self)
+            let touchLocation = touch.location(in: self)
+            // Position the shape slightly above the touch point
+            dragNode?.position = CGPoint(x: touchLocation.x, y: touchLocation.y + GameConstants.blockSize * 1.5)
             dragNode?.alpha = 0.7
+            dragNode?.zPosition = 50 // Set a high but not too high z-position
             addChild(dragNode!)
         }
     }
     
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard let touch = touches.first, let dragNode = dragNode else { return }
-        dragNode.position = touch.location(in: self)
+        guard let touch = touches.first,
+              let dragNode = dragNode,
+              let draggingBlock = draggingBlock else { return }
         
-        // Update preview validity
-        let gridLocation = convertToGridCoordinates(touch.location(in: gridNode))
-        let isValid = gameState.canPlaceBlock(draggingBlock!, at: gridLocation)
-        dragNode.alpha = isValid ? 0.7 : 0.3
+        let touchPoint = touch.location(in: self)
+        let gridPoint = convertToGridCoordinates(touchPoint)
+        
+        // Update drag node position to follow touch
+        dragNode.position = touchPoint
+        
+        // Remove any existing preview
+        previewNode?.removeFromParent()
+        previewNode = nil
+        
+        // Only show preview if placement is valid
+        if gameState.canPlaceBlock(draggingBlock, at: gridPoint) {
+            // Create preview node for the entire shape
+            let preview = SKNode()
+            preview.zPosition = 1 // Set preview z-position just above grid
+            
+            // Create preview for each cell in the shape
+            for (dx, dy) in draggingBlock.shape.cells {
+                let cellNode = SKShapeNode(rectOf: CGSize(width: GameConstants.blockSize, height: GameConstants.blockSize))
+                cellNode.fillColor = SKColor.from(draggingBlock.color.color)
+                cellNode.strokeColor = .clear
+                cellNode.alpha = 0.5
+                
+                // Position each cell relative to the shape's anchor point
+                cellNode.position = CGPoint(
+                    x: CGFloat(dx) * GameConstants.blockSize,
+                    y: CGFloat(dy) * GameConstants.blockSize
+                )
+                preview.addChild(cellNode)
+            }
+            
+            // Calculate the preview position relative to the grid
+            let blockSize = GameConstants.blockSize
+            let gridSize = GameConstants.gridSize
+            let totalWidth = CGFloat(gridSize) * blockSize
+            let totalHeight = CGFloat(gridSize) * blockSize
+            
+            // Position the entire preview at the grid position
+            let previewPosition = CGPoint(
+                x: -totalWidth / 2 + CGFloat(Int(gridPoint.x)) * blockSize + blockSize / 2,
+                y: -totalHeight / 2 + CGFloat(Int(gridPoint.y)) * blockSize + blockSize / 2
+            )
+            preview.position = previewPosition
+            
+            // Add preview to grid node
+            gridNode.addChild(preview)
+            previewNode = preview
+            
+            // Make dragged shape more transparent
+            dragNode.alpha = 0.7
+        } else {
+            // Make dragged shape more opaque when placement is invalid
+            dragNode.alpha = 1.0
+        }
     }
     
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard let touch = touches.first, let draggingBlock = draggingBlock else { return }
-        let gridLocation = convertToGridCoordinates(touch.location(in: gridNode))
+        guard let touch = touches.first,
+              let dragNode = dragNode,
+              let draggingBlock = draggingBlock else { return }
         
-        if gameState.tryPlaceBlockFromTray(draggingBlock, at: gridLocation) {
-            playPlacementAnimation(at: gridLocation)
-            renderGrid(gridNode: gridNode, gameState: gameState, blockSize: GameConstants.blockSize)
+        let touchPoint = touch.location(in: self)
+        let gridPoint = convertToGridCoordinates(touchPoint)
+        
+        // Try to place the block
+        if gameState.tryPlaceBlockFromTray(draggingBlock, at: gridPoint) {
+            // Play placement sound
+            run(SKAction.playSoundFileNamed("place.mp3", waitForCompletion: false))
+        } else {
+            // Play error sound
+            run(SKAction.playSoundFileNamed("error.mp3", waitForCompletion: false))
         }
         
-        dragNode?.removeFromParent()
-        dragNode = nil
+        // Clean up
+        dragNode.removeFromParent()
+        previewNode?.removeFromParent()
+        self.dragNode = nil
         self.draggingBlock = nil
+        self.previewNode = nil
     }
     
     private func convertToGridCoordinates(_ point: CGPoint) -> CGPoint {
+        // Calculate the grid cell size
         let cellSize = GameConstants.blockSize
-        let col = Int((point.x + CGFloat(GameConstants.gridSize) * cellSize/2) / cellSize)
-        let row = Int((point.y + CGFloat(GameConstants.gridSize) * cellSize/2) / cellSize)
+        let gridSize = GameConstants.gridSize
+        
+        // Calculate the grid's origin (top-left corner)
+        let gridOrigin = CGPoint(
+            x: frame.midX - (CGFloat(gridSize) * cellSize) / 2,
+            y: frame.midY - (CGFloat(gridSize) * cellSize) / 2
+        )
+        
+        // Calculate the relative position within the grid
+        let relativeX = point.x - gridOrigin.x
+        let relativeY = point.y - gridOrigin.y
+        
+        // Convert to grid coordinates using floor to ensure consistent placement
+        let col = max(0, min(gridSize - 1, Int(floor(relativeX / cellSize))))
+        let row = max(0, min(gridSize - 1, Int(floor(relativeY / cellSize))))
+        
         return CGPoint(x: col, y: row)
     }
     
@@ -420,17 +508,21 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     // MARK: - Grid Rendering
     private func renderGrid(gridNode: SKNode, gameState: GameState, blockSize: CGFloat) {
-        // Remove all previous placed block nodes (but not grid lines or background)
+        // Remove only the placed block nodes, not the grid lines or background
         for node in gridNode.children {
-            if node.zPosition == 0 {
+            if node.name != "gridLine" && node.name != "gridBackground" {
                 node.removeFromParent()
             }
         }
+        
         // Draw all placed blocks
         for row in 0..<GameConstants.gridSize {
             for col in 0..<GameConstants.gridSize {
                 if let block = gameState.grid[row][col] {
                     let cellNode = SKShapeNode(rectOf: CGSize(width: blockSize, height: blockSize), cornerRadius: blockSize * 0.18)
+                    cellNode.name = "placedBlock"
+                    cellNode.zPosition = 1 // Set placed blocks z-position
+                    
                     // Gradient fill
                     let colors = [block.color.gradientColors.start, block.color.gradientColors.end]
                     let locations: [CGFloat] = [0.0, 1.0]
@@ -440,6 +532,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                     } else {
                         cellNode.fillColor = SKColor.from(block.color.color)
                     }
+                    
                     // Shadow
                     let shadowNode = SKShapeNode(rectOf: CGSize(width: blockSize, height: blockSize))
                     shadowNode.fillColor = UIColor(cgColor: block.color.shadowColor)
@@ -447,9 +540,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                     shadowNode.position = CGPoint(x: 2, y: -2)
                     shadowNode.zPosition = -1
                     cellNode.addChild(shadowNode)
+                    
                     // Border
                     cellNode.strokeColor = .white
                     cellNode.lineWidth = 1
+                    
                     // Shine
                     let shineNode = SKShapeNode(rectOf: CGSize(width: blockSize * 0.3, height: blockSize * 0.3))
                     shineNode.fillColor = .white
@@ -457,17 +552,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                     shineNode.position = CGPoint(x: -blockSize * 0.25, y: blockSize * 0.25)
                     shineNode.zRotation = .pi / 4
                     cellNode.addChild(shineNode)
+                    
                     // Position cell in the grid
                     cellNode.position = CGPoint(
                         x: CGFloat(col) * blockSize - CGFloat(GameConstants.gridSize) * blockSize / 2 + blockSize / 2,
                         y: CGFloat(row) * blockSize - CGFloat(GameConstants.gridSize) * blockSize / 2 + blockSize / 2
                     )
-                    cellNode.zPosition = 0
                     gridNode.addChild(cellNode)
                 }
             }
         }
-        // Do NOT redraw grid lines here!
     }
 }
 
@@ -481,5 +575,36 @@ extension GameScene: GameStateDelegate {
         let points = positions.map { CGPoint(x: $0.1, y: $0.0) }
         playComboAnimation(at: points)
         renderGrid(gridNode: gridNode, gameState: gameState, blockSize: GameConstants.blockSize)
+    }
+    
+    func showScoreAnimation(points: Int, at position: CGPoint) {
+        // Create a label node for the score animation
+        let scoreLabel = SKLabelNode(text: "+\(points)")
+        scoreLabel.fontName = "AvenirNext-Bold"
+        scoreLabel.fontSize = 24
+        scoreLabel.fontColor = .white
+        scoreLabel.position = position
+        scoreLabel.zPosition = 100
+        scoreLabel.alpha = 0
+        
+        // Add the label to the scene
+        addChild(scoreLabel)
+        
+        // Create the animation sequence
+        let fadeIn = SKAction.fadeIn(withDuration: 0.2)
+        let moveUp = SKAction.moveBy(x: 0, y: 50, duration: 0.5)
+        let fadeOut = SKAction.fadeOut(withDuration: 0.3)
+        let remove = SKAction.removeFromParent()
+        
+        // Combine the actions
+        let sequence = SKAction.sequence([
+            fadeIn,
+            moveUp,
+            fadeOut,
+            remove
+        ])
+        
+        // Run the animation
+        scoreLabel.run(sequence)
     }
 } 

@@ -4,6 +4,7 @@ import GoogleMobileAds
 import FirebaseCore
 import AppTrackingTransparency
 import AdSupport
+import FirebaseAppCheck
 
 // MARK: - Main App Entry Point
 @main
@@ -16,14 +17,9 @@ struct Infinitum_Block_SmashApp: App {
     // MARK: - Initializer
     init() {
         FirebaseApp.configure()
+        configureAppCheck()
         MobileAds.shared.start { status in
             print("AdMob initialization status: \(status)")
-        }
-        // Force log out guest on app launch
-        if isGuest {
-            userID = ""
-            username = ""
-            isGuest = false
         }
         // Request App Tracking Transparency on first launch
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -35,27 +31,60 @@ struct Infinitum_Block_SmashApp: App {
         }
     }
 
+    // MARK: - AppCheck Configuration
+    private func configureAppCheck() {
+        #if os(macOS)
+        // 🖥️ macOS: Use debug provider
+        let providerFactory = AppCheckDebugProviderFactory()
+        AppCheck.setAppCheckProviderFactory(providerFactory)
+        print("[AppCheck] Using DebugProvider for macOS")
+        
+        #elseif targetEnvironment(simulator)
+        // 🧪 Simulator: Use debug provider
+        let providerFactory = AppCheckDebugProviderFactory()
+        AppCheck.setAppCheckProviderFactory(providerFactory)
+        print("[AppCheck] Using DebugProvider for Simulator")
+
+        #elseif DEBUG
+        if isTestFlight() {
+            // 🧪 TestFlight build: Use debug provider
+            let providerFactory = AppCheckDebugProviderFactory()
+            AppCheck.setAppCheckProviderFactory(providerFactory)
+            print("[AppCheck] Using DebugProvider for TestFlight")
+        } else {
+            // ✅ Development Device: Use real provider
+            let providerFactory = DeviceCheckProviderFactory()
+            AppCheck.setAppCheckProviderFactory(providerFactory)
+            print("[AppCheck] Using DeviceCheckProvider for Development Device")
+        }
+
+        #else
+        // 🚀 Production: Use DeviceCheck
+        let providerFactory = DeviceCheckProviderFactory()
+        AppCheck.setAppCheckProviderFactory(providerFactory)
+        print("[AppCheck] Using DeviceCheckProvider for Production")
+        #endif
+    }
+
+    private func isTestFlight() -> Bool {
+        #if DEBUG
+        return Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
+        #else
+        return false
+        #endif
+    }
+
     // MARK: - Scene Definition
-       var body: some Scene {
-           WindowGroup {
-               Group {
-                   if userID.isEmpty || username.isEmpty {
-                       AuthView()
-                   } else {
-                       ContentView()
-                   }
-               }
-               .onAppear {
-                   print("[App Launch] userID: \(userID), username: \(username), isGuest: \(isGuest)")
-                   if userID.isEmpty || username.isEmpty {
-                       print("[App Launch] Showing AuthView (userID or username is empty)")
-                   } else {
-                       print("[App Launch] Showing ContentView (user is signed in)")
-                   }
-               }
-           }
-       }
-   }
+    var body: some Scene {
+        WindowGroup {
+            if userID.isEmpty {
+                AuthView()
+            } else {
+                ContentView()
+            }
+        }
+    }
+}
 
 // MARK: - HomeView
 struct HomeView: View {

@@ -99,6 +99,8 @@ enum BlockShape: String, CaseIterable {
     case bar4H, bar4V
     // Square
     case square
+    // Rectangles
+    case rect2x3, rect3x2, rect3x3
     // L shapes (4 rotations)
     case lUp, lDown, lLeft, lRight
     // T shapes (4 rotations)
@@ -117,6 +119,10 @@ enum BlockShape: String, CaseIterable {
         case .bar4V: return [(0,0), (0,1), (0,2), (0,3)]
         // Square
         case .square: return [(0,0), (1,0), (0,1), (1,1)]
+        // Rectangles
+        case .rect2x3: return [(0,0), (1,0), (0,1), (1,1), (0,2), (1,2)]
+        case .rect3x2: return [(0,0), (1,0), (2,0), (0,1), (1,1), (2,1)]
+        case .rect3x3: return [(0,0), (1,0), (2,0), (0,1), (1,1), (2,1), (0,2), (1,2), (2,2)]
         // L shapes
         case .lUp:    return [(0,0), (0,1), (0,2), (1,2)]
         case .lDown:  return [(1,0), (1,1), (1,2), (0,2)]
@@ -149,6 +155,8 @@ enum BlockShape: String, CaseIterable {
         case .uShape, .vShape: return 4
         case .wShape, .xShape: return 5
         case .yShape, .zShape2: return 6
+        case .rect2x3, .rect3x2: return 10
+        case .rect3x3: return 15
         }
     }
     

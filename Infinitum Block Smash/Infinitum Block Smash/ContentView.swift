@@ -5,14 +5,17 @@ struct ContentView: View {
     @State private var showingGame = false
     @State private var showingLeaderboard = false
     @State private var showingSettings = false
+    @State private var showingAuth = false
+    @State private var showingChangeInfo = false
     @AppStorage("userID") private var userID: String = ""
     @AppStorage("username") private var username: String = ""
-    @State private var showChangeUsername = false
-    @State private var newUsername = ""
+    @State private var gameState = GameState()
+    @State private var showingTutorial = false
     
     var isGuest: Bool {
-        !userID.isEmpty && username.isEmpty
+        userID.isEmpty
     }
+    
     var isLoggedIn: Bool {
         !userID.isEmpty && !username.isEmpty
     }
@@ -45,6 +48,16 @@ struct ContentView: View {
                 }
                 
                 if isLoggedIn {
+                    Button(action: { showingChangeInfo = true }) {
+                        Text("Change Information")
+                            .font(.title2.bold())
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 40)
+                            .padding(.vertical, 20)
+                            .background(Color.purple)
+                            .cornerRadius(15)
+                    }
+                    
                     Button(action: { showingSettings = true }) {
                         Text("Settings")
                             .font(.title2.bold())
@@ -54,11 +67,12 @@ struct ContentView: View {
                             .background(Color.gray)
                             .cornerRadius(15)
                     }
+                    
                     Button(action: {
                         userID = ""
                         username = ""
                     }) {
-                        Text("Sign Out")
+                        Text("Log Out")
                             .font(.title2.bold())
                             .foregroundColor(.white)
                             .padding(.horizontal, 40)
@@ -66,14 +80,9 @@ struct ContentView: View {
                             .background(Color.red)
                             .cornerRadius(15)
                     }
-                }
-                
-                if isGuest {
-                    Button(action: {
-                        userID = ""
-                        username = ""
-                    }) {
-                        Text("Sign Up")
+                } else {
+                    Button(action: { showingAuth = true }) {
+                        Text("Sign In / Sign Up")
                             .font(.title2.bold())
                             .foregroundColor(.white)
                             .padding(.horizontal, 40)
@@ -98,23 +107,113 @@ struct ContentView: View {
                 LeaderboardView()
             }
             .sheet(isPresented: $showingSettings) {
-                // Placeholder SettingsView
-                Text("Settings View Coming Soon")
-                    .font(.largeTitle)
-                    .padding()
+                SettingsView(gameState: gameState, showingTutorial: $showingTutorial)
             }
-            .alert("Change Username", isPresented: $showChangeUsername, actions: {
-                TextField("New Username", text: $newUsername)
-                Button("Save") {
-                    if !newUsername.trimmingCharacters(in: .whitespaces).isEmpty {
-                        username = newUsername.trimmingCharacters(in: .whitespaces)
-                        newUsername = ""
+            .sheet(isPresented: $showingAuth) {
+                AuthView()
+            }
+            .sheet(isPresented: $showingChangeInfo) {
+                ChangeInfoView()
+            }
+        }
+    }
+}
+
+struct ChangeInfoView: View {
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage("username") private var username: String = ""
+    @AppStorage("email") private var email: String = ""
+    @AppStorage("phoneNumber") private var phoneNumber: String = ""
+    @State private var newUsername: String = ""
+    @State private var newEmail: String = ""
+    @State private var newPhoneNumber: String = ""
+    @State private var showingPasswordChange = false
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("Account Information")) {
+                    TextField("Username", text: $newUsername)
+                        .textContentType(.username)
+                    TextField("Email", text: $newEmail)
+                        .textContentType(.emailAddress)
+                        .keyboardType(.emailAddress)
+                    TextField("Phone Number", text: $newPhoneNumber)
+                        .textContentType(.telephoneNumber)
+                        .keyboardType(.phonePad)
+                }
+                
+                Section {
+                    Button("Change Password") {
+                        showingPasswordChange = true
                     }
                 }
-                Button("Cancel", role: .cancel) { newUsername = "" }
-            }, message: {
-                Text("Enter your new username.")
-            })
+                
+                Section {
+                    Button("Save Changes") {
+                        if !newUsername.isEmpty {
+                            username = newUsername
+                        }
+                        if !newEmail.isEmpty {
+                            email = newEmail
+                        }
+                        if !newPhoneNumber.isEmpty {
+                            phoneNumber = newPhoneNumber
+                        }
+                        dismiss()
+                    }
+                }
+            }
+            .navigationTitle("Change Information")
+            .navigationBarItems(trailing: Button("Done") { dismiss() })
+            .onAppear {
+                newUsername = username
+                newEmail = email
+                newPhoneNumber = phoneNumber
+            }
+            .sheet(isPresented: $showingPasswordChange) {
+                ChangePasswordView()
+            }
+        }
+    }
+}
+
+struct ChangePasswordView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var currentPassword: String = ""
+    @State private var newPassword: String = ""
+    @State private var confirmPassword: String = ""
+    @State private var showingError = false
+    @State private var errorMessage = ""
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("Change Password")) {
+                    SecureField("Current Password", text: $currentPassword)
+                    SecureField("New Password", text: $newPassword)
+                    SecureField("Confirm New Password", text: $confirmPassword)
+                }
+                
+                Section {
+                    Button("Update Password") {
+                        if newPassword != confirmPassword {
+                            errorMessage = "New passwords do not match"
+                            showingError = true
+                            return
+                        }
+                        // TODO: Implement password change logic
+                        dismiss()
+                    }
+                }
+            }
+            .navigationTitle("Change Password")
+            .navigationBarItems(trailing: Button("Cancel") { dismiss() })
+            .alert("Error", isPresented: $showingError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(errorMessage)
+            }
         }
     }
 }

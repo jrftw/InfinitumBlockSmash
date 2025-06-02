@@ -6,6 +6,7 @@ import FirebaseFirestore
 protocol GameStateDelegate: AnyObject {
     func gameStateDidUpdate()
     func gameStateDidClearLines(at positions: [(Int, Int)])
+    func showScoreAnimation(points: Int, at position: CGPoint)
 }
 
 class GameState: ObservableObject {
@@ -32,6 +33,9 @@ class GameState: ObservableObject {
     @Published var isPerfectLevel: Bool = true
     @Published var gamesCompleted: Int = 0
     @Published var undoCount: Int = 0
+    
+    // Add frame size property
+    var frameSize: CGSize = .zero
     
     weak var delegate: GameStateDelegate?
     private var rng: RandomNumberGenerator = SystemRandomNumberGenerator()
@@ -227,6 +231,9 @@ class GameState: ObservableObject {
 
     // In tryPlaceBlockFromTray, save state before placement and reset undo after
     func tryPlaceBlockFromTray(_ block: Block, at anchor: CGPoint) -> Bool {
+        // Don't allow placing blocks if game is over
+        guard !isGameOver else { return false }
+        
         guard let trayIndex = tray.firstIndex(where: { $0.id == block.id }) else { return false }
         if canPlaceBlock(block, at: anchor) {
             print("[Placement] Placing block \(block.shape.rawValue) at \(anchor)")
@@ -254,16 +261,23 @@ class GameState: ObservableObject {
     }
     
     func canPlaceBlock(_ block: Block, at anchor: CGPoint) -> Bool {
+        // Check if any part of the shape would be outside the grid
         for (dx, dy) in block.shape.cells {
             let x = Int(anchor.x) + dx
             let y = Int(anchor.y) + dy
+            
+            // Check if the position is within grid bounds
             if x < 0 || x >= GameConstants.gridSize || y < 0 || y >= GameConstants.gridSize {
                 return false
             }
+            
+            // Check if the position is already occupied
             if grid[y][x] != nil {
                 return false
             }
         }
+        
+        // If we get here, the placement is valid
         return true
     }
     
@@ -272,7 +286,7 @@ class GameState: ObservableObject {
             let x = Int(anchor.x) + dx
             let y = Int(anchor.y) + dy
             if x >= 0 && x < GameConstants.gridSize && y >= 0 && y < GameConstants.gridSize {
-                var placedBlock = Block(color: block.color, shape: .bar2H)
+                var placedBlock = Block(color: block.color, shape: block.shape)
                 placedBlock.position = CGPoint(x: x, y: y)
                 grid[y][x] = placedBlock
             }
@@ -287,6 +301,9 @@ class GameState: ObservableObject {
     private func checkMatches() {
         var clearedPositions: [(Int, Int)] = []
         var linesCleared = 0
+        var colorMatchCount = 0
+        
+        // Check rows
         for row in 0..<GameConstants.gridSize {
             if isRowFull(row) {
                 let rowColors = grid[row].compactMap { $0?.color }
@@ -295,15 +312,19 @@ class GameState: ObservableObject {
                     clearedPositions.append((row, col))
                 }
                 clearRow(row)
-                addScore(100)
+                let position = CGPoint(x: frameSize.width/2, y: CGFloat(row) * GameConstants.blockSize)
+                addScore(100, at: position)
                 print("[Clear] Row \(row) cleared. +100 points.")
                 if allSameColor && !rowColors.isEmpty {
-                    addScore(200)
-                    print("[Bonus] Row \(row) all same color (\(rowColors.first!)). +200 bonus points!")
+                    colorMatchCount += 1
+                    addScore(500, at: position) // Increased from 200 to 500 for color match
+                    print("[Bonus] Row \(row) all same color (\(rowColors.first!)). +500 bonus points!")
                 }
                 linesCleared += 1
             }
         }
+        
+        // Check columns
         for col in 0..<GameConstants.gridSize {
             if isColumnFull(col) {
                 let colColors = (0..<GameConstants.gridSize).compactMap { grid[$0][col]?.color }
@@ -312,15 +333,25 @@ class GameState: ObservableObject {
                     clearedPositions.append((row, col))
                 }
                 clearColumn(col)
-                addScore(100)
+                let position = CGPoint(x: CGFloat(col) * GameConstants.blockSize, y: frameSize.height/2)
+                addScore(100, at: position)
                 print("[Clear] Column \(col) cleared. +100 points.")
                 if allSameColor && !colColors.isEmpty {
-                    addScore(200)
-                    print("[Bonus] Column \(col) all same color (\(colColors.first!)). +200 bonus points!")
+                    colorMatchCount += 1
+                    addScore(500, at: position) // Increased from 200 to 500 for color match
+                    print("[Bonus] Column \(col) all same color (\(colColors.first!)). +500 bonus points!")
                 }
                 linesCleared += 1
             }
         }
+        
+        // Additional bonus for multiple color matches
+        if colorMatchCount >= 2 {
+            let multiMatchBonus = colorMatchCount * 1000
+            addScore(multiMatchBonus, at: CGPoint(x: frameSize.width/2, y: frameSize.height/2))
+            print("[Super Bonus] \(colorMatchCount) color matches! +\(multiMatchBonus) bonus points!")
+        }
+        
         if !clearedPositions.isEmpty {
             print("[Clear] Total lines cleared: \(linesCleared)")
             delegate?.gameStateDidClearLines(at: clearedPositions)
@@ -330,10 +361,12 @@ class GameState: ObservableObject {
             }
             checkGroups()
         }
+        
         if isGridEmpty() {
             print("[Level] Grid empty, leveling up.")
             levelUp()
         }
+        
         linesCleared += linesCleared
         currentChain += 1
         checkAchievements()
@@ -372,14 +405,22 @@ class GameState: ObservableObject {
         return true
     }
     
-    func addScore(_ points: Int) {
+    func addScore(_ points: Int, at position: CGPoint? = nil) {
         let oldScore = score
         score += points
         print("[Score] Added \(points) points (from \(oldScore) to \(score))")
+        
+        // Show score animation if position is provided
+        if let position = position {
+            delegate?.showScoreAnimation(points: points, at: position)
+        }
+        
         achievementsManager.updateAchievement(id: "score_1000", value: score)
         // Global high score
         if score > userDefaults.integer(forKey: scoreKey) {
             achievementsManager.updateAchievement(id: "high_score", value: score)
+            // Update leaderboard when new high score is achieved
+            updateLeaderboard()
         }
         // Per-level high score
         let levelHighScoreKey = "highScore_level_\(level)"
@@ -390,7 +431,7 @@ class GameState: ObservableObject {
         }
         delegate?.gameStateDidUpdate()
         // Check for level up after every score change
-        let requiredScore = level * 1000
+        let requiredScore = calculateRequiredScore()
         if score >= requiredScore && !levelComplete {
             print("[Level] Score threshold met for level \(level). Level complete!")
             levelComplete = true
@@ -398,8 +439,20 @@ class GameState: ObservableObject {
         checkAchievements()
     }
     
+    private func calculateRequiredScore() -> Int {
+        if level <= 5 {
+            return level * 1000
+        } else if level <= 10 {
+            return level * 2000
+        } else if level <= 50 {
+            return level * 3000
+        } else {
+            return level * 5000
+        }
+    }
+    
     func levelUp() {
-        let requiredScore = level * 1000
+        let requiredScore = calculateRequiredScore()
         guard score >= requiredScore else {
             print("[Level] Not enough score to level up. Required: \(requiredScore), Current: \(score)")
             return
@@ -411,6 +464,8 @@ class GameState: ObservableObject {
         tray = []
         if level > userDefaults.integer(forKey: levelKey) {
             achievementsManager.updateAchievement(id: "highest_level", value: level)
+            // Update leaderboard when new highest level is achieved
+            updateLeaderboard()
         }
         let availableShapes = BlockShape.availableShapes(for: level)
         print("[Level] Level \(level) - Available shapes: \(availableShapes.map { String(describing: $0) }.joined(separator: ", "))")
@@ -474,7 +529,7 @@ class GameState: ObservableObject {
                 if let _ = grid[row][col], !visited[row][col] {
                     let group = floodFill(row: row, col: col, visited: &visited)
                     if group.count >= 10 {
-                        addScore(200)
+                        addScore(200, at: CGPoint(x: frameSize.width/2, y: CGFloat(row) * GameConstants.blockSize))
                         print("[Bonus] Group of \(group.count) contiguous blocks at (\(row),\(col)). +200 bonus points!")
                     }
                 }
@@ -512,19 +567,47 @@ class GameState: ObservableObject {
             "yearly",
             "alltime"
         ]
+        
+        // Add debug logging
+        print("[Leaderboard] Attempting to update leaderboard")
+        print("[Leaderboard] UserID: \(userID)")
+        print("[Leaderboard] Username: \(username)")
+        print("[Leaderboard] Current Score: \(score)")
+        
         // Only write to leaderboard if user is not a guest and has a username
-        guard !userID.isEmpty, !username.isEmpty else { return }
+        guard !userID.isEmpty, !username.isEmpty else {
+            print("[Leaderboard] Update failed - Missing userID or username")
+            return
+        }
+        
         for period in periods {
             let periodKey = period
             let docRef = db.collection("classic_leaderboard").document(periodKey).collection("scores").document(userID)
+            
             docRef.getDocument { snapshot, error in
-                let prevScore = snapshot?.data()? ["score"] as? Int ?? 0
+                if let error = error {
+                    print("[Leaderboard] Error fetching previous score: \(error.localizedDescription)")
+                    return
+                }
+                
+                let prevScore = snapshot?.data()?["score"] as? Int ?? 0
+                print("[Leaderboard] Previous score for \(period): \(prevScore)")
+                
                 if self.score > prevScore {
+                    print("[Leaderboard] Updating score for \(period) - New score: \(self.score)")
                     docRef.setData([
                         "username": self.username,
                         "score": self.score,
                         "timestamp": Timestamp(date: now)
-                    ], merge: true)
+                    ], merge: true) { error in
+                        if let error = error {
+                            print("[Leaderboard] Error updating score: \(error.localizedDescription)")
+                        } else {
+                            print("[Leaderboard] Successfully updated score for \(period)")
+                        }
+                    }
+                } else {
+                    print("[Leaderboard] Score not updated for \(period) - Current score (\(self.score)) not higher than previous (\(prevScore))")
                 }
             }
         }
@@ -560,190 +643,83 @@ class GameState: ObservableObject {
     }
     
     private func showAchievementNotification(_ achievement: Achievement) {
-        currentAchievement = achievement
-        showingAchievementNotification = true
-        
-        // Hide notification after 3 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
-            self?.showingAchievementNotification = false
-            self?.currentAchievement = nil
+        // Only show notification if the achievement hasn't been notified before
+        if !achievement.wasNotified {
+            currentAchievement = achievement
+            showingAchievementNotification = true
+            
+            // Mark the achievement as notified immediately
+            achievementsManager.markAsNotified(id: achievement.id)
+            
+            // Hide notification after 3 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                self?.showingAchievementNotification = false
+                self?.currentAchievement = nil
+            }
         }
     }
     
     private func checkAchievements() {
         // Score achievements
-        if score >= 1000 && !achievementsManager.isUnlocked(id: "score_1000") {
-            achievementsManager.updateAchievement(id: "score_1000", value: 1)
-            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "score_1000" }) {
-                showAchievementNotification(achievement)
-            }
-        }
-        if score >= 5000 && !achievementsManager.isUnlocked(id: "score_5000") {
-            achievementsManager.updateAchievement(id: "score_5000", value: 1)
-            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "score_5000" }) {
-                showAchievementNotification(achievement)
-            }
-        }
-        if score >= 10000 && !achievementsManager.isUnlocked(id: "score_10000") {
-            achievementsManager.updateAchievement(id: "score_10000", value: 1)
-            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "score_10000" }) {
-                showAchievementNotification(achievement)
-            }
-        }
+        achievementsManager.updateAchievement(id: "score_1000", value: score)
+        achievementsManager.updateAchievement(id: "score_5000", value: score)
+        achievementsManager.updateAchievement(id: "score_10000", value: score)
+        achievementsManager.updateAchievement(id: "score_50000", value: score)
         
         // Level achievements
-        if level >= 5 && !achievementsManager.isUnlocked(id: "level_5") {
-            achievementsManager.updateAchievement(id: "level_5", value: 1)
-            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "level_5" }) {
-                showAchievementNotification(achievement)
-            }
-        }
-        if level >= 10 && !achievementsManager.isUnlocked(id: "level_10") {
-            achievementsManager.updateAchievement(id: "level_10", value: 1)
-            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "level_10" }) {
-                showAchievementNotification(achievement)
-            }
-        }
-        if level >= 20 && !achievementsManager.isUnlocked(id: "level_20") {
-            achievementsManager.updateAchievement(id: "level_20", value: 1)
-            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "level_20" }) {
-                showAchievementNotification(achievement)
-            }
-        }
+        achievementsManager.updateAchievement(id: "level_5", value: level)
+        achievementsManager.updateAchievement(id: "level_10", value: level)
+        achievementsManager.updateAchievement(id: "level_20", value: level)
+        achievementsManager.updateAchievement(id: "level_50", value: level)
         
         // Lines cleared achievements
-        if linesCleared >= 10 && !achievementsManager.isUnlocked(id: "lines_10") {
-            achievementsManager.updateAchievement(id: "lines_10", value: 1)
-            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "lines_10" }) {
-                showAchievementNotification(achievement)
-            }
-        }
-        if linesCleared >= 50 && !achievementsManager.isUnlocked(id: "lines_50") {
-            achievementsManager.updateAchievement(id: "lines_50", value: 1)
-            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "lines_50" }) {
-                showAchievementNotification(achievement)
-            }
-        }
-        if linesCleared >= 100 && !achievementsManager.isUnlocked(id: "lines_100") {
-            achievementsManager.updateAchievement(id: "lines_100", value: 1)
-            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "lines_100" }) {
-                showAchievementNotification(achievement)
-            }
-        }
+        achievementsManager.updateAchievement(id: "lines_10", value: linesCleared)
+        achievementsManager.updateAchievement(id: "lines_50", value: linesCleared)
+        achievementsManager.updateAchievement(id: "lines_100", value: linesCleared)
         
         // Blocks placed achievements
-        if blocksPlaced >= 50 && !achievementsManager.isUnlocked(id: "blocks_50") {
-            achievementsManager.updateAchievement(id: "blocks_50", value: 1)
-            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "blocks_50" }) {
-                showAchievementNotification(achievement)
-            }
-        }
-        if blocksPlaced >= 200 && !achievementsManager.isUnlocked(id: "blocks_200") {
-            achievementsManager.updateAchievement(id: "blocks_200", value: 1)
-            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "blocks_200" }) {
-                showAchievementNotification(achievement)
-            }
-        }
-        if blocksPlaced >= 500 && !achievementsManager.isUnlocked(id: "blocks_500") {
-            achievementsManager.updateAchievement(id: "blocks_500", value: 1)
-            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "blocks_500" }) {
-                showAchievementNotification(achievement)
-            }
-        }
+        achievementsManager.updateAchievement(id: "blocks_50", value: blocksPlaced)
+        achievementsManager.updateAchievement(id: "blocks_200", value: blocksPlaced)
+        achievementsManager.updateAchievement(id: "blocks_500", value: blocksPlaced)
         
         // Chain achievements
-        if currentChain >= 3 && !achievementsManager.isUnlocked(id: "chain_3") {
-            achievementsManager.updateAchievement(id: "chain_3", value: 1)
-            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "chain_3" }) {
-                showAchievementNotification(achievement)
-            }
-        }
-        if currentChain >= 5 && !achievementsManager.isUnlocked(id: "chain_5") {
-            achievementsManager.updateAchievement(id: "chain_5", value: 1)
-            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "chain_5" }) {
-                showAchievementNotification(achievement)
-            }
-        }
+        achievementsManager.updateAchievement(id: "chain_3", value: currentChain)
+        achievementsManager.updateAchievement(id: "chain_5", value: currentChain)
+        achievementsManager.updateAchievement(id: "chain_10", value: currentChain)
         
         // Color achievements
-        if usedColors.count >= 5 && !achievementsManager.isUnlocked(id: "colors_5") {
-            achievementsManager.updateAchievement(id: "colors_5", value: 1)
-            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "colors_5" }) {
-                showAchievementNotification(achievement)
-            }
-        }
-        if usedColors.count >= 8 && !achievementsManager.isUnlocked(id: "colors_8") {
-            achievementsManager.updateAchievement(id: "colors_8", value: 1)
-            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "colors_8" }) {
-                showAchievementNotification(achievement)
-            }
-        }
+        achievementsManager.updateAchievement(id: "colors_5", value: usedColors.count)
+        achievementsManager.updateAchievement(id: "colors_8", value: usedColors.count)
         
         // Grid fill achievements
         let gridFillPercentage = Double(blocksPlaced) / Double(GameConstants.gridSize * GameConstants.gridSize) * 100
-        if gridFillPercentage >= 25 && !achievementsManager.isUnlocked(id: "grid_25") {
-            achievementsManager.updateAchievement(id: "grid_25", value: 1)
-            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "grid_25" }) {
-                showAchievementNotification(achievement)
-            }
-        }
-        if gridFillPercentage >= 50 && !achievementsManager.isUnlocked(id: "grid_50") {
-            achievementsManager.updateAchievement(id: "grid_50", value: 1)
-            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "grid_50" }) {
-                showAchievementNotification(achievement)
-            }
-        }
-        if gridFillPercentage >= 75 && !achievementsManager.isUnlocked(id: "grid_75") {
-            achievementsManager.updateAchievement(id: "grid_75", value: 1)
-            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "grid_75" }) {
-                showAchievementNotification(achievement)
-            }
-        }
+        achievementsManager.updateAchievement(id: "grid_25", value: Int(gridFillPercentage))
+        achievementsManager.updateAchievement(id: "grid_50", value: Int(gridFillPercentage))
+        achievementsManager.updateAchievement(id: "grid_75", value: Int(gridFillPercentage))
         
         // Perfect level achievements
-        if isPerfectLevel && !achievementsManager.isUnlocked(id: "perfect_level") {
+        if isPerfectLevel {
             achievementsManager.updateAchievement(id: "perfect_level", value: 1)
-            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "perfect_level" }) {
-                showAchievementNotification(achievement)
-            }
         }
-        if perfectLevels >= 3 && !achievementsManager.isUnlocked(id: "perfect_3") {
-            achievementsManager.updateAchievement(id: "perfect_3", value: 1)
-            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "perfect_3" }) {
-                showAchievementNotification(achievement)
-            }
-        }
+        achievementsManager.updateAchievement(id: "perfect_3", value: perfectLevels)
         
         // Undo achievements
-        if undoCount >= 5 && !achievementsManager.isUnlocked(id: "undo_5") {
-            achievementsManager.updateAchievement(id: "undo_5", value: 1)
-            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "undo_5" }) {
-                showAchievementNotification(achievement)
-            }
-        }
-        if undoCount >= 20 && !achievementsManager.isUnlocked(id: "undo_20") {
-            achievementsManager.updateAchievement(id: "undo_20", value: 1)
-            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "undo_20" }) {
-                showAchievementNotification(achievement)
-            }
-        }
+        achievementsManager.updateAchievement(id: "undo_5", value: undoCount)
+        achievementsManager.updateAchievement(id: "undo_20", value: undoCount)
         
         // Daily login achievements
-        if consecutiveDays >= 3 && !achievementsManager.isUnlocked(id: "login_3") {
-            achievementsManager.updateAchievement(id: "login_3", value: 1)
-            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "login_3" }) {
-                showAchievementNotification(achievement)
-            }
-        }
-        if consecutiveDays >= 7 && !achievementsManager.isUnlocked(id: "login_7") {
-            achievementsManager.updateAchievement(id: "login_7", value: 1)
-            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "login_7" }) {
-                showAchievementNotification(achievement)
-            }
-        }
-        if consecutiveDays >= 30 && !achievementsManager.isUnlocked(id: "login_30") {
-            achievementsManager.updateAchievement(id: "login_30", value: 1)
-            if let achievement = achievementsManager.getAllAchievements().first(where: { $0.id == "login_30" }) {
+        achievementsManager.updateAchievement(id: "login_3", value: consecutiveDays)
+        achievementsManager.updateAchievement(id: "login_7", value: consecutiveDays)
+        achievementsManager.updateAchievement(id: "login_30", value: consecutiveDays)
+        
+        // Games completed achievements
+        achievementsManager.updateAchievement(id: "games_10", value: gamesCompleted)
+        achievementsManager.updateAchievement(id: "games_50", value: gamesCompleted)
+        achievementsManager.updateAchievement(id: "games_100", value: gamesCompleted)
+        
+        // Check for newly unlocked achievements and show notifications
+        for achievement in achievementsManager.getAllAchievements() {
+            if achievement.unlocked && !achievement.wasNotified {
                 showAchievementNotification(achievement)
             }
         }

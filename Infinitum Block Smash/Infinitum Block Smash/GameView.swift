@@ -13,6 +13,8 @@ struct GameView: View {
     @AppStorage("showTutorial") private var showTutorial = true
     @State private var showingTutorial = false
     @State private var isPaused = false
+    @Environment(\.presentationMode) var presentationMode
+    @State private var scoreAnimator = ScoreAnimationContainer()
 
     var body: some View {
         ZStack {
@@ -83,17 +85,27 @@ struct GameView: View {
             LevelCompleteOverlay(isPresented: gameState.levelComplete, score: gameState.score, level: gameState.level) {
                 gameState.advanceToNextLevel()
             }
+            GameOverOverlay(
+                isPresented: gameState.isGameOver,
+                score: gameState.score,
+                level: gameState.level,
+                onRetry: {
+                    gameState.resetGame()
+                },
+                onMainMenu: {
+                    presentationMode.wrappedValue.dismiss()
+                }
+            )
             PauseMenuOverlay(isPresented: isPaused, onResume: { isPaused = false }, onSave: {
                 gameState.saveProgress(); isPaused = false
             }, onRestart: {
                 gameState.resetGame(); isPaused = false
             }, onHome: {
-                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                   let window = windowScene.windows.first {
-                    window.rootViewController = UIHostingController(rootView: ContentView())
-                    window.makeKeyAndVisible()
-                }
+                presentationMode.wrappedValue.dismiss()
             })
+            
+            // Score animation container
+            scoreAnimator
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView(gameState: gameState, showingTutorial: $showingTutorial)

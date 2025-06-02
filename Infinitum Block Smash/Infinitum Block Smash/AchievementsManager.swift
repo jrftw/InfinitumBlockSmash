@@ -163,6 +163,7 @@ class AchievementsManager: ObservableObject {
         achievements[achievement.id] = achievement
         if let encoded = try? JSONEncoder().encode(achievement) {
             userDefaults.set(encoded, forKey: achievement.id)
+            userDefaults.synchronize()  // Force immediate save
         }
         calculateTotalPoints()
         objectWillChange.send()
@@ -170,23 +171,33 @@ class AchievementsManager: ObservableObject {
     
     func updateAchievement(id: String, value: Int) {
         guard var achievement = achievements[id] else { return }
+        
+        // Update progress
         achievement.progress = value
+        
+        // Check if achievement should be unlocked
         if value >= achievement.goal && !achievement.unlocked {
             achievement.unlocked = true
-            achievement.wasNotified = false
+            achievement.wasNotified = false  // Reset notification flag when newly unlocked
             updateLeaderboard()
         }
+        
         saveAchievement(achievement)
     }
     
     func increment(id: String) {
         guard var achievement = achievements[id] else { return }
+        
+        // Increment progress
         achievement.progress += 1
+        
+        // Check if achievement should be unlocked
         if achievement.progress >= achievement.goal && !achievement.unlocked {
             achievement.unlocked = true
-            achievement.wasNotified = false
+            achievement.wasNotified = false  // Reset notification flag when newly unlocked
             updateLeaderboard()
         }
+        
         saveAchievement(achievement)
     }
     

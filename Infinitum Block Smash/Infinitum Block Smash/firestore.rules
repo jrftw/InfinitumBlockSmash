@@ -1,0 +1,51 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    function isValidScore() {
+      return request.resource.data.score is number 
+        && request.resource.data.score >= 0;
+    }
+    
+    function isValidUsername() {
+      return request.resource.data.username is string 
+        && request.resource.data.username.size() >= 3 
+        && request.resource.data.username.size() <= 20;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUsername();
+      allow update: if isAuthenticated() && isOwner(userId) && isValidUsername();
+      allow delete: if isAuthenticated() && isOwner(userId);
+    }
+
+    // Classic leaderboard
+    match /classic_leaderboard/{timeframe}/scores/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isOwner(userId) && isValidScore();
+    }
+
+    // Achievement leaderboard
+    match /achievement_leaderboard/{timeframe}/scores/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isOwner(userId) && isValidScore();
+    }
+
+    // Game settings
+    match /settings/{userId} {
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow write: if isAuthenticated() && isOwner(userId);
+    }
+  }
+} 
