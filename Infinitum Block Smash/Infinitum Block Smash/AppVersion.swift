@@ -2,9 +2,16 @@ import Foundation
 
 struct AppVersion {
     static let current = "1.0.0"
-    static let build = "3"
+    static let build = "4"
     
     static let changelog: [String: [String]] = [
+        "1.0.0 (Build 4)": [
+            "Added point system for touching blocks",
+            "Fixed scoring system for block placement",
+            "Improved game performance",
+            "Enhanced UI responsiveness",
+            "Bug fixes and optimizations"
+        ],
         "1.0.0 (Build 3)": [
             "Fixed tray visibility and placement issues",
             "Improved game performance and stability",
