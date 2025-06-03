@@ -139,6 +139,12 @@ struct GameView: View {
             
             // Score animation container
             scoreAnimator
+            
+            VStack {
+                Spacer()
+                BannerAdView()
+                    .frame(width: 320, height: 50)
+            }
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView(gameState: gameState, showingTutorial: $showingTutorial)
@@ -161,6 +167,8 @@ struct GameView: View {
                         // Optional reward logic here
                     }
                 }
+                // Reset levelComplete to false after showing the ad
+                gameState.resetLevelComplete()
             }
         }
         .onDisappear {

@@ -2,6 +2,7 @@ import SwiftUI
 import FirebaseAuth
 import FirebaseFirestore
 import GameKit
+import AuthenticationServices
 
 // MARK: - AuthView
 
@@ -12,6 +13,9 @@ struct AuthView: View {
     @State private var showSignIn = false
     @State private var showPhoneSignIn = false
     @State private var showGameCenterSignIn = false
+    @State private var showAdditionalInfo = false
+    @State private var tempUserID = ""
+    @State private var tempAuthProvider = ""
     @State private var email = ""
     @State private var password = ""
     @State private var username = ""
@@ -56,7 +60,7 @@ struct AuthView: View {
                     .padding(.bottom, 24)
                 // Card-like container for sign-in options
                 VStack(spacing: 18) {
-                    if !showSignUp && !showSignIn && !showPhoneSignIn && !showGameCenterSignIn {
+                    if !showSignUp && !showSignIn && !showPhoneSignIn && !showGameCenterSignIn && !showAdditionalInfo {
                         Button(action: { showSignIn = true }) {
                             Label("Sign In", systemImage: "person.crop.circle")
                                 .font(.headline)
@@ -141,6 +145,45 @@ struct AuthView: View {
                             .buttonStyle(ModernButtonStyle(filled: false, accent: .gray))
                     }
                     
+                    if showAdditionalInfo {
+                        VStack(spacing: 12) {
+                            Text("Complete Your Profile")
+                                .font(.title2)
+                                .foregroundColor(.white)
+                                .padding(.bottom, 8)
+                            
+                            TextField("Username", text: $username)
+                                .textFieldStyle(ModernTextFieldStyle())
+                            
+                            if tempAuthProvider == "gamecenter" {
+                                TextField("Email", text: $email)
+                                    .textFieldStyle(ModernTextFieldStyle())
+                                
+                                SecureField("Password", text: $password)
+                                    .textFieldStyle(ModernTextFieldStyle())
+                            }
+                            
+                            Button("Complete Setup") {
+                                completeAdditionalInfo()
+                            }
+                            .buttonStyle(ModernButtonStyle())
+                            
+                            Button("Cancel") {
+                                showAdditionalInfo = false
+                                tempUserID = ""
+                                tempAuthProvider = ""
+                                email = ""
+                                password = ""
+                                username = ""
+                            }
+                            .buttonStyle(ModernButtonStyle(filled: false, accent: .gray))
+                        }
+                        .padding(24)
+                        .background(BlurView(style: .systemUltraThinMaterialDark))
+                        .cornerRadius(28)
+                        .padding(.horizontal, 24)
+                    }
+                    
                     if isLoading {
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle(tint: .white))
@@ -163,6 +206,74 @@ struct AuthView: View {
         .onAppear {
             // Remove automatic check for signed in user
             // checkIfSignedIn()
+        }
+    }
+
+    // MARK: - Notification Handling
+    private func setupNotificationObservers() {
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("AppleSignInSuccess"),
+            object: nil,
+            queue: .main
+        ) { notification in
+            if let credential = notification.userInfo?["credential"] as? ASAuthorizationAppleIDCredential {
+                handleAppleSignInSuccess(credential)
+            }
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("AppleSignInError"),
+            object: nil,
+            queue: .main
+        ) { notification in
+            if let error = notification.userInfo?["error"] as? Error {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func removeNotificationObservers() {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    private func handleAppleSignInSuccess(_ credential: ASAuthorizationAppleIDCredential) {
+        guard let appleIDToken = credential.identityToken,
+              let idTokenString = String(data: appleIDToken, encoding: .utf8) else {
+            errorMessage = "Unable to fetch identity token"
+            return
+        }
+        
+        let credential = OAuthProvider.credential(
+            providerID: AuthProviderID.apple,
+            idToken: idTokenString,
+            rawNonce: ""
+        )
+        
+        // Sign in with Firebase
+        Auth.auth().signIn(with: credential) { result, error in
+            if let error = error {
+                errorMessage = error.localizedDescription
+                return
+            }
+            
+            if let user = result?.user {
+                tempUserID = user.uid
+                tempAuthProvider = "apple"
+                
+                // If we don't have the user's email, show additional info form
+                if user.email == nil {
+                    showAdditionalInfo = true
+                } else {
+                    // If we have email but no username, just ask for username
+                    if storedUsername.isEmpty {
+                        showAdditionalInfo = true
+                    } else {
+                        userID = user.uid
+                        isGuest = false
+                        dismiss()
+                    }
+                }
+            }
         }
     }
 
@@ -228,16 +339,126 @@ struct AuthView: View {
                     window.rootViewController?.present(vc, animated: true)
                 }
             } else if localPlayer.isAuthenticated {
-                userID = localPlayer.gamePlayerID
-                if storedUsername.isEmpty {
-                    storedUsername = localPlayer.alias
-                    saveUsername()
+                // Get the Game Center credential
+                GameCenterAuthProvider.getCredential { credential, error in
+                    if let error = error {
+                        self.errorMessage = error.localizedDescription
+                        return
+                    }
+                    
+                    guard let credential = credential else {
+                        self.errorMessage = "Failed to get Game Center credential"
+                        return
+                    }
+                    
+                    // Sign in with Firebase using the Game Center credential
+                    Auth.auth().signIn(with: credential) { result, error in
+                        if let error = error {
+                            self.errorMessage = error.localizedDescription
+                            return
+                        }
+                        
+                        if let user = result?.user {
+                            self.tempUserID = user.uid
+                            self.tempAuthProvider = "gamecenter"
+                            self.showAdditionalInfo = true
+                        }
+                    }
                 }
-                isGuest = false
-                dismiss()
             } else if let error = error {
                 errorMessage = error.localizedDescription
             }
+        }
+    }
+
+    private func completeAdditionalInfo() {
+        guard !username.isEmpty else {
+            errorMessage = "Please enter a username."
+            return
+        }
+        
+        isLoading = true
+        
+        switch tempAuthProvider {
+        case "gamecenter":
+            // For Game Center, we need email and password
+            guard !email.isEmpty, !password.isEmpty else {
+                isLoading = false
+                errorMessage = "Please fill in all fields."
+                return
+            }
+            
+            // Create a new user with email/password
+            Auth.auth().createUser(withEmail: email, password: password) { result, error in
+                if let error = error {
+                    isLoading = false
+                    errorMessage = error.localizedDescription
+                    return
+                }
+                
+                guard let user = result?.user else {
+                    isLoading = false
+                    errorMessage = "Failed to create user account."
+                    return
+                }
+                
+                // Get the Game Center credential
+                GameCenterAuthProvider.getCredential { credential, error in
+                    if let error = error {
+                        isLoading = false
+                        errorMessage = error.localizedDescription
+                        return
+                    }
+                    
+                    guard let credential = credential else {
+                        isLoading = false
+                        errorMessage = "Failed to get Game Center credential"
+                        return
+                    }
+                    
+                    // Link the Game Center account
+                    user.link(with: credential) { result, error in
+                        isLoading = false
+                        if let error = error {
+                            errorMessage = error.localizedDescription
+                            return
+                        }
+                        
+                        userID = user.uid
+                        storedUsername = username
+                        saveUsername()
+                        isGuest = false
+                        dismiss()
+                    }
+                }
+            }
+            
+        case "apple":
+            // For Apple Sign In, we only need to update the username
+            if let user = Auth.auth().currentUser {
+                let changeRequest = user.createProfileChangeRequest()
+                changeRequest.displayName = username
+                changeRequest.commitChanges { error in
+                    isLoading = false
+                    if let error = error {
+                        errorMessage = error.localizedDescription
+                        return
+                    }
+                    
+                    userID = user.uid
+                    storedUsername = username
+                    saveUsername()
+                    isGuest = false
+                    dismiss()
+                }
+            } else {
+                isLoading = false
+                errorMessage = "No authenticated user found."
+            }
+            
+        default:
+            isLoading = false
+            errorMessage = "Invalid authentication provider."
         }
     }
 
@@ -410,4 +631,10 @@ struct PhoneSignInView: View {
             "username": storedUsername
         ], merge: true)
     }
+}
+
+// MARK: - Preview
+#Preview {
+    AuthView()
+        .preferredColorScheme(.dark) // Since the view uses a dark theme
 }

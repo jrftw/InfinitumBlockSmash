@@ -25,6 +25,7 @@ class AdManager: NSObject, ObservableObject, FullScreenContentDelegate {
     // Published properties for UI updates
     @Published var adDidDismiss = false
     @Published var isAdLoading = false
+    @Published var adLoadFailed = false // For silent debugging only
     
     override init() {
         super.init()
@@ -88,19 +89,23 @@ class AdManager: NSObject, ObservableObject, FullScreenContentDelegate {
         RewardedInterstitialAd.load(with: AdConfig.testRewardedAdUnitID, request: request) { [weak self] ad, error in
             if let error = error {
                 print("Failed to load rewarded interstitial ad with error: \(error.localizedDescription)")
+                self?.adLoadFailed = true // Silent fail
                 return
             }
             self?.rewardedInterstitial = ad
             self?.rewardedInterstitial?.fullScreenContentDelegate = self
+            self?.adLoadFailed = false
         }
         #else
         RewardedInterstitialAd.load(with: AdConfig.rewardedAdUnitID, request: request) { [weak self] ad, error in
             if let error = error {
                 print("Failed to load rewarded interstitial ad with error: \(error.localizedDescription)")
+                self?.adLoadFailed = true // Silent fail
                 return
             }
             self?.rewardedInterstitial = ad
             self?.rewardedInterstitial?.fullScreenContentDelegate = self
+            self?.adLoadFailed = false
         }
         #endif
     }
@@ -129,6 +134,7 @@ class AdManager: NSObject, ObservableObject, FullScreenContentDelegate {
     
     func ad(_ ad: FullScreenPresentingAd, didFailToPresentFullScreenContentWithError error: Error) {
         print("Ad failed to present with error: \(error.localizedDescription)")
+        self.adLoadFailed = true // Silent fail
         // Reload the ad for next time
         if ad is InterstitialAd {
             loadInterstitial()

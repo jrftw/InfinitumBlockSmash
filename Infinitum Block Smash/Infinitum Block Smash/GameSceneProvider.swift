@@ -3,17 +3,22 @@ import SpriteKit
 
 struct GameSceneProvider: View {
     @ObservedObject var gameState: GameState
+    @State private var scene: GameScene? = nil
+    
     var body: some View {
-        SpriteView(scene: makeScene())
-            .ignoresSafeArea()
-    }
-    private func makeScene() -> SKScene {
         let width = UIScreen.main.bounds.width
         let height = UIScreen.main.bounds.height
-        let scene = GameScene()
-        scene.size = CGSize(width: width, height: height)
-        scene.scaleMode = .aspectFill
-        scene.gameState = gameState
-        return scene
+        let sceneSize = CGSize(width: width, height: height)
+        SpriteView(scene: scene ?? GameScene(size: sceneSize))
+            .ignoresSafeArea()
+            .onAppear {
+                print("[DEBUG] GameSceneProvider onAppear")
+                if scene == nil {
+                    let newScene = GameScene(size: sceneSize)
+                    newScene.scaleMode = .aspectFill
+                    newScene.gameState = gameState
+                    scene = newScene
+                }
+            }
     }
 } 

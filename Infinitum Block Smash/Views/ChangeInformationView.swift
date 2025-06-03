@@ -125,6 +125,34 @@ struct ChangeInformationView: View {
     }
     
     private func loadUserInfo() {
+        guard let user = Auth.auth().currentUser else { return }
+        username = user.displayName ?? ""
+        originalUsername = username
+        email = user.email ?? ""
+        originalEmail = email
+        phone = user.phoneNumber ?? ""
+        originalPhone = phone
+        connectionTypes = user.providerData.map { provider in
+            switch provider.providerID {
+            case "password": return "Email"
+            case "phone": return "Phone"
+            case "gamecenter.apple.com": return "Game Center"
+            default: return provider.providerID
+            }
+        }
+        // Firestore fallback if displayName is empty
+        if username.isEmpty {
+            let db = Firestore.firestore()
+            db.collection("users").document(user.uid).getDocument { snapshot, error in
+                if let data = snapshot?.data(), let name = data["username"] as? String {
+                    username = name
+                    originalUsername = name
+                }
+            }
+        }
+        // Load lastUsernameChange from Firestore
+        let db = Firestore.firestore()
+        db.collection("users").document(user.uid).getDocument { snapshot, error in
         // ... existing code ...
     }
     

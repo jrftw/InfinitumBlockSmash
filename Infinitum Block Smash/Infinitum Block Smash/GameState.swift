@@ -58,7 +58,12 @@ final class GameState: ObservableObject {
     // Add frame size property
     var frameSize: CGSize = .zero
     
-    weak var delegate: GameStateDelegate?
+    var delegate: GameStateDelegate? {
+        didSet {
+            print("[DEBUG] GameState.delegate set to \(String(describing: delegate))")
+        }
+    }
+    
     private var rng: RandomNumberGenerator = SystemRandomNumberGenerator()
     private let traySize = 3
     
@@ -222,24 +227,29 @@ final class GameState: ObservableObject {
 
     // In tryPlaceBlockFromTray, save state before placement and reset undo after
     func tryPlaceBlockFromTray(_ block: Block, at anchor: CGPoint) -> Bool {
-        // Don't allow placing blocks if game is over
         guard !isGameOver else { return false }
-        
         guard let trayIndex = tray.firstIndex(where: { $0.id == block.id }) else { return false }
-        if canPlaceBlock(block, at: anchor) {
-            print("[Placement] Placing block \(block.shape.rawValue) at \(anchor)")
-            saveStateForUndo()
-            placeBlock(block, at: anchor)
-            tray.remove(at: trayIndex)
-            refillTray()
-            checkMatches()
-            checkGameOver()
-            adUndoCount = 2 // Reset ad-based undos for this placement
-            delegate?.gameStateDidUpdate()
-            checkAchievements()
-            return true
+        guard canPlaceBlock(block, at: anchor) else { return false }
+        // Final defensive check: ensure all cells are within bounds
+        for (dx, dy) in block.shape.cells {
+            let x = Int(anchor.x) + dx
+            let y = Int(anchor.y) + dy
+            if x < 0 || x >= GameConstants.gridSize || y < 0 || y >= GameConstants.gridSize {
+                print("[Placement] Block \(block.shape.rawValue) at \(anchor) would be out of bounds. Skipping placement.")
+                return false
+            }
         }
-        return false
+        print("[Placement] Placing block \(block.shape.rawValue) at \(anchor)")
+        saveStateForUndo()
+        placeBlock(block, at: anchor)
+        tray.remove(at: trayIndex)
+        refillTray()
+        checkMatches()
+        checkGameOver()
+        adUndoCount = 2
+        delegate?.gameStateDidUpdate()
+        checkAchievements()
+        return true
     }
     
     private func anyTrayBlockFits() -> Bool {
@@ -276,11 +286,12 @@ final class GameState: ObservableObject {
         for (dx, dy) in block.shape.cells {
             let x = Int(anchor.x) + dx
             let y = Int(anchor.y) + dy
-            if x >= 0 && x < GameConstants.gridSize && y >= 0 && y < GameConstants.gridSize {
-                var placedBlock = Block(color: block.color, shape: block.shape)
-                placedBlock.position = CGPoint(x: x, y: y)
-                grid[y][x] = placedBlock
-            }
+            // Defensive: skip if out of bounds or already occupied
+            guard x >= 0, x < GameConstants.gridSize, y >= 0, y < GameConstants.gridSize else { continue }
+            guard grid[y][x] == nil else { continue }
+            var placedBlock = Block(color: block.color, shape: block.shape)
+            placedBlock.position = CGPoint(x: x, y: y)
+            grid[y][x] = placedBlock
         }
         blocksPlaced += 1
         usedColors.insert(block.color)
@@ -737,6 +748,10 @@ final class GameState: ObservableObject {
         cancellables.removeAll()
         currentAchievement = nil
         lastMove = nil
+    }
+    
+    func resetLevelComplete() {
+        levelComplete = false
     }
 }
 

@@ -11,7 +11,7 @@ struct PhysicsCategory {
 
 struct GameConstants {
     static let gridSize = 10
-    static let blockSize: CGFloat = 30
+    static let blockSize: CGFloat = 34
     static let blockWidth: CGFloat = 40
     static let blockHeight: CGFloat = 20
     static let blockSpacing: CGFloat = 2

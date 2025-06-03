@@ -15,7 +15,34 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var particleEmitter: SKEmitterNode?
     private var glowNode: SKNode?
     
+    override init(size: CGSize) {
+        super.init(size: size)
+        print("[DEBUG] GameScene init(size:) called")
+    }
+    required init?(coder aDecoder: NSCoder) {
+        super.init(coder: aDecoder)
+        print("[DEBUG] GameScene init(coder:) called")
+    }
+    
     override func didMove(to view: SKView) {
+        print("[DEBUG] didMove(to:) called")
+        guard gameState != nil else {
+            print("[ERROR] GameState not initialized")
+            return
+        }
+        
+        // Only add nodes if they haven't been added yet
+        if gridNode == nil {
+            print("[DEBUG] Creating new gridNode")
+            gridNode = SKNode()
+            addChild(gridNode)
+        }
+        if trayNode == nil {
+            print("[DEBUG] Creating new trayNode")
+            trayNode = SKNode()
+            addChild(trayNode)
+        }
+        
         // Configure view for better performance
         view.preferredFramesPerSecond = 60
         view.ignoresSiblingOrder = true
@@ -24,15 +51,29 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Set the frame size in GameState
         gameState.frameSize = size
         
+        // Setup scene components
         setupScene()
         setupGrid()
         setupTray()
         setupUI()
         setupParticles()
+        
         // Set delegate if not already set
         if gameState.delegate !== self {
+            print("[DEBUG] Setting GameState delegate")
             gameState.delegate = self
         }
+        
+        print("[DEBUG] Scene setup complete. trayNode in parent: \(trayNode.parent != nil)")
+    }
+    
+    deinit {
+        print("[DEBUG] GameScene deinit called")
+        // Cleanup
+        gridNode?.removeFromParent()
+        trayNode?.removeFromParent()
+        particleEmitter?.removeFromParent()
+        glowNode?.removeFromParent()
     }
     
     private func setupScene() {
@@ -64,23 +105,30 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let totalWidth = CGFloat(gridSize) * blockSize
         let totalHeight = CGFloat(gridSize) * blockSize
         
-        // Ensure gridNode is initialized
-        if gridNode == nil {
-            gridNode = SKNode()
-            gridNode.position = CGPoint(x: frame.midX, y: frame.midY)
-            gridNode.zPosition = 0 // Set base z-position for grid
-            addChild(gridNode)
-        }
+        // Center the grid in the frame
+        gridNode.position = CGPoint(x: frame.midX, y: frame.midY)
+        gridNode.zPosition = 0 // Set base z-position for grid
+        print("[DEBUG] GridNode position: \(gridNode.position), totalWidth: \(totalWidth), totalHeight: \(totalHeight), frame: \(frame)")
         gridNode.removeAllChildren()
         
-        // Create grid background
-        let gridBackground = SKShapeNode(rectOf: CGSize(width: totalWidth, height: totalHeight))
+        // Create grid background with a slight padding
+        let padding: CGFloat = 2
+        let gridBackground = SKShapeNode(rectOf: CGSize(width: totalWidth + padding, height: totalHeight + padding))
         gridBackground.fillColor = .black
         gridBackground.alpha = 0.3
         gridBackground.position = CGPoint(x: 0, y: 0)
         gridBackground.zPosition = -2
         gridBackground.name = "gridBackground"
         gridNode.addChild(gridBackground)
+        
+        // Optional: Add a visible debug border for the grid
+        #if DEBUG
+        let debugBorder = SKShapeNode(rectOf: CGSize(width: totalWidth, height: totalHeight))
+        debugBorder.strokeColor = .red
+        debugBorder.lineWidth = 2
+        debugBorder.zPosition = 10
+        gridNode.addChild(debugBorder)
+        #endif
         
         // Draw grid lines (as children of gridNode)
         for i in 0...gridSize {
@@ -105,26 +153,114 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
     }
     
-    private func setupTray() {
-        let blockSize = GameConstants.blockSize
-        let trayHeight = blockSize * 1.5
-        let trayWidth = frame.width * 0.8
+    private func createShapeNode(for block: Block, blockSize: CGFloat) -> SKNode {
+        let shapeNode = SKNode()
         
-        // Create tray background
-        let trayBackground = SKShapeNode(rectOf: CGSize(width: trayWidth, height: trayHeight))
+        for (dx, dy) in block.shape.cells {
+            let cellNode = SKShapeNode(rectOf: CGSize(width: blockSize, height: blockSize), cornerRadius: blockSize * 0.18)
+            
+            // Create gradient fill
+            let gradientNode = SKShapeNode(rectOf: CGSize(width: blockSize, height: blockSize))
+            gradientNode.fillColor = .clear
+            gradientNode.strokeColor = .clear
+            
+            // Add gradient effect
+            let colors = [block.color.gradientColors.start, block.color.gradientColors.end]
+            let locations: [CGFloat] = [0.0, 1.0]
+            
+            if let gradientImage = createGradientImage(size: CGSize(width: blockSize, height: blockSize),
+                                                     colors: colors,
+                                                     locations: locations) {
+                gradientNode.fillTexture = SKTexture(image: gradientImage)
+                gradientNode.fillColor = .white
+            }
+            
+            // Add shadow effect
+            let shadowNode = SKShapeNode(rectOf: CGSize(width: blockSize, height: blockSize))
+            shadowNode.fillColor = UIColor(cgColor: block.color.shadowColor)
+            shadowNode.alpha = 0.3
+            shadowNode.position = CGPoint(x: 2, y: -2)
+            shadowNode.zPosition = -1
+            
+            // Add subtle border
+            gradientNode.strokeColor = .white
+            gradientNode.lineWidth = 1
+            
+            // Add shine effect
+            let shineNode = SKShapeNode(rectOf: CGSize(width: blockSize * 0.3, height: blockSize * 0.3))
+            shineNode.fillColor = .white
+            shineNode.alpha = 0.3
+            shineNode.position = CGPoint(x: -blockSize * 0.25, y: blockSize * 0.25)
+            shineNode.zRotation = .pi / 4
+            
+            cellNode.addChild(shadowNode)
+            cellNode.addChild(gradientNode)
+            gradientNode.addChild(shineNode)
+            
+            cellNode.position = CGPoint(x: CGFloat(dx) * blockSize, y: CGFloat(dy) * blockSize)
+            shapeNode.addChild(cellNode)
+        }
+        
+        return shapeNode
+    }
+    
+    private func setupTray() {
+        print("[DEBUG] setupTray called. Tray contents: \(gameState.tray)")
+        print("[DEBUG] trayNode parent before setup: \(trayNode.parent != nil)")
+        print("[DEBUG] trayNode children count before setup: \(trayNode.children.count)")
+        
+        let blockSize = GameConstants.blockSize
+        let trayHeight = blockSize * 4.5
+        // Calculate the bounding width for each shape
+        let shapeWidths = gameState.tray.map { block in
+            let minX = block.shape.cells.map { $0.0 }.min() ?? 0
+            let maxX = block.shape.cells.map { $0.0 }.max() ?? 0
+            return CGFloat(maxX - minX + 1) * blockSize
+        }
+        let spacing: CGFloat = 16 // slightly increased for clarity
+        let totalWidth = shapeWidths.reduce(0, +) + spacing * CGFloat(max(gameState.tray.count - 1, 0))
+        let trayWidth = max(frame.width * 0.92, totalWidth + 32)
+
+        // Position tray just below the grid, centered horizontally
+        let gridHeight = CGFloat(GameConstants.gridSize) * blockSize
+        let trayY = frame.midY - gridHeight / 2 - trayHeight / 2 - blockSize * 1.2
+        trayNode.position = CGPoint(x: frame.midX, y: trayY)
+        trayNode.zPosition = 10
+        print("[DEBUG] TrayNode position: \(trayNode.position), trayWidth: \(trayWidth), trayHeight: \(trayHeight), frame: \(frame)")
+
+        trayNode.removeAllChildren()
+        print("[DEBUG] trayNode children count after removeAllChildren: \(trayNode.children.count)")
+
+        // Tray background (centered at 0,0 in trayNode)
+        let trayBackground = SKShapeNode(rectOf: CGSize(width: trayWidth, height: trayHeight), cornerRadius: 18)
         trayBackground.fillColor = .black
         trayBackground.alpha = 0.3
-        // Move tray higher (about 22% of the screen height) and add extra offset to prevent clipping
-        let trayY = frame.height * 0.22 + blockSize // Move tray up by one block size
-        trayBackground.position = CGPoint(x: frame.midX, y: trayY)
+        trayBackground.position = .zero
         trayBackground.zPosition = -1
-        addChild(trayBackground)
+        trayBackground.name = "trayBackground"
+        trayNode.addChild(trayBackground)
+        print("[DEBUG] Added tray background")
+
+        // Place shapes, centered horizontally in trayNode
+        var xOffset: CGFloat = -totalWidth / 2
+        for (i, block) in gameState.tray.enumerated() {
+            let shapeWidth = shapeWidths[i]
+            let shapeNode = createShapeNode(for: block, blockSize: blockSize)
+            shapeNode.position = CGPoint(x: xOffset + shapeWidth / 2, y: 0)
+            shapeNode.name = "trayShape_\(block.id.uuidString)"
+            print("[DEBUG] Shape \(i) xOffset: \(xOffset), shapeWidth: \(shapeWidth), finalPos: \(shapeNode.position)")
+            trayNode.addChild(shapeNode)
+            xOffset += shapeWidth + spacing
+        }
         
-        trayNode = SKNode()
-        trayNode.position = CGPoint(x: frame.midX, y: trayY)
-        addChild(trayNode)
-        
-        updateTray()
+        print("[DEBUG] trayNode in parent after setup: \(trayNode.parent != nil)")
+        print("[DEBUG] trayNode children count after setup: \(trayNode.children.count)")
+        print("[DEBUG] trayNode zPosition: \(trayNode.zPosition)")
+        print("[DEBUG] trayNode alpha: \(trayNode.alpha), isHidden: \(trayNode.isHidden)")
+        for (i, child) in trayNode.children.enumerated() {
+            let childName = child.name ?? "nil"
+            print("[DEBUG] trayNode child \(i) alpha: \(child.alpha), isHidden: \(child.isHidden), name: \(childName)")
+        }
     }
     
     private func setupUI() {
@@ -260,39 +396,33 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         return image
     }
     
-    private func updateTray() {
+    private func updateTray(trayHeight: CGFloat, trayWidth: CGFloat, shapeWidths: [CGFloat], spacing: CGFloat) {
         trayNode.removeAllChildren()
-        
         let blockSize = GameConstants.blockSize
-        let spacing: CGFloat = 40 // Increased spacing for better visibility
-        var currentX: CGFloat = 0
-        
-        // Calculate total width needed for all shapes
-        var totalWidth: CGFloat = 0
-        for block in gameState.tray {
-            let shapeWidth = CGFloat(block.shape.cells.map { $0.0 }.max()! + 1) * blockSize
-            totalWidth += shapeWidth + spacing
-        }
-        totalWidth -= spacing // Remove last spacing
-        
-        // Start position to center the tray
-        currentX = -totalWidth / 2
-        
+        let totalWidth = shapeWidths.reduce(0, +) + spacing * CGFloat(max(gameState.tray.count - 1, 0))
+        let startX = -totalWidth / 2
+        var currentX = startX
+        let containerNode = SKNode()
+        containerNode.zPosition = 1
         for (index, block) in gameState.tray.enumerated() {
-            let shapeWidth = CGFloat(block.shape.cells.map { $0.0 }.max()! + 1) * blockSize
+            let shapeWidth = shapeWidths[index]
+            let shapeHeight = CGFloat(block.shape.cells.map { $0.1 }.max()! + 1) * blockSize
             let blockNode = SKNode()
             blockNode.name = "tray_\(block.id.uuidString)"
-            blockNode.zPosition = CGFloat(index) // Set zPosition based on index to prevent overlapping
-            
-            // Draw each cell of the block
+            blockNode.zPosition = CGFloat(index)
+            // Vertically center the shape in the tray
+            let verticalOffset = (trayHeight - shapeHeight) / 2
             for (dx, dy) in block.shape.cells {
-                let cellNode = SKShapeNode(rectOf: CGSize(width: blockSize, height: blockSize))
+                let cellNode = SKShapeNode(rectOf: CGSize(width: blockSize, height: blockSize), cornerRadius: blockSize * 0.18)
+                cellNode.position = CGPoint(x: CGFloat(dx) * blockSize, y: CGFloat(dy) * blockSize - shapeHeight / 2 + blockSize / 2 + verticalOffset)
                 // Gradient fill
                 let colors = [block.color.gradientColors.start, block.color.gradientColors.end]
                 let locations: [CGFloat] = [0.0, 1.0]
                 if let gradientImage = createGradientImage(size: CGSize(width: blockSize, height: blockSize), colors: colors, locations: locations) {
                     cellNode.fillTexture = SKTexture(image: gradientImage)
                     cellNode.fillColor = .white
+                } else {
+                    cellNode.fillColor = SKColor.from(block.color.color)
                 }
                 // Shadow
                 let shadowNode = SKShapeNode(rectOf: CGSize(width: blockSize, height: blockSize))
@@ -303,33 +433,26 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 cellNode.addChild(shadowNode)
                 // Border
                 cellNode.strokeColor = .white
-                cellNode.lineWidth = 1
-                // Shine
-                let shineNode = SKShapeNode(rectOf: CGSize(width: blockSize * 0.3, height: blockSize * 0.3))
-                shineNode.fillColor = .white
-                shineNode.alpha = 0.3
-                shineNode.position = CGPoint(x: -blockSize * 0.25, y: blockSize * 0.25)
-                shineNode.zRotation = .pi / 4
-                cellNode.addChild(shineNode)
-                // Position cell
-                cellNode.position = CGPoint(x: CGFloat(dx) * blockSize, y: CGFloat(dy) * blockSize)
-                cellNode.zPosition = 0 // Ensure cells are above shadow
+                cellNode.lineWidth = 2
                 blockNode.addChild(cellNode)
             }
-            // Center the block shape vertically in the tray
+            // Center each blockNode horizontally in its shape width
             blockNode.position = CGPoint(x: currentX + shapeWidth / 2, y: 0)
-            trayNode.addChild(blockNode)
+            containerNode.addChild(blockNode)
             currentX += shapeWidth + spacing
         }
-        animateTrayRefill()
+        trayNode.addChild(containerNode)
     }
     
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = touches.first else { return }
         let location = touch.location(in: trayNode)
-        if let node = trayNode.nodes(at: location).first(where: { $0.name?.starts(with: "tray_") == true }),
-           let blockId = node.name?.split(separator: "_").last,
-           let block = gameState.tray.first(where: { $0.id.uuidString == blockId }) {
+        print("[DEBUG] touchesBegan at location in trayNode: \(location)")
+        let nodesAtPoint = trayNode.nodes(at: location)
+        print("[DEBUG] nodes at touch location: \(nodesAtPoint.map { $0.name ?? "nil" })")
+        if let node = nodesAtPoint.first(where: { $0.name?.starts(with: "trayShape_") == true }),
+           let blockIdString = node.name?.replacingOccurrences(of: "trayShape_", with: ""),
+           let block = gameState.tray.first(where: { $0.id.uuidString == blockIdString }) {
             draggingBlock = block
             dragNode = createBlockNode(for: block)
             let touchLocation = touch.location(in: self)
@@ -338,6 +461,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             dragNode?.alpha = 0.7
             dragNode?.zPosition = 50 // Set a high but not too high z-position
             addChild(dragNode!)
+            print("[DEBUG] Started dragging block: \(block.id.uuidString)")
+        } else {
+            print("[DEBUG] No tray shape node found at touch location.")
         }
     }
     
@@ -567,8 +693,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
 extension GameScene: GameStateDelegate {
     func gameStateDidUpdate() {
-        updateTray()
+        print("[DEBUG] gameStateDidUpdate called")
+        print("[DEBUG] trayNode in parent before update: \(trayNode.parent != nil)")
+        setupTray()
         renderGrid(gridNode: gridNode, gameState: gameState, blockSize: GameConstants.blockSize)
+        print("[DEBUG] trayNode in parent after update: \(trayNode.parent != nil)")
     }
     
     func gameStateDidClearLines(at positions: [(Int, Int)]) {
