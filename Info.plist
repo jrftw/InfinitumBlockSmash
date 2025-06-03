@@ -50,7 +50,24 @@
                 <string>C617.1</string>
             </array>
         </dict>
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSUserActivity</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <string>C617.1</string>
+            </array>
+        </dict>
     </array>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <false/>
+    </dict>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
+    <key>GADApplicationIdentifier</key>
+    <string>ca-app-pub-xxxxxxxxxxxxxxxx~yyyyyyyyyy</string>
     <key>FirebaseAppDelegateProxyEnabled</key>
     <false/>
     <key>SKAdNetworkItems</key>

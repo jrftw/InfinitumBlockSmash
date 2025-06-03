@@ -34,7 +34,7 @@ final class GameState: ObservableObject {
     @Published private(set) var score: Int = 0
     @Published private(set) var level: Int = 1
     @Published private(set) var isGameOver: Bool = false
-    @Published private(set) var grid: [[Block?]] = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
+    @Published private(set) var grid: [[BlockColor?]] = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
     @Published private(set) var tray: [Block] = []
     @Published private(set) var achievementsManager = AchievementsManager()
     @Published private(set) var canUndo: Bool = false
@@ -73,7 +73,7 @@ final class GameState: ObservableObject {
     private let progressKey = "gameProgress"
     
     // Undo support
-    private var previousGrid: [[Block?]] = []
+    private var previousGrid: [[BlockColor?]] = []
     private var previousTray: [Block] = []
     private var previousScore: Int = 0
     private var previousLevel: Int = 1
@@ -181,7 +181,7 @@ final class GameState: ObservableObject {
         return Block(color: color, shape: shape)
     }
     
-    private func refillTray() {
+    func refillTray() {
         // Keep 3 shapes in the tray, using nextBlockRandom for proper shape/level
         while tray.count < traySize {
             let newBlock = nextBlockRandom()
@@ -227,7 +227,10 @@ final class GameState: ObservableObject {
 
     // In tryPlaceBlockFromTray, save state before placement and reset undo after
     func tryPlaceBlockFromTray(_ block: Block, at anchor: CGPoint) -> Bool {
-        guard !isGameOver else { return false }
+        guard !isGameOver && !levelComplete else {
+            print("[DEBUG] Block placement prevented: isGameOver=", isGameOver, "levelComplete=", levelComplete)
+            return false
+        }
         guard let trayIndex = tray.firstIndex(where: { $0.id == block.id }) else { return false }
         guard canPlaceBlock(block, at: anchor) else { return false }
         // Final defensive check: ensure all cells are within bounds
@@ -243,7 +246,7 @@ final class GameState: ObservableObject {
         saveStateForUndo()
         placeBlock(block, at: anchor)
         tray.remove(at: trayIndex)
-        refillTray()
+        // refillTray() will be called after UI update
         checkMatches()
         checkGameOver()
         adUndoCount = 2
@@ -262,23 +265,16 @@ final class GameState: ObservableObject {
     }
     
     func canPlaceBlock(_ block: Block, at anchor: CGPoint) -> Bool {
-        // Check if any part of the shape would be outside the grid
         for (dx, dy) in block.shape.cells {
             let x = Int(anchor.x) + dx
             let y = Int(anchor.y) + dy
-            
-            // Check if the position is within grid bounds
             if x < 0 || x >= GameConstants.gridSize || y < 0 || y >= GameConstants.gridSize {
                 return false
             }
-            
-            // Check if the position is already occupied
             if grid[y][x] != nil {
                 return false
             }
         }
-        
-        // If we get here, the placement is valid
         return true
     }
     
@@ -286,12 +282,9 @@ final class GameState: ObservableObject {
         for (dx, dy) in block.shape.cells {
             let x = Int(anchor.x) + dx
             let y = Int(anchor.y) + dy
-            // Defensive: skip if out of bounds or already occupied
-            guard x >= 0, x < GameConstants.gridSize, y >= 0, y < GameConstants.gridSize else { continue }
-            guard grid[y][x] == nil else { continue }
-            var placedBlock = Block(color: block.color, shape: block.shape)
-            placedBlock.position = CGPoint(x: x, y: y)
-            grid[y][x] = placedBlock
+            if x >= 0 && x < GameConstants.gridSize && y >= 0 && y < GameConstants.gridSize {
+                grid[y][x] = block.color
+            }
         }
         blocksPlaced += 1
         usedColors.insert(block.color)
@@ -308,7 +301,7 @@ final class GameState: ObservableObject {
         // Check rows
         for row in 0..<GameConstants.gridSize {
             if isRowFull(row) {
-                let rowColors = grid[row].compactMap { $0?.color }
+                let rowColors = grid[row].compactMap { $0 }
                 let allSameColor = rowColors.allSatisfy { $0 == rowColors.first }
                 for col in 0..<GameConstants.gridSize {
                     clearedPositions.append((row, col))
@@ -329,7 +322,7 @@ final class GameState: ObservableObject {
         // Check columns
         for col in 0..<GameConstants.gridSize {
             if isColumnFull(col) {
-                let colColors = (0..<GameConstants.gridSize).compactMap { grid[$0][col]?.color }
+                let colColors = (0..<GameConstants.gridSize).compactMap { grid[$0][col] }
                 let allSameColor = colColors.allSatisfy { $0 == colColors.first }
                 for row in 0..<GameConstants.gridSize {
                     clearedPositions.append((row, col))
@@ -365,8 +358,9 @@ final class GameState: ObservableObject {
         }
         
         if isGridEmpty() {
-            print("[Level] Grid empty, leveling up.")
-            levelUp()
+            print("[Level] Grid empty, level complete!")
+            levelComplete = true
+            // Don't call levelUp here - let the UI handle it through the LevelCompleteOverlay
         }
         
         linesCleared += linesCleared
@@ -383,7 +377,9 @@ final class GameState: ObservableObject {
     }
     
     private func clearRow(_ row: Int) {
-        grid[row] = Array(repeating: nil, count: GameConstants.gridSize)
+        for col in 0..<GameConstants.gridSize {
+            grid[row][col] = nil
+        }
     }
     
     private func clearColumn(_ col: Int) {
@@ -435,6 +431,7 @@ final class GameState: ObservableObject {
         // Check for level up after every score change
         let requiredScore = calculateRequiredScore()
         if score >= requiredScore && !levelComplete {
+            print("[DEBUG] Setting levelComplete = true due to score threshold. Score: \(score), Required: \(requiredScore)")
             print("[Level] Score threshold met for level \(level). Level complete!")
             levelComplete = true
         }
@@ -485,19 +482,22 @@ final class GameState: ObservableObject {
     }
     
     func advanceToNextLevel() {
-        level += 1
-        print("[Level] Advancing to level \(level)")
-        setSeed(for: level)
-        grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
-        tray = []
-        if level > userDefaults.integer(forKey: levelKey) {
-            achievementsManager.updateAchievement(id: "highest_level", value: level)
+        // Add a small delay before advancing to ensure the level complete overlay is visible
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.level += 1
+            print("[Level] Advancing to level \(self.level)")
+            self.setSeed(for: self.level)
+            self.grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
+            self.tray = []
+            if self.level > UserDefaults.standard.integer(forKey: self.levelKey) {
+                self.achievementsManager.updateAchievement(id: "highest_level", value: self.level)
+            }
+            let availableShapes = BlockShape.availableShapes(for: self.level)
+            print("[Level] Level \(self.level) - Available shapes: \(availableShapes.map { String(describing: $0) }.joined(separator: ", "))")
+            self.refillTray()
+            self.levelComplete = false
+            self.delegate?.gameStateDidUpdate()
         }
-        let availableShapes = BlockShape.availableShapes(for: level)
-        print("[Level] Level \(level) - Available shapes: \(availableShapes.map { String(describing: $0) }.joined(separator: ", "))")
-        refillTray()
-        levelComplete = false
-        delegate?.gameStateDidUpdate()
     }
     
     private func checkGameOver() {
@@ -704,43 +704,28 @@ final class GameState: ObservableObject {
             userDefaults.set(score, forKey: scoreKey)
             achievementsManager.updateAchievement(id: "high_score", value: score)
         }
-        
         if level > userDefaults.integer(forKey: levelKey) {
             userDefaults.set(level, forKey: levelKey)
             achievementsManager.updateAchievement(id: "highest_level", value: level)
         }
-        
         // Save current game state
-        var gridData: [[[String: Any]]] = []
+        var gridData: [[String?]] = []
         for row in grid {
-            var rowData: [[String: Any]] = []
-            for cell in row {
-                if let block = cell {
-                    rowData.append([
-                        "color": block.color.rawValue,
-                        "shape": block.shape.rawValue
-                    ])
-                } else {
-                    rowData.append([:])
-                }
-            }
+            let rowData: [String?] = row.map { $0?.rawValue }
             gridData.append(rowData)
         }
-        
         let trayData = tray.map { block in
             [
                 "color": block.color.rawValue,
                 "shape": block.shape.rawValue
             ]
         }
-        
         let progress: [String: Any] = [
             "score": score,
             "level": level,
             "grid": gridData,
             "tray": trayData
         ]
-        
         userDefaults.set(progress, forKey: progressKey)
     }
     

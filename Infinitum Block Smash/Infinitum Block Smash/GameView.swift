@@ -164,11 +164,17 @@ struct GameView: View {
             if isComplete {
                 if let root = getRootViewController() {
                     adManager.showRewardedInterstitial(from: root) {
-                        // Optional reward logic here
+                        // Only reset levelComplete after the ad is shown
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                            gameState.resetLevelComplete()
+                        }
+                    }
+                } else {
+                    // If no ad is shown, still give some time for the overlay to be visible
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        gameState.resetLevelComplete()
                     }
                 }
-                // Reset levelComplete to false after showing the ad
-                gameState.resetLevelComplete()
             }
         }
         .onDisappear {

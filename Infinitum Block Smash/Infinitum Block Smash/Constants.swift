@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import UIKit
 
 struct PhysicsCategory {
     static let none: UInt32 = 0
@@ -11,7 +12,17 @@ struct PhysicsCategory {
 
 struct GameConstants {
     static let gridSize = 10
-    static let blockSize: CGFloat = 34
+    static let blockSize: CGFloat = {
+        #if os(iOS)
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            return 54 // Larger block size for iPad
+        } else {
+            return 34 // Default for iPhone
+        }
+        #else
+        return 34
+        #endif
+    }()
     static let blockWidth: CGFloat = 40
     static let blockHeight: CGFloat = 20
     static let blockSpacing: CGFloat = 2

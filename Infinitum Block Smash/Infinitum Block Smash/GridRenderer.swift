@@ -40,17 +40,17 @@ func renderGrid(gridNode: SKNode, gameState: GameState, blockSize: CGFloat) {
             if let block = gameState.grid[row][col] {
                 let cellNode = SKShapeNode(rectOf: CGSize(width: blockSize, height: blockSize), cornerRadius: blockSize * 0.18)
                 // Gradient fill
-                let colors = [block.color.gradientColors.start, block.color.gradientColors.end]
+                let colors = [block.gradientColors.start, block.gradientColors.end]
                 let locations: [CGFloat] = [0.0, 1.0]
                 if let gradientImage = createGradientImage(size: CGSize(width: blockSize, height: blockSize), colors: colors, locations: locations) {
                     cellNode.fillTexture = SKTexture(image: gradientImage)
                     cellNode.fillColor = .white
                 } else {
-                    cellNode.fillColor = SKColor.from(block.color.color)
+                    cellNode.fillColor = SKColor.from(Color(cgColor: block.gradientColors.start))
                 }
                 // Shadow
                 let shadowNode = SKShapeNode(rectOf: CGSize(width: blockSize, height: blockSize))
-                shadowNode.fillColor = UIColor(cgColor: block.color.shadowColor)
+                shadowNode.fillColor = UIColor(cgColor: block.shadowColor)
                 shadowNode.alpha = 0.3
                 shadowNode.position = CGPoint(x: 2, y: -2)
                 shadowNode.zPosition = -1

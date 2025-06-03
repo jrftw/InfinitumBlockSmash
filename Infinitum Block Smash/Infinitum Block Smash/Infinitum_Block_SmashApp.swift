@@ -6,21 +6,20 @@ import AppTrackingTransparency
 import AdSupport
 import FirebaseAppCheck
 
-// MARK: - Main App Entry Point
-@main
-struct Infinitum_Block_SmashApp: App {
-    @State private var showGame = false
-    @AppStorage("userID") private var userID: String = ""
-    @AppStorage("username") private var username: String = ""
-    @AppStorage("isGuest") private var isGuest: Bool = false
-
-    // MARK: - Initializer
-    init() {
+// MARK: - AppDelegate
+class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+        // Configure Firebase
         FirebaseApp.configure()
+        
+        // Configure AppCheck
         configureAppCheck()
+        
+        // Initialize AdMob
         MobileAds.shared.start { status in
             print("AdMob initialization status: \(status)")
         }
+        
         // Request App Tracking Transparency on first launch
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             if #available(iOS 14, *) {
@@ -29,8 +28,10 @@ struct Infinitum_Block_SmashApp: App {
                 }
             }
         }
+        
+        return true
     }
-
+    
     // MARK: - AppCheck Configuration
     private func configureAppCheck() {
         #if os(macOS)
@@ -73,6 +74,16 @@ struct Infinitum_Block_SmashApp: App {
         return false
         #endif
     }
+}
+
+// MARK: - Main App Entry Point
+@main
+struct Infinitum_Block_SmashApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @State private var showGame = false
+    @AppStorage("userID") private var userID: String = ""
+    @AppStorage("username") private var username: String = ""
+    @AppStorage("isGuest") private var isGuest: Bool = false
 
     // MARK: - Scene Definition
     var body: some Scene {

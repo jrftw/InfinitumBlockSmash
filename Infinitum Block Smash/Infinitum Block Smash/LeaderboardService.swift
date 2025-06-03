@@ -8,7 +8,43 @@ final class LeaderboardService {
     private let db = Firestore.firestore()
     private var cancellables = Set<AnyCancellable>()
     
-    private init() {}
+    private init() {
+        setupDailyReset()
+    }
+    
+    private func setupDailyReset() {
+        // Check if we need to reset daily scores
+        if let lastReset = UserDefaults.standard.object(forKey: "lastDailyReset") as? Date {
+            let calendar = Calendar.current
+            if !calendar.isDateInToday(lastReset) {
+                resetDailyScores()
+            }
+        } else {
+            // First time setup
+            resetDailyScores()
+        }
+    }
+    
+    private func resetDailyScores() {
+        Task {
+            do {
+                // Delete all daily scores
+                let dailyScores = try await db.collection("classic_leaderboard")
+                    .document("daily")
+                    .collection("scores")
+                    .getDocuments()
+                
+                for document in dailyScores.documents {
+                    try await document.reference.delete()
+                }
+                
+                // Update last reset date
+                UserDefaults.standard.set(Date(), forKey: "lastDailyReset")
+            } catch {
+                print("[Leaderboard] Error resetting daily scores: \(error.localizedDescription)")
+            }
+        }
+    }
     
     func updateLeaderboard(type: LeaderboardType, score: Int, username: String, userID: String) async throws {
         guard !userID.isEmpty, !username.isEmpty else {
@@ -28,7 +64,25 @@ final class LeaderboardService {
                 let snapshot = try await docRef.getDocument()
                 let prevScore = snapshot.data()?[type.scoreField] as? Int ?? 0
                 
-                if score > prevScore {
+                // For daily scores, always update if it's a new day
+                if period == "daily" {
+                    let calendar = Calendar.current
+                    if let prevTimestamp = (snapshot.data()?["timestamp"] as? Timestamp)?.dateValue(),
+                       !calendar.isDateInToday(prevTimestamp) {
+                        try await docRef.setData([
+                            "username": username,
+                            type.scoreField: score,
+                            "timestamp": Timestamp(date: now)
+                        ])
+                    } else if score > prevScore {
+                        try await docRef.setData([
+                            "username": username,
+                            type.scoreField: score,
+                            "timestamp": Timestamp(date: now)
+                        ], merge: true)
+                    }
+                } else if score > prevScore {
+                    // For other periods, only update if score is higher
                     try await docRef.setData([
                         "username": username,
                         type.scoreField: score,
