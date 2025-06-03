@@ -38,6 +38,20 @@ struct SettingsView: View {
                     Toggle("Auto Save", isOn: $autoSave)
                 }
                 
+                Section(header: Text("Game Mode Rules")) {
+                    NavigationLink(destination: GameRulesView(gameMode: "Classic")) {
+                        HStack {
+                            Image(systemName: "gamecontroller.fill")
+                                .foregroundColor(.blue)
+                            Text("Classic")
+                            Spacer()
+                            Text("Current")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                
                 Section(header: Text("Audio Settings")) {
                     Toggle("Sound Effects", isOn: $soundEnabled)
                     Toggle("Haptic Feedback", isOn: $hapticsEnabled)
@@ -75,31 +89,6 @@ struct SettingsView: View {
                         Text("\(UserDefaults.standard.integer(forKey: "highestLevel"))")
                             .foregroundColor(.blue)
                     }
-                }
-                
-                // Rules Section
-                Section(header: Text("Rules").font(.headline)) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("Drag shapes from the tray onto the grid.", systemImage: "hand.point.up.left.fill")
-                        Label("Shapes come in many sizes and rotations, including I, L, T, and more.", systemImage: "cube")
-                        Label("Fill an entire row or column to clear it and earn points.", systemImage: "line.horizontal.3.decrease.circle")
-                        Label("Bonus points for clearing lines with all the same color.", systemImage: "star.fill")
-                        Label("Group bonuses for clearing large groups when clearing lines.", systemImage: "sparkles")
-                        Label("Level up by reaching the required score (Level × 1000).", systemImage: "arrow.up.right.square")
-                        Label("Each level gets harder with more shapes and colors.", systemImage: "flame")
-                        Label("Undo your last move once per placement.", systemImage: "arrow.uturn.left.circle")
-                        Label("Pause the game anytime with the pause button.", systemImage: "pause.circle")
-                        Label("Game over if none of your tray shapes can be placed.", systemImage: "xmark.octagon")
-                        Label("Track your high score and highest level in the settings.", systemImage: "chart.bar")
-                        Divider()
-                        Button(action: { showingTutorial = true }) {
-                            Label("View Tutorial", systemImage: "questionmark.circle")
-                                .font(.headline)
-                        }
-                    }
-                    .padding()
-                    .background(Color(.systemGray6))
-                    .cornerRadius(12)
                 }
                 
                 Section(header: Text("Data Management")) {

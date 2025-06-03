@@ -278,7 +278,45 @@ final class GameState: ObservableObject {
         return true
     }
     
+    private func countTouchingBlocks(at x: Int, y: Int) -> Int {
+        var touchingCount = 0
+        let directions = [(0, 1), (1, 0), (0, -1), (-1, 0)] // up, right, down, left
+        
+        for (dx, dy) in directions {
+            let newX = x + dx
+            let newY = y + dy
+            
+            // Only count if the adjacent position is within grid bounds AND contains a block
+            if newX >= 0 && newX < GameConstants.gridSize && 
+               newY >= 0 && newY < GameConstants.gridSize && 
+               grid[newY][newX] != nil {
+                touchingCount += 1
+            }
+        }
+        return touchingCount
+    }
+
     private func placeBlock(_ block: Block, at anchor: CGPoint) {
+        var totalTouchingPoints = 0
+        var hasAnyTouches = false
+        
+        // First check for touches before placing the block
+        for (dx, dy) in block.shape.cells {
+            let x = Int(anchor.x) + dx
+            let y = Int(anchor.y) + dy
+            if x >= 0 && x < GameConstants.gridSize && y >= 0 && y < GameConstants.gridSize {
+                let touchingCount = countTouchingBlocks(at: x, y: y)
+                if touchingCount > 0 {
+                    hasAnyTouches = true
+                    totalTouchingPoints += touchingCount
+                    let position = CGPoint(x: CGFloat(x) * GameConstants.blockSize, y: CGFloat(y) * GameConstants.blockSize)
+                    addScore(touchingCount, at: position)
+                    print("[Touch] Block at (\(x),\(y)) touches \(touchingCount) blocks. +\(touchingCount) points!")
+                }
+            }
+        }
+        
+        // Then place the block
         for (dx, dy) in block.shape.cells {
             let x = Int(anchor.x) + dx
             let y = Int(anchor.y) + dy
@@ -286,6 +324,14 @@ final class GameState: ObservableObject {
                 grid[y][x] = block.color
             }
         }
+        
+        // Only award bonus if the block actually touched other blocks
+        if hasAnyTouches && totalTouchingPoints >= 3 {
+            let bonusPoints = totalTouchingPoints * 2
+            addScore(bonusPoints, at: CGPoint(x: frameSize.width/2, y: frameSize.height/2))
+            print("[Bonus] Multiple touches! +\(bonusPoints) bonus points!")
+        }
+        
         blocksPlaced += 1
         usedColors.insert(block.color)
         usedShapes.insert(block.shape)
@@ -708,24 +754,31 @@ final class GameState: ObservableObject {
             userDefaults.set(level, forKey: levelKey)
             achievementsManager.updateAchievement(id: "highest_level", value: level)
         }
-        // Save current game state
+        
+        // Convert grid to a property list compatible format
         var gridData: [[String?]] = []
         for row in grid {
             let rowData: [String?] = row.map { $0?.rawValue }
             gridData.append(rowData)
         }
+        
+        // Convert tray to a property list compatible format
         let trayData = tray.map { block in
             [
                 "color": block.color.rawValue,
                 "shape": block.shape.rawValue
             ]
         }
+        
+        // Create a property list compatible dictionary
         let progress: [String: Any] = [
             "score": score,
             "level": level,
             "grid": gridData,
             "tray": trayData
         ]
+        
+        // Save the progress
         userDefaults.set(progress, forKey: progressKey)
     }
     
