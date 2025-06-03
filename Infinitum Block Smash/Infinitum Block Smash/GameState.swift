@@ -167,7 +167,12 @@ final class GameState: ObservableObject {
         gameBoard = GameBoard()
         currentShapes = []
         lastMove = nil
-        saveProgress()
+        do {
+            try saveProgress()
+        } catch {
+            print("[Reset] Error saving progress: \(error.localizedDescription)")
+            // Continue with reset even if save fails
+        }
         delegate?.gameStateDidUpdate()
     }
     
@@ -549,13 +554,41 @@ final class GameState: ObservableObject {
     private func checkGameOver() {
         // End the game if none of the tray shapes can be placed anywhere
         let canPlaceAny = tray.contains { canPlaceBlockAnywhere($0) }
-        if !canPlaceAny {
+        if !canPlaceAny && !isGameOver {  // Only proceed if not already game over
             print("[GameOver] No available moves for any tray shape. Game over.")
-            isGameOver = true
-            saveProgress()
-            if score > 0 { updateLeaderboard() }
-            gameOver()
+            handleGameOver()
         }
+    }
+    
+    private func handleGameOver() {
+        // Ensure we only process game over once
+        guard !isGameOver else { return }
+        
+        isGameOver = true
+        gamesCompleted += 1
+        
+        // Update achievements
+        achievementsManager.updateAchievement(id: "games_10", value: gamesCompleted)
+        achievementsManager.updateAchievement(id: "games_50", value: gamesCompleted)
+        achievementsManager.updateAchievement(id: "games_100", value: gamesCompleted)
+        
+        // Save game state and update leaderboard safely
+        do {
+            try saveProgress()
+            if score > 0 {
+                updateLeaderboard()
+            }
+        } catch {
+            print("[GameOver] Error saving progress: \(error.localizedDescription)")
+            // Continue with game over even if save fails
+        }
+        
+        // Save last play date and check achievements
+        saveLastPlayDate()
+        checkAchievements()
+        
+        // Notify delegate of state change
+        delegate?.gameStateDidUpdate()
     }
     
     private func hasValidMoves() -> Bool {
@@ -734,17 +767,10 @@ final class GameState: ObservableObject {
     }
     
     func gameOver() {
-        isGameOver = true
-        gamesCompleted += 1
-        achievementsManager.updateAchievement(id: "games_10", value: gamesCompleted)
-        achievementsManager.updateAchievement(id: "games_50", value: gamesCompleted)
-        achievementsManager.updateAchievement(id: "games_100", value: gamesCompleted)
-        
-        saveLastPlayDate()
-        checkAchievements()
+        handleGameOver()
     }
     
-    func saveProgress() {
+    func saveProgress() throws {
         // Save high score and highest level
         if score > userDefaults.integer(forKey: scoreKey) {
             userDefaults.set(score, forKey: scoreKey)
@@ -758,16 +784,22 @@ final class GameState: ObservableObject {
         // Convert grid to a property list compatible format
         var gridData: [[String?]] = []
         for row in grid {
-            let rowData: [String?] = row.map { $0?.rawValue }
+            let rowData: [String?] = row.map { color in
+                if let color = color {
+                    return String(describing: color.rawValue)
+                }
+                return nil
+            }
             gridData.append(rowData)
         }
         
         // Convert tray to a property list compatible format
         let trayData = tray.map { block in
             [
-                "color": block.color.rawValue,
-                "shape": block.shape.rawValue
-            ]
+                "color": String(describing: block.color.rawValue),
+                "shape": String(describing: block.shape.rawValue),
+                "id": block.id.uuidString
+            ] as [String: String]
         }
         
         // Create a property list compatible dictionary
@@ -778,8 +810,18 @@ final class GameState: ObservableObject {
             "tray": trayData
         ]
         
-        // Save the progress
-        userDefaults.set(progress, forKey: progressKey)
+        // Convert to Data first to ensure it's property list compatible
+        guard let data = try? JSONSerialization.data(withJSONObject: progress) else {
+            throw GameError.saveFailed(NSError(domain: "GameState", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to serialize game state"]))
+        }
+        
+        // Save the data
+        userDefaults.set(data, forKey: progressKey)
+        
+        // Verify the save was successful
+        guard userDefaults.synchronize() else {
+            throw GameError.saveFailed(NSError(domain: "GameState", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to synchronize UserDefaults"]))
+        }
     }
     
     func cleanup() {

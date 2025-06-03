@@ -128,7 +128,12 @@ struct GameView: View {
             .accessibilityLabel("Game Over. Final Score: \(gameState.score), Level: \(gameState.level)")
             
             PauseMenuOverlay(isPresented: isPaused, onResume: { isPaused = false }, onSave: {
-                gameState.saveProgress(); isPaused = false
+                do {
+                    try gameState.saveProgress()
+                } catch {
+                    print("[PauseMenu] Error saving progress: \(error.localizedDescription)")
+                }
+                isPaused = false
             }, onRestart: {
                 gameState.resetGame(); isPaused = false
             }, onHome: {
