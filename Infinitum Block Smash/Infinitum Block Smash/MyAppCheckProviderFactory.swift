@@ -7,13 +7,8 @@ class MyAppCheckProviderFactory: NSObject, AppCheckProviderFactory {
         // Use debug provider on simulator
         return AppCheckDebugProvider(app: app)
         #else
-        if #available(iOS 14.0, *) {
-            // Use App Attest on real devices
-            return AppAttestProvider(app: app)
-        } else {
-            // Fallback to DeviceCheck on older iOS
-            return DeviceCheckProvider(app: app)
-        }
+        // Use DeviceCheck on all real devices
+        return DeviceCheckProvider(app: app)
         #endif
     }
 } 

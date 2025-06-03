@@ -7,6 +7,7 @@ class AudioManager {
     private var backgroundMusic: AVAudioPlayer?
     private var soundEffects: [String: AVAudioPlayer] = [:]
     private var isMuted: Bool = false
+    private var audioSession: AVAudioSession?
     
     private init() {
         setupAudioSession()
@@ -14,45 +15,70 @@ class AudioManager {
     }
     
     private func setupAudioSession() {
+        audioSession = AVAudioSession.sharedInstance()
         do {
-            try AVAudioSession.sharedInstance().setCategory(.ambient, mode: .default)
-            try AVAudioSession.sharedInstance().setActive(true)
+            try audioSession?.setCategory(.ambient, mode: .default, options: [.mixWithOthers])
+            try audioSession?.setActive(true)
         } catch {
             print("Failed to set up audio session: \(error)")
         }
     }
     
     private func loadSounds() {
-        // Load background music
+        // Load background music with reduced memory usage
         if let musicURL = Bundle.main.url(forResource: "background_music", withExtension: "mp3") {
             do {
-                backgroundMusic = try AVAudioPlayer(contentsOf: musicURL)
-                backgroundMusic?.numberOfLoops = -1 // Infinite loop
+                let data = try Data(contentsOf: musicURL)
+                backgroundMusic = try AVAudioPlayer(data: data)
+                backgroundMusic?.numberOfLoops = -1
                 backgroundMusic?.prepareToPlay()
             } catch {
                 print("Failed to load background music: \(error)")
             }
         }
         
-        // Load sound effects
-        let soundEffects = [
-            "placement": "placement",
-            "combo": "combo",
-            "level_up": "level_up",
-            "game_over": "game_over"
-        ]
+        // Clear existing sound effects
+        cleanupSoundEffects()
         
-        for (key, filename) in soundEffects {
-            if let url = Bundle.main.url(forResource: filename, withExtension: "wav") {
-                do {
-                    let player = try AVAudioPlayer(contentsOf: url)
-                    player.prepareToPlay()
-                    self.soundEffects[key] = player
-                } catch {
-                    print("Failed to load sound effect \(filename): \(error)")
-                }
+        // Load only essential sound effects initially
+        loadEssentialSoundEffects()
+    }
+    
+    private func loadEssentialSoundEffects() {
+        // Only load the most frequently used sound effect
+        if let url = Bundle.main.url(forResource: "placement", withExtension: "wav") {
+            do {
+                let data = try Data(contentsOf: url)
+                let player = try AVAudioPlayer(data: data)
+                player.prepareToPlay()
+                self.soundEffects["placement"] = player
+            } catch {
+                print("Failed to load placement sound effect: \(error)")
             }
         }
+    }
+    
+    func loadSoundEffect(_ name: String) {
+        guard soundEffects[name] == nil else { return }
+        
+        if let url = Bundle.main.url(forResource: name, withExtension: "wav") {
+            do {
+                let data = try Data(contentsOf: url)
+                let player = try AVAudioPlayer(data: data)
+                player.prepareToPlay()
+                self.soundEffects[name] = player
+            } catch {
+                print("Failed to load sound effect \(name): \(error)")
+            }
+        }
+    }
+    
+    func playSoundEffect(_ name: String) {
+        if soundEffects[name] == nil {
+            loadSoundEffect(name)
+        }
+        guard !isMuted else { return }
+        soundEffects[name]?.play()
     }
     
     func playBackgroundMusic() {
@@ -98,5 +124,27 @@ class AudioManager {
         } else {
             stopBackgroundMusic()
         }
+    }
+    
+    private func cleanupSoundEffects() {
+        for (_, player) in soundEffects {
+            player.stop()
+        }
+        soundEffects.removeAll()
+    }
+    
+    func cleanup() {
+        // Stop and cleanup all audio
+        stopBackgroundMusic()
+        cleanupSoundEffects()
+        backgroundMusic = nil
+        
+        // Deactivate audio session
+        try? audioSession?.setActive(false)
+        audioSession = nil
+    }
+    
+    deinit {
+        cleanup()
     }
 } 

@@ -640,16 +640,26 @@ final class GameState: ObservableObject {
     }
     
     private func updateLeaderboard() {
+        print("[GameState] Attempting to update leaderboard - Score: \(score), Username: \(username)")
         Task {
             do {
+                // Check if user is authenticated
+                guard let currentUser = Auth.auth().currentUser else {
+                    print("[GameState] User not authenticated - skipping leaderboard update")
+                    return
+                }
+                
                 try await LeaderboardService.shared.updateLeaderboard(
                     type: .score,
                     score: score,
                     username: username,
-                    userID: userID
+                    userID: currentUser.uid
                 )
+                print("[GameState] Leaderboard update completed successfully")
+            } catch LeaderboardError.notAuthenticated {
+                print("[GameState] User not authenticated - skipping leaderboard update")
             } catch {
-                print("[Leaderboard] Error updating leaderboard: \(error.localizedDescription)")
+                print("[GameState] Error updating leaderboard: \(error.localizedDescription)")
             }
         }
     }
@@ -847,26 +857,67 @@ struct SeededGenerator: RandomNumberGenerator {
 
 extension BlockShape {
     static func availableShapes(for level: Int) -> [BlockShape] {
-        // Level 1: I, L, T, and square shapes (all rotations)
-        let all: [BlockShape] = [
+        // Basic shapes available from the start
+        let basicShapes: [BlockShape] = [
             .bar2H, .bar2V, .bar3H, .bar3V, .bar4H, .bar4V, .square,
             .lUp, .lDown, .lLeft, .lRight,
-            .tUp, .tDown, .tLeft, .tRight,
-            .zShape, .plus, .cross, .uShape, .vShape, .wShape, .xShape, .yShape, .zShape2
+            .tUp, .tDown, .tLeft, .tRight
         ]
+        
+        // Plus shape
+        let plusShape: [BlockShape] = [.plus]
+        
+        // Z shape
+        let zShape: [BlockShape] = [.zShape]
+        
+        // Medium complexity shapes
+        let mediumShapes: [BlockShape] = [.cross, .uShape, .vShape, .wShape]
+        
+        // Complex shapes
+        let complexShapes: [BlockShape] = [.xShape, .yShape, .zShape2]
+        
+        // Master shapes (for very high levels)
+        let starShape: [BlockShape] = [.star]      // 5-pointed star
+        let diamondShape: [BlockShape] = [.diamond] // Diamond shape
+        let hexagonShape: [BlockShape] = [.hexagon] // Hexagonal shape
+        let spiralShape: [BlockShape] = [.spiral]   // Spiral pattern
+        let zigzagShape: [BlockShape] = [.zigzag]   // Zigzag pattern
+        
         if level <= 1 {
-            return [.bar2H, .bar2V, .bar3H, .bar3V, .bar4H, .bar4V, .square, .lUp, .lDown, .lLeft, .lRight, .tUp, .tDown, .tLeft, .tRight]
+            return basicShapes
         }
-        if level <= 3 {
-            return [.bar2H, .bar2V, .bar3H, .bar3V, .bar4H, .bar4V, .square, .lUp, .lDown, .lLeft, .lRight, .tUp, .tDown, .tLeft, .tRight, .zShape]
+        if level <= 15 {
+            return basicShapes
         }
-        if level <= 5 {
-            return [.bar2H, .bar2V, .bar3H, .bar3V, .bar4H, .bar4V, .square, .lUp, .lDown, .lLeft, .lRight, .tUp, .tDown, .tLeft, .tRight, .zShape, .plus]
+        if level <= 25 {
+            return basicShapes + plusShape
         }
-        if level <= 10 { return Array(all.prefix(18)) }
-        if level <= 20 { return Array(all.prefix(20)) }
-        if level <= 50 { return Array(all.prefix(22)) }
-        return all
+        if level <= 40 {
+            return basicShapes + plusShape + zShape
+        }
+        if level <= 60 {
+            return basicShapes + plusShape + zShape + mediumShapes
+        }
+        if level <= 100 {
+            return basicShapes + plusShape + zShape + mediumShapes + complexShapes
+        }
+        if level <= 125 {
+            return basicShapes + plusShape + zShape + mediumShapes + complexShapes
+        }
+        if level <= 200 {
+            return basicShapes + plusShape + zShape + mediumShapes + complexShapes + starShape
+        }
+        if level <= 300 {
+            return basicShapes + plusShape + zShape + mediumShapes + complexShapes + starShape + diamondShape
+        }
+        if level <= 400 {
+            return basicShapes + plusShape + zShape + mediumShapes + complexShapes + starShape + diamondShape + hexagonShape
+        }
+        if level <= 500 {
+            return basicShapes + plusShape + zShape + mediumShapes + complexShapes + starShape + diamondShape + hexagonShape + spiralShape
+        }
+        // Level 501+: All shapes available
+        return basicShapes + plusShape + zShape + mediumShapes + complexShapes + starShape + diamondShape + hexagonShape + spiralShape + zigzagShape
     }
 }
 

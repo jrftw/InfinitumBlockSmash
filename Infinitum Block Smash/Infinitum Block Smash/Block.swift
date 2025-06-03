@@ -107,6 +107,8 @@ enum BlockShape: String, CaseIterable {
     case tUp, tDown, tLeft, tRight
     // ... other shapes as before
     case zShape, plus, cross, uShape, vShape, wShape, xShape, yShape, zShape2
+    // Master shapes
+    case star, diamond, hexagon, spiral, zigzag
     
     var cells: [(Int, Int)] {
         switch self {
@@ -143,6 +145,41 @@ enum BlockShape: String, CaseIterable {
         case .xShape: return [(0,0), (2,0), (1,1), (0,2), (2,2)]
         case .yShape: return [(0,0), (0,1), (1,1), (0,2), (0,3)]
         case .zShape2: return [(0,0), (1,0), (2,0), (2,1), (2,2)]
+        // Master shapes
+        case .star: return [
+            (1,0), (3,0),  // Top points
+            (0,1), (2,1), (4,1),  // Middle row
+            (1,2), (3,2),  // Bottom points
+            (2,3)  // Bottom center
+        ]
+        case .diamond: return [
+            (2,0),  // Top
+            (1,1), (3,1),  // Upper middle
+            (0,2), (4,2),  // Middle
+            (1,3), (3,3),  // Lower middle
+            (2,4)  // Bottom
+        ]
+        case .hexagon: return [
+            (1,0), (2,0), (3,0),  // Top
+            (0,1), (4,1),  // Upper sides
+            (0,2), (4,2),  // Middle sides
+            (0,3), (4,3),  // Lower sides
+            (1,4), (2,4), (3,4)  // Bottom
+        ]
+        case .spiral: return [
+            (0,0), (1,0), (2,0), (3,0),  // Top row
+            (3,1), (3,2), (3,3),  // Right side
+            (2,3), (1,3), (0,3),  // Bottom row
+            (0,2), (0,1),  // Left side
+            (1,1), (2,1)  // Inner spiral
+        ]
+        case .zigzag: return [
+            (0,0), (1,0),  // First zig
+            (1,1), (2,1),  // First zag
+            (2,2), (3,2),  // Second zig
+            (3,3), (4,3),  // Second zag
+            (4,4), (5,4)   // Third zig
+        ]
         }
     }
     
@@ -157,6 +194,12 @@ enum BlockShape: String, CaseIterable {
         case .yShape, .zShape2: return 6
         case .rect2x3, .rect3x2: return 10
         case .rect3x3: return 15
+        // Master shapes
+        case .star: return 125
+        case .diamond: return 200
+        case .hexagon: return 300
+        case .spiral: return 400
+        case .zigzag: return 500
         }
     }
     

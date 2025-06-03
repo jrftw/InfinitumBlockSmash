@@ -12,8 +12,8 @@ service cloud.firestore {
     }
     
     function isValidScore() {
-      return request.resource.data.score is number 
-        && request.resource.data.score >= 0;
+      return (request.resource.data.score is number && request.resource.data.score >= 0) ||
+             (request.resource.data.points is number && request.resource.data.points >= 0);
     }
     
     function isValidUsername() {

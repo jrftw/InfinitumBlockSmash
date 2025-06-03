@@ -76,6 +76,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         trayNode?.removeFromParent()
         particleEmitter?.removeFromParent()
         glowNode?.removeFromParent()
+        
+        // Clear any cached images
+        autoreleasepool {
+            gridNode = nil
+            trayNode = nil
+            particleEmitter = nil
+            glowNode = nil
+        }
     }
     
     private func setupScene() {
@@ -278,7 +286,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func createGradientImage(size: CGSize, colors: [CGColor], locations: [CGFloat]) -> UIImage? {
-        UIGraphicsBeginImageContextWithOptions(size, false, 0)
+        // Use a smaller scale factor for better memory usage
+        let scale: CGFloat = 1.0
+        UIGraphicsBeginImageContextWithOptions(size, false, scale)
+        defer { UIGraphicsEndImageContext() }
+        
         guard let context = UIGraphicsGetCurrentContext() else { return nil }
         
         let colorSpace = CGColorSpaceCreateDeviceRGB()
@@ -291,9 +303,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                                  end: CGPoint(x: size.width, y: size.height),
                                  options: [])
         
-        let image = UIGraphicsGetImageFromCurrentImageContext()
-        UIGraphicsEndImageContext()
-        return image
+        return UIGraphicsGetImageFromCurrentImageContext()
     }
     
     private func updateTray(trayHeight: CGFloat, trayWidth: CGFloat, shapeWidths: [CGFloat], spacing: CGFloat) {

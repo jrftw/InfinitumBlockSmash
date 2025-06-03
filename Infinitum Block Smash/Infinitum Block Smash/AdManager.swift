@@ -29,13 +29,16 @@ class AdManager: NSObject, ObservableObject, FullScreenContentDelegate {
     
     override init() {
         super.init()
-        loadInterstitial()
-        loadRewardedInterstitial()
+        // Load ads only when needed
         preloadBanner()
     }
     
     // MARK: - Banner Ad Preloading
     func preloadBanner() {
+        // Clean up existing banner if any
+        bannerView?.removeFromSuperview()
+        bannerView = nil
+        
         let banner = BannerView(adSize: AdSizeBanner)
         #if DEBUG
         banner.adUnitID = AdConfig.testBannerAdUnitID
@@ -51,6 +54,9 @@ class AdManager: NSObject, ObservableObject, FullScreenContentDelegate {
     
     // MARK: - Interstitial Ads
     func loadInterstitial() {
+        // Clean up existing interstitial if any
+        interstitial = nil
+        
         let request = Request()
         #if DEBUG
         InterstitialAd.load(with: AdConfig.testInterstitialAdUnitID, request: request) { [weak self] ad, error in
@@ -84,12 +90,15 @@ class AdManager: NSObject, ObservableObject, FullScreenContentDelegate {
     
     // MARK: - Rewarded Interstitial Ads
     func loadRewardedInterstitial() {
+        // Clean up existing rewarded interstitial if any
+        rewardedInterstitial = nil
+        
         let request = Request()
         #if DEBUG
         RewardedInterstitialAd.load(with: AdConfig.testRewardedAdUnitID, request: request) { [weak self] ad, error in
             if let error = error {
                 print("Failed to load rewarded interstitial ad with error: \(error.localizedDescription)")
-                self?.adLoadFailed = true // Silent fail
+                self?.adLoadFailed = true
                 return
             }
             self?.rewardedInterstitial = ad
@@ -100,7 +109,7 @@ class AdManager: NSObject, ObservableObject, FullScreenContentDelegate {
         RewardedInterstitialAd.load(with: AdConfig.rewardedAdUnitID, request: request) { [weak self] ad, error in
             if let error = error {
                 print("Failed to load rewarded interstitial ad with error: \(error.localizedDescription)")
-                self?.adLoadFailed = true // Silent fail
+                self?.adLoadFailed = true
                 return
             }
             self?.rewardedInterstitial = ad
@@ -141,5 +150,12 @@ class AdManager: NSObject, ObservableObject, FullScreenContentDelegate {
         } else if ad is RewardedInterstitialAd {
             loadRewardedInterstitial()
         }
+    }
+    
+    func cleanup() {
+        bannerView?.removeFromSuperview()
+        bannerView = nil
+        interstitial = nil
+        rewardedInterstitial = nil
     }
 } 
