@@ -194,7 +194,7 @@ struct TutorialModal: View {
     @Binding var showTutorial: Bool
     @State private var step = 0
     private let steps: [(String, String, String?)] = [
-        ("Welcome to Infinitum Stack & Smash!", "Get ready to stack and smash blocks for high scores.", "star.fill"),
+        ("Welcome to Infinitum Block Smash!", "Get ready to stack and smash blocks for high scores.", "star.fill"),
         ("Drag Shapes", "Drag shapes from the tray onto the grid.", "hand.point.up.left.fill"),
         ("Clear Lines", "Fill an entire row or column to clear it and earn points.", "line.horizontal.3.decrease.circle"),
         ("Level Up", "The game gets harder as you level up, with more complex shapes.", "arrow.up.right.square"),

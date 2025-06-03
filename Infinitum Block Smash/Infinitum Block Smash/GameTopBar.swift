@@ -12,7 +12,7 @@ struct GameTopBar: View {
                     .foregroundColor(.white)
             }
             .padding(.trailing, 8)
-            Text("Infinitum Stack & Smash")
+            Text("Infinitum Block Smash")
                 .font(.title2.bold())
                 .foregroundColor(.white)
             Spacer()
