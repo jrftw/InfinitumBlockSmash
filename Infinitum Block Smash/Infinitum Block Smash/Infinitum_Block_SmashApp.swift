@@ -34,37 +34,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     
     // MARK: - AppCheck Configuration
     private func configureAppCheck() {
-        #if os(macOS)
-        // 🖥️ macOS: Use debug provider
-        let providerFactory = AppCheckDebugProviderFactory()
+        let providerFactory = MyAppCheckProviderFactory()
         AppCheck.setAppCheckProviderFactory(providerFactory)
-        print("[AppCheck] Using DebugProvider for macOS")
-        
-        #elseif targetEnvironment(simulator)
-        // 🧪 Simulator: Use debug provider
-        let providerFactory = AppCheckDebugProviderFactory()
-        AppCheck.setAppCheckProviderFactory(providerFactory)
-        print("[AppCheck] Using DebugProvider for Simulator")
-
-        #elseif DEBUG
-        if isTestFlight() {
-            // 🧪 TestFlight build: Use debug provider
-            let providerFactory = AppCheckDebugProviderFactory()
-            AppCheck.setAppCheckProviderFactory(providerFactory)
-            print("[AppCheck] Using DebugProvider for TestFlight")
-        } else {
-            // ✅ Development Device: Use AppAttest provider
-            let providerFactory = AppAttestProviderFactory()
-            AppCheck.setAppCheckProviderFactory(providerFactory)
-            print("[AppCheck] Using AppAttestProvider for Development Device")
-        }
-
-        #else
-        // 🚀 Production: Use AppAttest
-        let providerFactory = AppAttestProviderFactory()
-        AppCheck.setAppCheckProviderFactory(providerFactory)
-        print("[AppCheck] Using AppAttestProvider for Production")
-        #endif
+        print("[AppCheck] Using custom AppCheckProviderFactory")
     }
 
     private func isTestFlight() -> Bool {
