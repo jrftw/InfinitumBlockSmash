@@ -9,14 +9,13 @@ struct GameSceneProvider: View {
         let width = UIScreen.main.bounds.width
         let height = UIScreen.main.bounds.height
         let sceneSize = CGSize(width: width, height: height)
-        SpriteView(scene: scene ?? GameScene(size: sceneSize))
+        SpriteView(scene: scene ?? GameScene(size: sceneSize, gameState: gameState))
             .ignoresSafeArea()
             .onAppear {
                 print("[DEBUG] GameSceneProvider onAppear")
                 if scene == nil {
-                    let newScene = GameScene(size: sceneSize)
+                    let newScene = GameScene(size: sceneSize, gameState: gameState)
                     newScene.scaleMode = .aspectFill
-                    newScene.gameState = gameState
                     scene = newScene
                 }
             }

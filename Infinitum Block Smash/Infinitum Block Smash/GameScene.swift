@@ -15,10 +15,22 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var particleEmitter: SKEmitterNode?
     private var glowNode: SKNode?
     
-    override init(size: CGSize) {
+    // MARK: - Properties
+    private var blockNodes: [SKNode] = []
+    private var scoreLabel: SKLabelNode?
+    private var levelLabel: SKLabelNode?
+    private var memoryWarningLabel: SKLabelNode?
+    private var lastMemoryCheck: TimeInterval = 0
+    private let memoryCheckInterval: TimeInterval = 5.0 // Check every 5 seconds
+    
+    // MARK: - Initialization
+    init(size: CGSize, gameState: GameState) {
+        self.gameState = gameState
         super.init(size: size)
         print("[DEBUG] GameScene init(size:) called")
+        setupScene()
     }
+    
     required init?(coder aDecoder: NSCoder) {
         super.init(coder: aDecoder)
         print("[DEBUG] GameScene init(coder:) called")
@@ -76,7 +88,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         trayNode?.removeFromParent()
         particleEmitter?.removeFromParent()
         glowNode?.removeFromParent()
-        
         // Clear any cached images
         autoreleasepool {
             gridNode = nil
@@ -105,6 +116,19 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             SKAction.colorize(with: SKColor(hex: "#1a1a2e"), colorBlendFactor: 1.0, duration: 2.0)
         ])
         backgroundNode.run(SKAction.repeatForever(backgroundAnimation))
+        
+        // Setup memory warning label
+        memoryWarningLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        if let label = memoryWarningLabel {
+            label.fontSize = 14
+            label.fontColor = .red
+            label.position = CGPoint(x: size.width - 100, y: size.height - 20)
+            label.isHidden = true
+            addChild(label)
+        }
+        
+        // Start memory monitoring
+        startMemoryMonitoring()
     }
     
     private func setupGrid() {
@@ -237,6 +261,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let blockSize = GameConstants.blockSize
         let blockNode = SKNode()
         
+        // Reuse existing nodes if possible
+        if let existingNode = blockNodes.first(where: { $0.parent == nil }) {
+            existingNode.removeAllChildren()
+            blockNode.addChild(existingNode)
+        }
+        
         for (dx, dy) in block.shape.cells {
             let cellNode = SKShapeNode(rectOf: CGSize(width: blockSize, height: blockSize))
             
@@ -249,9 +279,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             let colors = [block.color.gradientColors.start, block.color.gradientColors.end]
             let locations: [CGFloat] = [0.0, 1.0]
             
-            if let gradientImage = createGradientImage(size: CGSize(width: blockSize, height: blockSize),
-                                                     colors: colors,
-                                                     locations: locations) {
+            if let gradientImage = createGradientImage(size: CGSize(width: blockSize, height: blockSize), colors: colors, locations: locations) {
                 gradientNode.fillTexture = SKTexture(image: gradientImage)
                 gradientNode.fillColor = .white
             }
@@ -282,6 +310,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             blockNode.addChild(cellNode)
         }
         
+        blockNodes.append(blockNode)
         return blockNode
     }
     
@@ -589,6 +618,70 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         gridNode.addChild(containerNode)
     }
+    
+    // MARK: - Memory Management
+    private func startMemoryMonitoring() {
+        // Check memory usage periodically
+        let checkMemory = SKAction.run { [weak self] in
+            self?.checkMemoryUsage()
+        }
+        let wait = SKAction.wait(forDuration: memoryCheckInterval)
+        let sequence = SKAction.sequence([checkMemory, wait])
+        run(SKAction.repeatForever(sequence), withKey: "memoryMonitoring")
+    }
+    
+    private func checkMemoryUsage() {
+        let status = MemoryMonitor.shared.checkMemoryUsage()
+        switch status {
+        case .critical:
+            handleCriticalMemory()
+        case .warning:
+            handleMemoryWarning()
+        case .normal:
+            hideMemoryWarning()
+        }
+    }
+    
+    private func handleCriticalMemory() {
+        // Show warning
+        memoryWarningLabel?.text = "⚠️ Memory Critical"
+        memoryWarningLabel?.isHidden = false
+        
+        // Force cleanup
+        cleanupMemory()
+        
+        // Notify user
+        NotificationCenter.default.post(name: .memoryCritical, object: nil)
+    }
+    
+    private func handleMemoryWarning() {
+        // Show warning
+        memoryWarningLabel?.text = "⚠️ High Memory Usage"
+        memoryWarningLabel?.isHidden = false
+        
+        // Perform cleanup
+        cleanupMemory()
+    }
+    
+    private func hideMemoryWarning() {
+        memoryWarningLabel?.isHidden = true
+    }
+    
+    private func cleanupMemory() {
+        // Remove unused nodes
+        blockNodes.removeAll(where: { $0.parent == nil })
+        
+        // Clear any cached textures
+        SKTexture.preload([]) { [weak self] in
+            self?.removeAllActions()
+        }
+        
+        // Clear any cached images
+        UIGraphicsEndImageContext()
+        
+        // Log memory usage
+        MemoryMonitor.shared.logMemoryUsage()
+    }
 }
 
 extension GameScene: GameStateDelegate {
@@ -640,4 +733,9 @@ extension GameScene: GameStateDelegate {
         // Run the animation
         scoreLabel.run(sequence)
     }
+}
+
+// MARK: - Notifications
+extension Notification.Name {
+    static let memoryCritical = Notification.Name("memoryCritical")
 } 

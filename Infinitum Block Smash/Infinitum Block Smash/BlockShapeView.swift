@@ -6,6 +6,10 @@ struct BlockShapeView: View {
     let isPreview: Bool
     let isValid: Bool
     
+    // Cache for gradient images
+    private static var gradientCache: [String: UIImage] = [:]
+    private static let cacheQueue = DispatchQueue(label: "com.infinitum.blocksmash.gradientcache")
+    
     var body: some View {
         ZStack {
             ForEach(0..<block.shape.cells.count, id: \.self) { idx in
@@ -24,14 +28,51 @@ struct BlockShapeView: View {
         }
         .frame(width: shapeWidth, height: shapeHeight)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: block.id)
+        .onDisappear {
+            cleanupMemory()
+        }
     }
     
     private var shapeWidth: CGFloat {
         let maxX = block.shape.cells.map { $0.0 }.max() ?? 0
         return CGFloat(maxX + 1) * cellSize
     }
+    
     private var shapeHeight: CGFloat {
         let maxY = block.shape.cells.map { $0.1 }.max() ?? 0
         return CGFloat(maxY + 1) * cellSize
+    }
+    
+    private func cleanupMemory() {
+        // Clear gradient cache if it gets too large
+        BlockShapeView.cacheQueue.async {
+            if BlockShapeView.gradientCache.count > 100 {
+                BlockShapeView.gradientCache.removeAll()
+            }
+        }
+    }
+    
+    // MARK: - Gradient Cache
+    private static func getCachedGradient(for color: BlockColor, size: CGSize) -> UIImage? {
+        let key = "\(color.rawValue)_\(size.width)_\(size.height)"
+        return cacheQueue.sync {
+            return gradientCache[key]
+        }
+    }
+    
+    private static func cacheGradient(_ image: UIImage, for color: BlockColor, size: CGSize) {
+        let key = "\(color.rawValue)_\(size.width)_\(size.height)"
+        cacheQueue.async {
+            gradientCache[key] = image
+        }
+    }
+}
+
+// MARK: - Memory Management
+extension BlockShapeView {
+    static func clearCache() {
+        cacheQueue.async {
+            gradientCache.removeAll()
+        }
     }
 } 

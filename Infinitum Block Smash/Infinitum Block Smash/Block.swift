@@ -153,32 +153,27 @@ enum BlockShape: String, CaseIterable {
             (2,3)  // Bottom center
         ]
         case .diamond: return [
-            (2,0),  // Top
-            (1,1), (3,1),  // Upper middle
-            (0,2), (4,2),  // Middle
-            (1,3), (3,3),  // Lower middle
-            (2,4)  // Bottom
+            (1,0), (3,0),  // Top points
+            (0,1), (2,1), (4,1),  // Middle row
+            (1,2), (3,2),  // Bottom points
+            (2,3)  // Bottom center
         ]
         case .hexagon: return [
-            (1,0), (2,0), (3,0),  // Top
-            (0,1), (4,1),  // Upper sides
-            (0,2), (4,2),  // Middle sides
-            (0,3), (4,3),  // Lower sides
-            (1,4), (2,4), (3,4)  // Bottom
+            (1,0), (2,0),  // Top
+            (0,1), (3,1),  // Upper sides
+            (0,2), (3,2),  // Lower sides
+            (1,3), (2,3)   // Bottom
         ]
         case .spiral: return [
-            (0,0), (1,0), (2,0), (3,0),  // Top row
-            (3,1), (3,2), (3,3),  // Right side
-            (2,3), (1,3), (0,3),  // Bottom row
-            (0,2), (0,1),  // Left side
-            (1,1), (2,1)  // Inner spiral
+            (0,0), (1,0), (2,0),  // Top row
+            (2,1), (2,2),  // Right side
+            (1,2), (0,2),  // Bottom row
+            (0,1)  // Left side
         ]
         case .zigzag: return [
             (0,0), (1,0),  // First zig
             (1,1), (2,1),  // First zag
-            (2,2), (3,2),  // Second zig
-            (3,3), (4,3),  // Second zag
-            (4,4), (5,4)   // Third zig
+            (2,2), (3,2)   // Second zig
         ]
         }
     }

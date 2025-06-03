@@ -54,6 +54,7 @@ final class GameState: ObservableObject {
     @Published private(set) var isPerfectLevel: Bool = true
     @Published private(set) var gamesCompleted: Int = 0
     @Published private(set) var undoCount: Int = 0
+    @Published var isPaused: Bool = false
     
     // Add frame size property
     var frameSize: CGSize = .zero
@@ -72,9 +73,10 @@ final class GameState: ObservableObject {
     private let levelKey = "highestLevel"
     private let progressKey = "gameProgress"
     
-    // Undo support
-    private var previousGrid: [[BlockColor?]] = []
-    private var previousTray: [Block] = []
+    // Undo support - use weak references to prevent memory leaks
+    private var previousGrid: [[BlockColor?]]?
+    private var previousTray: [Block]?
+    private var lastMove: GameMove?
     private var previousScore: Int = 0
     private var previousLevel: Int = 1
     
@@ -85,24 +87,32 @@ final class GameState: ObservableObject {
     
     // MARK: - Private Properties
     private var cancellables = Set<AnyCancellable>()
-    private var lastMove: GameMove?
-    private var gameBoard: GameBoard
-    private var currentShapes: [any Shape]
     
     // MARK: - Initialization
     init() {
-        self.gameBoard = GameBoard()
-        self.currentShapes = []
+        self.grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
+        self.tray = []
+        refillTray()
         setupSubscriptions()
         setupInitialGame()
         gameStartTime = Date()
         loadLastPlayDate()
     }
     
+    deinit {
+        Task { [weak self] in
+            guard let self = self else { return }
+            await MainActor.run {
+                self.cleanupMemory()
+                self.cancellables.removeAll()
+            }
+        }
+    }
+    
     // MARK: - Private Methods
     private func setupInitialGame() {
         grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
-        tray = []
+        tray.removeAll(keepingCapacity: true)
         refillTray()
         level = 1
         score = 0
@@ -113,8 +123,8 @@ final class GameState: ObservableObject {
         blocksPlaced = 0
         linesCleared = 0
         currentChain = 0
-        usedColors.removeAll()
-        usedShapes.removeAll()
+        usedColors.removeAll(keepingCapacity: true)
+        usedShapes.removeAll(keepingCapacity: true)
         isPerfectLevel = true
     }
     
@@ -154,26 +164,42 @@ final class GameState: ObservableObject {
         }
     }
     
+    // MARK: - Memory Management
+    private func cleanupMemory() {
+        // Clear cached data
+        previousGrid = nil
+        previousTray = nil
+        lastMove = nil
+        
+        // Clear any temporary arrays
+        autoreleasepool {
+            // Additional cleanup if needed
+        }
+    }
+    
     // MARK: - Public Methods
     func resetGame() {
-        score = 0
-        level = 1
-        isGameOver = false
-        grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
-        tray = []
-        refillTray()
-        levelComplete = false
-        canUndo = false
-        gameBoard = GameBoard()
-        currentShapes = []
-        lastMove = nil
-        do {
-            try saveProgress()
-        } catch {
-            print("[Reset] Error saving progress: \(error.localizedDescription)")
-            // Continue with reset even if save fails
+        Task { [weak self] in
+            guard let self = self else { return }
+            await MainActor.run {
+                self.cleanupMemory()
+                self.score = 0
+                self.level = 1
+                self.isGameOver = false
+                self.grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
+                self.tray.removeAll(keepingCapacity: true)
+                self.refillTray()
+                self.levelComplete = false
+                self.canUndo = false
+                self.lastMove = nil
+                do {
+                    try self.saveProgress()
+                } catch {
+                    print("[Reset] Error saving progress: \(error.localizedDescription)")
+                }
+                self.delegate?.gameStateDidUpdate()
+            }
         }
-        delegate?.gameStateDidUpdate()
     }
     
     func setSeed(for level: Int) {
@@ -218,8 +244,12 @@ final class GameState: ObservableObject {
     func undoLastMove() {
         guard canUndo && adUndoCount > 0 else { return }
         print("[Undo] Undoing last move. Restoring previous grid, tray, score, and level.")
-        grid = previousGrid.map { $0.map { $0 } }
-        tray = previousTray.map { $0 }
+        if let prevGrid = previousGrid {
+            grid = prevGrid
+        }
+        if let prevTray = previousTray {
+            tray = prevTray
+        }
         score = previousScore
         level = previousLevel
         canUndo = false
@@ -835,13 +865,43 @@ final class GameState: ObservableObject {
     }
     
     func cleanup() {
-        cancellables.removeAll()
-        currentAchievement = nil
-        lastMove = nil
+        Task { [weak self] in
+            guard let self = self else { return }
+            await MainActor.run {
+                self.cleanupMemory()
+                self.cancellables.removeAll()
+                self.currentAchievement = nil
+                self.lastMove = nil
+            }
+        }
     }
     
     func resetLevelComplete() {
         levelComplete = false
+    }
+    
+    func undo() {
+        guard let previousGrid = previousGrid,
+              let previousTray = previousTray else {
+            return
+        }
+        
+        self.grid = previousGrid
+        self.tray = previousTray
+        self.lastMove = nil
+    }
+    
+    func reset() {
+        grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
+        tray = []
+        score = 0
+        level = 1
+        isGameOver = false
+        isPaused = false
+        previousGrid = nil
+        previousTray = nil
+        lastMove = nil
+        refillTray()
     }
 }
 
