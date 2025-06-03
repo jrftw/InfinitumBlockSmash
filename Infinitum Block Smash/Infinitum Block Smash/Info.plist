@@ -28,6 +28,8 @@
 	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>MarketingURL</key>
+	<string>https://infinitumlive.com/apps</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
@@ -39,10 +41,6 @@
 	<string>We use this identifier to provide you with personalized ads and improve your gaming experience. This helps us show you relevant content and track your achievements. Your data is used to enhance gameplay features, analyze app performance, and provide better support. You can change this setting anytime in your device settings.</string>
 	<key>PrivacyPolicyURL</key>
 	<string>https://infinitumlive.com/privacy-policy/</string>
-	<key>SupportURL</key>
-	<string>https://infinitumlive.com/support</string>
-	<key>MarketingURL</key>
-	<string>https://infinitumlive.com/apps</string>
 	<key>SKAdNetworkItems</key>
 	<array>
 		<dict>
@@ -394,6 +392,8 @@
 			<string>zq492l623r.skadnetwork</string>
 		</dict>
 	</array>
+	<key>SupportURL</key>
+	<string>https://infinitumlive.com/support</string>
 	<key>UIAppFonts</key>
 	<array/>
 	<key>UIApplicationSceneManifest</key>
