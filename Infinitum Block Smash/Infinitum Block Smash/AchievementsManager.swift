@@ -4,6 +4,7 @@ import Foundation
 import Combine
 import SwiftUI
 import FirebaseFirestore
+import FirebaseAuth
 
 struct Achievement: Identifiable, Codable, Equatable {
     let id: String
@@ -228,6 +229,13 @@ class AchievementsManager: ObservableObject {
             do {
                 guard let userID = UserDefaults.standard.string(forKey: "userID"),
                       let username = UserDefaults.standard.string(forKey: "username") else {
+                    print("[Achievement Leaderboard] Error: Missing userID or username")
+                    return
+                }
+                
+                // Check if user is authenticated
+                guard Auth.auth().currentUser != nil else {
+                    print("[Achievement Leaderboard] Error: User not authenticated")
                     return
                 }
                 
@@ -237,6 +245,7 @@ class AchievementsManager: ObservableObject {
                     username: username,
                     userID: userID
                 )
+                print("[Achievement Leaderboard] Successfully updated leaderboard")
             } catch {
                 print("[Achievement Leaderboard] Error updating leaderboard: \(error.localizedDescription)")
             }

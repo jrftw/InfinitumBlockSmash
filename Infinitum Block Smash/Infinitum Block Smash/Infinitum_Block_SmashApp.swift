@@ -53,17 +53,17 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             AppCheck.setAppCheckProviderFactory(providerFactory)
             print("[AppCheck] Using DebugProvider for TestFlight")
         } else {
-            // ✅ Development Device: Use real provider
-            let providerFactory = DeviceCheckProviderFactory()
+            // ✅ Development Device: Use AppAttest provider
+            let providerFactory = AppAttestProviderFactory()
             AppCheck.setAppCheckProviderFactory(providerFactory)
-            print("[AppCheck] Using DeviceCheckProvider for Development Device")
+            print("[AppCheck] Using AppAttestProvider for Development Device")
         }
 
         #else
-        // 🚀 Production: Use DeviceCheck
-        let providerFactory = DeviceCheckProviderFactory()
+        // 🚀 Production: Use AppAttest
+        let providerFactory = AppAttestProviderFactory()
         AppCheck.setAppCheckProviderFactory(providerFactory)
-        print("[AppCheck] Using DeviceCheckProvider for Production")
+        print("[AppCheck] Using AppAttestProvider for Production")
         #endif
     }
 
