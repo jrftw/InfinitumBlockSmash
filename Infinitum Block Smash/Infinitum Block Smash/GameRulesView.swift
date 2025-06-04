@@ -25,6 +25,7 @@ struct GameRulesView: View {
                         RuleItem(icon: "cube.fill", text: "Shapes come in various sizes and rotations")
                         RuleItem(icon: "arrow.up.right.square.fill", text: "Level up by reaching the required score")
                         RuleItem(icon: "xmark.octagon.fill", text: "Game over if no shapes can be placed")
+                        RuleItem(icon: "tray.fill", text: "Always have 3 shapes available in your tray")
                     }
                 }
                 
@@ -37,6 +38,7 @@ struct GameRulesView: View {
                         RuleItem(icon: "paintpalette.fill", text: "500 bonus points for clearing a row/column of the same color")
                         RuleItem(icon: "sparkles.fill", text: "200 points for creating a group of 10 or more blocks")
                         RuleItem(icon: "arrow.triangle.2.circlepath", text: "Chain bonuses for multiple clears")
+                        RuleItem(icon: "checkmark.seal.fill", text: "Perfect level bonus for clearing without mistakes")
                     }
                 }
                 
@@ -48,16 +50,19 @@ struct GameRulesView: View {
                         RuleItem(icon: "3.square.fill", text: "Level 11-50: 3000 points per level")
                         RuleItem(icon: "4.square.fill", text: "Level 51+: 5000 points per level")
                         RuleItem(icon: "plus.circle.fill", text: "New shapes unlock as you progress")
+                        RuleItem(icon: "calendar", text: "Track consecutive days played")
                     }
                 }
                 
                 // Special Features
                 Group {
                     RuleSection(title: "Special Features", icon: "sparkles") {
-                        RuleItem(icon: "arrow.uturn.left.circle.fill", text: "Undo your last move once per placement")
+                        RuleItem(icon: "arrow.uturn.left.circle.fill", text: "Undo your last move (limited uses)")
                         RuleItem(icon: "pause.circle.fill", text: "Pause the game anytime")
                         RuleItem(icon: "trophy.fill", text: "Track high scores and achievements")
                         RuleItem(icon: "person.2.fill", text: "Compete on global leaderboards")
+                        RuleItem(icon: "chart.bar.fill", text: "Track statistics: blocks placed, lines cleared")
+                        RuleItem(icon: "star.circle.fill", text: "Earn achievements for milestones")
                     }
                 }
             }

@@ -3,6 +3,7 @@ import FirebaseAuth
 import FirebaseFirestore
 import GameKit
 import AuthenticationServices
+import UserNotifications
 
 // MARK: - AuthView
 
@@ -21,9 +22,11 @@ struct AuthView: View {
     @State private var username = ""
     @State private var errorMessage = ""
     @State private var isLoading = false
+    @State private var showingNotificationPermission = false
     @AppStorage("userID") private var userID: String = ""
     @AppStorage("username") private var storedUsername: String = ""
     @AppStorage("isGuest") private var isGuest: Bool = false
+    @AppStorage("hasRequestedNotifications") private var hasRequestedNotifications = false
 
     // MARK: - Body
     var body: some View {
@@ -207,6 +210,17 @@ struct AuthView: View {
             // Remove automatic check for signed in user
             // checkIfSignedIn()
         }
+        .alert("Enable Notifications", isPresented: $showingNotificationPermission) {
+            Button("Enable") {
+                requestNotificationPermission()
+            }
+            Button("Not Now", role: .cancel) {
+                hasRequestedNotifications = true
+                dismiss()
+            }
+        } message: {
+            Text("Would you like to receive notifications for game updates, events, and reminders?")
+        }
     }
 
     // MARK: - Notification Handling
@@ -270,7 +284,7 @@ struct AuthView: View {
                     } else {
                         userID = user.uid
                         isGuest = false
-                        dismiss()
+                        handleSuccessfulAuth()
                     }
                 }
             }
@@ -304,7 +318,7 @@ struct AuthView: View {
             storedUsername = username
             saveUsername()
             isGuest = false
-            dismiss()
+            handleSuccessfulAuth()
         }
     }
 
@@ -324,7 +338,7 @@ struct AuthView: View {
             userID = user.uid
             fetchUsername()
             isGuest = false
-            dismiss()
+            handleSuccessfulAuth()
         }
     }
 
@@ -427,7 +441,7 @@ struct AuthView: View {
                     storedUsername = username
                     saveUsername()
                     isGuest = false
-                    dismiss()
+                    handleSuccessfulAuth()
                 }
             } else {
                 isLoading = false
@@ -452,7 +466,7 @@ struct AuthView: View {
             self.storedUsername = self.username
             self.saveUsername()
             self.isGuest = false
-            self.dismiss()
+            self.handleSuccessfulAuth()
         }
     }
 
@@ -470,6 +484,47 @@ struct AuthView: View {
         db.collection("users").document(userID).getDocument { snapshot, error in
             if let data = snapshot?.data(), let name = data["username"] as? String {
                 storedUsername = name
+            }
+        }
+    }
+
+    private func handleSuccessfulAuth() {
+        // Set notifications to enabled by default
+        UserDefaults.standard.set(true, forKey: "notificationsEnabled")
+        UserDefaults.standard.set(true, forKey: "eventNotifications")
+        UserDefaults.standard.set(true, forKey: "updateNotifications")
+        UserDefaults.standard.set(true, forKey: "reminderNotifications")
+        
+        if !hasRequestedNotifications {
+            showingNotificationPermission = true
+        } else {
+            // Even if we've asked before, request permission again if it's not granted
+            UNUserNotificationCenter.current().getNotificationSettings { settings in
+                DispatchQueue.main.async {
+                    if settings.authorizationStatus != .authorized {
+                        self.showingNotificationPermission = true
+                    } else {
+                        self.dismiss()
+                    }
+                }
+            }
+        }
+    }
+
+    private func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+            DispatchQueue.main.async {
+                hasRequestedNotifications = true
+                if granted {
+                    UIApplication.shared.registerForRemoteNotifications()
+                    // Schedule daily reminder since notifications are enabled by default
+                    NotificationManager.shared.scheduleDailyReminder()
+                } else {
+                    // If permission is denied, we'll still keep notifications enabled in settings
+                    // but they won't work until the user enables them in system settings
+                    UserDefaults.standard.set(true, forKey: "notificationsEnabled")
+                }
+                dismiss()
             }
         }
     }

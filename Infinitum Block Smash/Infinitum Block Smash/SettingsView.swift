@@ -1,5 +1,6 @@
 import SwiftUI
 import AppTrackingTransparency
+import MessageUI
 
 struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
@@ -14,9 +15,13 @@ struct SettingsView: View {
     @AppStorage("theme") private var theme: String = "auto"
     @AppStorage("autoSave") private var autoSave = true
     @AppStorage("hasAcceptedAds") private var hasAcceptedAds = false
+    @AppStorage("allowAnalytics") private var allowAnalytics = true
+    @AppStorage("allowDataSharing") private var allowDataSharing = true
     @Environment(\.presentationMode) var presentationMode
     @State private var showingResetConfirmation = false
     @State private var showingChangelog = false
+    @State private var showingFeedbackMail = false
+    @State private var showingFeatureMail = false
     
     private let difficulties = ["easy", "normal", "hard", "expert"]
     private let themes = ["light", "dark", "auto"]
@@ -96,9 +101,30 @@ struct SettingsView: View {
                         showingResetConfirmation = true
                     }
                     .foregroundColor(.red)
-                    
+                }
+                
+                Section(header: Text("Information")) {
                     NavigationLink(destination: ChangelogView()) {
                         Text("Changelog")
+                    }
+                    
+                    Button("Send Feedback") {
+                        showingFeedbackMail = true
+                    }
+                    
+                    Button("Suggest a Feature") {
+                        showingFeatureMail = true
+                    }
+                }
+                
+                Section(header: Text("Privacy")) {
+                    Toggle("Allow anonymous usage analytics", isOn: $allowAnalytics)
+                    Toggle("Allow data sharing for app features", isOn: $allowDataSharing)
+                }
+                
+                Section(header: Text("Notifications")) {
+                    NavigationLink(destination: NotificationPreferencesView()) {
+                        Text("Notification Preferences")
                     }
                 }
                 
@@ -142,6 +168,12 @@ struct SettingsView: View {
             } message: {
                 Text("This will reset all game data including high scores and achievements. This action cannot be undone.")
             }
+            .sheet(isPresented: $showingFeedbackMail) {
+                MailView(isShowing: $showingFeedbackMail, recipient: "support@infinitumlive.com", subject: "Infinitum Block Smash Feedback")
+            }
+            .sheet(isPresented: $showingFeatureMail) {
+                MailView(isShowing: $showingFeatureMail, recipient: "jrftw@infinitumlive.com", subject: "Infinitum Block Smash Feature Suggestion")
+            }
         }
     }
     
@@ -166,6 +198,38 @@ struct SettingsView: View {
             ATTrackingManager.requestTrackingAuthorization { status in
                 // Handle tracking authorization status
             }
+        }
+    }
+}
+
+struct MailView: UIViewControllerRepresentable {
+    @Binding var isShowing: Bool
+    let recipient: String
+    let subject: String
+    
+    func makeUIViewController(context: Context) -> MFMailComposeViewController {
+        let vc = MFMailComposeViewController()
+        vc.mailComposeDelegate = context.coordinator
+        vc.setToRecipients([recipient])
+        vc.setSubject(subject)
+        return vc
+    }
+    
+    func updateUIViewController(_ uiViewController: MFMailComposeViewController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(isShowing: $isShowing)
+    }
+    
+    class Coordinator: NSObject, MFMailComposeViewControllerDelegate {
+        @Binding var isShowing: Bool
+        
+        init(isShowing: Binding<Bool>) {
+            _isShowing = isShowing
+        }
+        
+        func mailComposeController(_ controller: MFMailComposeViewController, didFinishWith result: MFMailComposeResult, error: Error?) {
+            isShowing = false
         }
     }
 } 
