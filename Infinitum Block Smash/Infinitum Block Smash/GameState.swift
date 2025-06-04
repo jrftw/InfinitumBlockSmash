@@ -498,8 +498,7 @@ final class GameState: ObservableObject {
         // Global high score
         if score > userDefaults.integer(forKey: scoreKey) {
             achievementsManager.updateAchievement(id: "high_score", value: score)
-            // Update leaderboard when new high score is achieved
-            updateLeaderboard()
+            // Remove leaderboard update from here
         }
         // Per-level high score
         let levelHighScoreKey = "highScore_level_\(level)"
@@ -544,8 +543,7 @@ final class GameState: ObservableObject {
         tray = []
         if level > userDefaults.integer(forKey: levelKey) {
             achievementsManager.updateAchievement(id: "highest_level", value: level)
-            // Update leaderboard when new highest level is achieved
-            updateLeaderboard()
+            // Remove leaderboard update from here
         }
         let availableShapes = BlockShape.availableShapes(for: level)
         print("[Level] Level \(level) - Available shapes: \(availableShapes.map { String(describing: $0) }.joined(separator: ", "))")

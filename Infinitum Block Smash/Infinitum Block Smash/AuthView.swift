@@ -332,7 +332,6 @@ struct AuthView: View {
         isLoading = true
         let localPlayer = GKLocalPlayer.local
         localPlayer.authenticateHandler = { vc, error in
-            isLoading = false
             if let vc = vc {
                 if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
                    let window = windowScene.windows.first {
@@ -342,11 +341,13 @@ struct AuthView: View {
                 // Get the Game Center credential
                 GameCenterAuthProvider.getCredential { credential, error in
                     if let error = error {
+                        self.isLoading = false
                         self.errorMessage = error.localizedDescription
                         return
                     }
                     
                     guard let credential = credential else {
+                        self.isLoading = false
                         self.errorMessage = "Failed to get Game Center credential"
                         return
                     }
@@ -354,6 +355,7 @@ struct AuthView: View {
                     // Sign in with Firebase using the Game Center credential
                     Auth.auth().signIn(with: credential) { result, error in
                         if let error = error {
+                            self.isLoading = false
                             self.errorMessage = error.localizedDescription
                             return
                         }
@@ -362,11 +364,18 @@ struct AuthView: View {
                             self.tempUserID = user.uid
                             self.tempAuthProvider = "gamecenter"
                             self.showAdditionalInfo = true
+                        } else {
+                            self.isLoading = false
+                            self.errorMessage = "Failed to sign in with Game Center"
                         }
                     }
                 }
             } else if let error = error {
-                errorMessage = error.localizedDescription
+                self.isLoading = false
+                self.errorMessage = error.localizedDescription
+            } else {
+                self.isLoading = false
+                self.errorMessage = "Game Center authentication failed"
             }
         }
     }
@@ -376,65 +385,35 @@ struct AuthView: View {
             errorMessage = "Please enter a username."
             return
         }
-        
         isLoading = true
         
         switch tempAuthProvider {
         case "gamecenter":
-            // For Game Center, we need email and password
-            guard !email.isEmpty, !password.isEmpty else {
+            guard let user = Auth.auth().currentUser else {
                 isLoading = false
-                errorMessage = "Please fill in all fields."
+                errorMessage = "No authenticated user found."
                 return
             }
-            
-            // Create a new user with email/password
-            Auth.auth().createUser(withEmail: email, password: password) { result, error in
-                if let error = error {
-                    isLoading = false
-                    errorMessage = error.localizedDescription
-                    return
-                }
-                
-                guard let user = result?.user else {
-                    isLoading = false
-                    errorMessage = "Failed to create user account."
-                    return
-                }
-                
-                // Get the Game Center credential
-                GameCenterAuthProvider.getCredential { credential, error in
-                    if let error = error {
-                        isLoading = false
-                        errorMessage = error.localizedDescription
-                        return
-                    }
-                    
-                    guard let credential = credential else {
-                        isLoading = false
-                        errorMessage = "Failed to get Game Center credential"
-                        return
-                    }
-                    
-                    // Link the Game Center account
-                    user.link(with: credential) { result, error in
-                        isLoading = false
-                        if let error = error {
-                            errorMessage = error.localizedDescription
-                            return
+            // If email and password are provided, try to link them
+            if !email.isEmpty && !password.isEmpty {
+                let credential = EmailAuthProvider.credential(withEmail: email, password: password)
+                user.link(with: credential) { result, error in
+                    if let error = error as NSError? {
+                        self.isLoading = false
+                        if error.code == AuthErrorCode.credentialAlreadyInUse.rawValue {
+                            self.errorMessage = "This email is already associated with another account."
+                        } else {
+                            self.errorMessage = error.localizedDescription
                         }
-                        
-                        userID = user.uid
-                        storedUsername = username
-                        saveUsername()
-                        isGuest = false
-                        dismiss()
+                        return
                     }
+                    self.finishProfileSetup(user: user)
                 }
+            } else {
+                // Just update the username
+                finishProfileSetup(user: user)
             }
-            
         case "apple":
-            // For Apple Sign In, we only need to update the username
             if let user = Auth.auth().currentUser {
                 let changeRequest = user.createProfileChangeRequest()
                 changeRequest.displayName = username
@@ -444,7 +423,6 @@ struct AuthView: View {
                         errorMessage = error.localizedDescription
                         return
                     }
-                    
                     userID = user.uid
                     storedUsername = username
                     saveUsername()
@@ -455,10 +433,26 @@ struct AuthView: View {
                 isLoading = false
                 errorMessage = "No authenticated user found."
             }
-            
         default:
             isLoading = false
             errorMessage = "Invalid authentication provider."
+        }
+    }
+
+    private func finishProfileSetup(user: User) {
+        let changeRequest = user.createProfileChangeRequest()
+        changeRequest.displayName = self.username
+        changeRequest.commitChanges { error in
+            self.isLoading = false
+            if let error = error {
+                self.errorMessage = error.localizedDescription
+                return
+            }
+            self.userID = user.uid
+            self.storedUsername = self.username
+            self.saveUsername()
+            self.isGuest = false
+            self.dismiss()
         }
     }
 
