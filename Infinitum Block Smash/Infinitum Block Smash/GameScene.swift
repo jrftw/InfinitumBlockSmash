@@ -409,8 +409,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let touchPoint = touch.location(in: self)
         let gridPoint = convertToGridCoordinates(touchPoint)
         
-        // Update drag node position to follow touch, but above the finger
-        dragNode.position = CGPoint(x: touchPoint.x, y: touchPoint.y + GameConstants.blockSize * 1.5)
+        // Update drag node position to follow touch more precisely
+        dragNode.position = CGPoint(x: touchPoint.x, y: touchPoint.y + GameConstants.blockSize * 0.5)
         
         // Remove any existing preview
         previewNode?.removeFromParent()
@@ -443,10 +443,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             let totalWidth = CGFloat(gridSize) * blockSize
             let totalHeight = CGFloat(gridSize) * blockSize
             
-            // Position the entire preview at the grid position
+            // Position the entire preview at the grid position with precise alignment
             let previewPosition = CGPoint(
-                x: -totalWidth / 2 + CGFloat(Int(gridPoint.x)) * blockSize + blockSize / 2,
-                y: -totalHeight / 2 + CGFloat(Int(gridPoint.y)) * blockSize + blockSize / 2
+                x: -totalWidth / 2 + CGFloat(gridPoint.x) * blockSize + blockSize / 2,
+                y: -totalHeight / 2 + CGFloat(gridPoint.y) * blockSize + blockSize / 2
             )
             preview.position = previewPosition
             
@@ -502,9 +502,22 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let relativeX = point.x - gridOrigin.x
         let relativeY = point.y - gridOrigin.y
         
-        // Convert to grid coordinates using floor to ensure consistent placement
-        let col = max(0, min(gridSize - 1, Int(floor(relativeX / cellSize))))
-        let row = max(0, min(gridSize - 1, Int(floor(relativeY / cellSize))))
+        // Add a small snap threshold (20% of cell size) for more precise placement
+        let snapThreshold = cellSize * 0.2
+        let snappedX = relativeX.truncatingRemainder(dividingBy: cellSize)
+        let snappedY = relativeY.truncatingRemainder(dividingBy: cellSize)
+        
+        // If we're within the snap threshold of a cell center, snap to it
+        let finalX = abs(snappedX - cellSize/2) < snapThreshold ? 
+            round(relativeX / cellSize) : 
+            floor(relativeX / cellSize)
+        let finalY = abs(snappedY - cellSize/2) < snapThreshold ? 
+            round(relativeY / cellSize) : 
+            floor(relativeY / cellSize)
+        
+        // Ensure we stay within grid bounds
+        let col = max(0, min(gridSize - 1, Int(finalX)))
+        let row = max(0, min(gridSize - 1, Int(finalY)))
         
         return CGPoint(x: col, y: row)
     }
