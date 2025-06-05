@@ -101,6 +101,12 @@ enum BlockColor: String, CaseIterable {
 
 // BlockShape: defines the arrangement of cells for a block
 enum BlockShape: String, CaseIterable {
+    // Single block
+    case single
+    // Tiny L shapes (3 blocks)
+    case tinyLUp, tinyLDown, tinyLLeft, tinyLRight
+    // Tiny I shapes (3 blocks)
+    case tinyI
     // I (bar) shapes
     case bar2H, bar2V
     case bar3H, bar3V
@@ -120,6 +126,15 @@ enum BlockShape: String, CaseIterable {
     
     var cells: [(Int, Int)] {
         switch self {
+        // Single block
+        case .single: return [(0,0)]
+        // Tiny L shapes
+        case .tinyLUp: return [(0,0), (0,1), (1,1)]
+        case .tinyLDown: return [(1,0), (1,1), (0,1)]
+        case .tinyLLeft: return [(0,0), (1,0), (1,1)]
+        case .tinyLRight: return [(0,0), (0,1), (1,0)]
+        // Tiny I shape
+        case .tinyI: return [(0,0), (0,1), (0,2)]
         // I (bar) shapes
         case .bar2H: return [(0,0), (1,0)]
         case .bar2V: return [(0,0), (0,1)]
@@ -189,6 +204,8 @@ enum BlockShape: String, CaseIterable {
     // Level at which this shape becomes available
     var requiredLevel: Int {
         switch self {
+        case .single: return 1
+        case .tinyLUp, .tinyLDown, .tinyLLeft, .tinyLRight, .tinyI: return 1
         case .bar2H, .bar2V, .bar3H, .bar3V, .bar4H, .bar4V, .square: return 1
         case .lUp, .lDown, .lLeft, .lRight, .tUp, .tDown, .tLeft, .tRight: return 2
         case .zShape, .plus, .cross: return 3

@@ -262,7 +262,24 @@ final class GameState: ObservableObject {
     }
     
     func nextBlockRandom() -> Block {
-        let shape = BlockShape.availableShapes(for: level).randomElement(using: &rng) ?? .bar2H
+        var availableShapes = BlockShape.availableShapes(for: level)
+        
+        // Implement rarity for single blocks and tiny shapes
+        if level <= 25 {
+            // 5% chance for single block
+            if Double.random(in: 0...1, using: &rng) < 0.05 {
+                availableShapes = [.single]
+            }
+        }
+        
+        if level <= 35 {
+            // 3% chance for tiny shapes
+            if Double.random(in: 0...1, using: &rng) < 0.03 {
+                availableShapes = [.tinyLUp, .tinyLDown, .tinyLLeft, .tinyLRight, .tinyI]
+            }
+        }
+        
+        let shape = availableShapes.randomElement(using: &rng) ?? .bar2H
         let color = BlockColor.availableColors(for: level).randomElement(using: &rng) ?? .red
         return Block(color: color, shape: shape)
     }
@@ -1446,6 +1463,12 @@ extension BlockShape {
             .tUp, .tDown, .tLeft, .tRight
         ]
         
+        // Single block (very rare, only up to level 25)
+        let singleBlock: [BlockShape] = level <= 25 ? [.single] : []
+        
+        // Tiny L and I shapes (very rare, only up to level 35)
+        let tinyShapes: [BlockShape] = level <= 35 ? [.tinyLUp, .tinyLDown, .tinyLLeft, .tinyLRight, .tinyI] : []
+        
         // Plus shape
         let plusShape: [BlockShape] = [.plus]
         
@@ -1466,13 +1489,16 @@ extension BlockShape {
         let zigzagShape: [BlockShape] = [.zigzag]   // Zigzag pattern
         
         if level <= 1 {
-            return basicShapes
+            return basicShapes + singleBlock + tinyShapes
         }
         if level <= 15 {
-            return basicShapes
+            return basicShapes + singleBlock + tinyShapes
         }
         if level <= 25 {
-            return basicShapes + plusShape
+            return basicShapes + singleBlock + tinyShapes + plusShape
+        }
+        if level <= 35 {
+            return basicShapes + tinyShapes + plusShape + zShape
         }
         if level <= 40 {
             return basicShapes + plusShape + zShape
