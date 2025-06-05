@@ -960,44 +960,35 @@ final class GameState: ObservableObject {
     }
     
     private func updateLeaderboard() {
-        print("[GameState] Attempting to update leaderboard - Score: \(score), Username: \(username)")
+        // Check if user is a guest
+        if UserDefaults.standard.bool(forKey: "isGuest") {
+            print("[Leaderboard] Skipping leaderboard update for guest user")
+            return
+        }
+        
         Task {
             do {
-                // Check if user is authenticated
-                guard let currentUser = Auth.auth().currentUser else {
-                    print("[GameState] User not authenticated - skipping leaderboard update")
+                guard let userID = UserDefaults.standard.string(forKey: "userID"),
+                      let username = UserDefaults.standard.string(forKey: "username") else {
+                    print("[Leaderboard] Error: Missing userID or username")
                     return
                 }
                 
-                // Get the user ID and username
-                let userID = currentUser.uid
-                let displayName = currentUser.displayName ?? username
+                // Check if user is authenticated
+                guard Auth.auth().currentUser != nil else {
+                    print("[Leaderboard] Error: User not authenticated")
+                    return
+                }
                 
-                // Store the user ID and username in UserDefaults for all users
-                UserDefaults.standard.set(userID, forKey: "userID")
-                UserDefaults.standard.set(displayName, forKey: "username")
-                
-                // Update both leaderboards
                 try await LeaderboardService.shared.updateLeaderboard(
                     type: .score,
                     score: score,
-                    username: displayName,
+                    username: username,
                     userID: userID
                 )
-                
-                // Also update achievements leaderboard
-                try await LeaderboardService.shared.updateLeaderboard(
-                    type: .achievement,
-                    score: achievementsManager.totalPoints,
-                    username: displayName,
-                    userID: userID
-                )
-                
-                print("[GameState] Leaderboard updates completed successfully")
-            } catch LeaderboardError.notAuthenticated {
-                print("[GameState] User not authenticated - skipping leaderboard update")
+                print("[Leaderboard] Successfully updated leaderboard")
             } catch {
-                print("[GameState] Error updating leaderboard: \(error.localizedDescription)")
+                print("[Leaderboard] Error updating leaderboard: \(error.localizedDescription)")
             }
         }
     }

@@ -259,6 +259,12 @@ class AchievementsManager: ObservableObject {
     }
     
     private func updateLeaderboard() {
+        // Check if user is a guest
+        if UserDefaults.standard.bool(forKey: "isGuest") {
+            print("[Achievement Leaderboard] Skipping leaderboard update for guest user")
+            return
+        }
+        
         Task {
             do {
                 guard let userID = UserDefaults.standard.string(forKey: "userID"),
