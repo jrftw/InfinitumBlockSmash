@@ -72,6 +72,7 @@ final class GameState: ObservableObject {
     private let scoreKey = "highScore"
     private let levelKey = "highestLevel"
     private let progressKey = "gameProgress"
+    private let hasSavedGameKey = "hasSavedGame"
     
     // Undo support - use weak references to prevent memory leaks
     private var previousGrid: [[BlockColor?]]?
@@ -292,49 +293,25 @@ final class GameState: ObservableObject {
             return false
         }
         
-        guard grid[row][col] == nil else {
-            print("[Place] Position (\(row), \(col)) already occupied")
-            return false
+        // Check if we can place the entire shape
+        for (dx, dy) in block.shape.cells {
+            let x = col + dx
+            let y = row + dy
+            if x < 0 || x >= GameConstants.gridSize || y < 0 || y >= GameConstants.gridSize {
+                print("[Place] Shape would go out of bounds at (\(x), \(y))")
+                return false
+            }
+            if grid[y][x] != nil {
+                print("[Place] Position (\(x), \(y)) already occupied")
+                return false
+            }
         }
         
         // Save state for undo before making changes
         saveStateForUndo()
         
-        // Place the block
-        grid[row][col] = block.color
-        blocksPlaced += 1
-        
-        // Track color and shape usage
-        usedColors.insert(block.color)
-        usedShapes.insert(block.shape)
-        
-        // Update achievements
-        achievementsManager.updateAchievement(id: "place_100", value: blocksPlaced)
-        achievementsManager.updateAchievement(id: "place_500", value: blocksPlaced)
-        achievementsManager.updateAchievement(id: "place_1000", value: blocksPlaced)
-        
-        // Check for color and shape master achievements
-        if usedColors.count == BlockColor.allCases.count {
-            achievementsManager.updateAchievement(id: "color_master", value: 1)
-        }
-        if usedShapes.count == BlockShape.availableShapes(for: level).count {
-            achievementsManager.updateAchievement(id: "shape_master", value: 1)
-        }
-        
-        // Check for grid achievements
-        let totalCells = GameConstants.gridSize * GameConstants.gridSize
-        let filledCells = blocksPlaced
-        let fillPercentage = Double(filledCells) / Double(totalCells)
-        
-        if fillPercentage >= 0.25 {
-            achievementsManager.updateAchievement(id: "grid_quarter", value: 1)
-        }
-        if fillPercentage >= 0.50 {
-            achievementsManager.updateAchievement(id: "grid_half", value: 1)
-        }
-        if fillPercentage >= 0.75 {
-            achievementsManager.updateAchievement(id: "grid_full", value: 1)
-        }
+        // Use placeBlock to handle scoring and placement
+        placeBlock(block, at: position)
         
         // Remove block from tray
         if let index = tray.firstIndex(where: { $0.id == block.id }) {
@@ -374,7 +351,7 @@ final class GameState: ObservableObject {
         return true
     }
     
-    private func countTouchingBlocks(at x: Int, y: Int) -> Int {
+    private func countTouchingBlocks(at x: Int, y: Int, excluding currentShapePositions: Set<String>) -> Int {
         var touchingCount = 0
         let directions = [(0, 1), (1, 0), (0, -1), (-1, 0)] // up, right, down, left
         
@@ -383,9 +360,11 @@ final class GameState: ObservableObject {
             let newY = y + dy
             
             // Only count if the adjacent position is within grid bounds AND contains a block
+            // AND is not part of the current shape
             if newX >= 0 && newX < GameConstants.gridSize && 
                newY >= 0 && newY < GameConstants.gridSize && 
-               grid[newY][newX] != nil {
+               grid[newY][newX] != nil &&
+               !currentShapePositions.contains("\(newX),\(newY)") {
                 touchingCount += 1
             }
         }
@@ -393,15 +372,28 @@ final class GameState: ObservableObject {
     }
 
     private func placeBlock(_ block: Block, at anchor: CGPoint) {
-        var totalTouchingPoints = 0
-        var hasAnyTouches = false
+        // Track the positions of the current shape
+        var currentShapePositions = Set<String>()
         
-        // First check for touches before placing the block
+        // First place the block
         for (dx, dy) in block.shape.cells {
             let x = Int(anchor.x) + dx
             let y = Int(anchor.y) + dy
             if x >= 0 && x < GameConstants.gridSize && y >= 0 && y < GameConstants.gridSize {
-                let touchingCount = countTouchingBlocks(at: x, y: y)
+                grid[y][x] = block.color
+                currentShapePositions.insert("\(x),\(y)")
+            }
+        }
+        
+        // Then check for touches after placing
+        var totalTouchingPoints = 0
+        var hasAnyTouches = false
+        
+        for (dx, dy) in block.shape.cells {
+            let x = Int(anchor.x) + dx
+            let y = Int(anchor.y) + dy
+            if x >= 0 && x < GameConstants.gridSize && y >= 0 && y < GameConstants.gridSize {
+                let touchingCount = countTouchingBlocks(at: x, y: y, excluding: currentShapePositions)
                 if touchingCount > 0 {
                     hasAnyTouches = true
                     totalTouchingPoints += touchingCount
@@ -412,16 +404,7 @@ final class GameState: ObservableObject {
             }
         }
         
-        // Then place the block
-        for (dx, dy) in block.shape.cells {
-            let x = Int(anchor.x) + dx
-            let y = Int(anchor.y) + dy
-            if x >= 0 && x < GameConstants.gridSize && y >= 0 && y < GameConstants.gridSize {
-                grid[y][x] = block.color
-            }
-        }
-        
-        // Only award bonus if the block actually touched other blocks
+        // Award bonus if the block touched other blocks
         if hasAnyTouches && totalTouchingPoints >= 3 {
             let bonusPoints = totalTouchingPoints * 2
             addScore(bonusPoints, at: CGPoint(x: frameSize.width/2, y: frameSize.height/2))
@@ -537,7 +520,7 @@ final class GameState: ObservableObject {
     private func checkMatches() {
         var clearedPositions: [(Int, Int)] = []
         var linesCleared = 0
-        var colorMatchCount = 0
+        var diagonalPatternsFound = Set<String>() // Track which diagonal patterns we've found
         
         // Check rows
         for row in 0..<GameConstants.gridSize {
@@ -545,7 +528,7 @@ final class GameState: ObservableObject {
                 clearRow(row)
                 clearedPositions.append((row, -1))  // -1 indicates entire row
                 linesCleared += 1
-                addScore(1000, at: CGPoint(x: frameSize.width/2, y: CGFloat(row) * GameConstants.blockSize))
+                addScore(100, at: CGPoint(x: frameSize.width/2, y: CGFloat(row) * GameConstants.blockSize))
             }
         }
         
@@ -555,86 +538,119 @@ final class GameState: ObservableObject {
                 clearColumn(col)
                 clearedPositions.append((-1, col))  // -1 indicates entire column
                 linesCleared += 1
-                addScore(1000, at: CGPoint(x: frameSize.width/2, y: frameSize.height/2))
+                addScore(100, at: CGPoint(x: CGFloat(col) * GameConstants.blockSize, y: frameSize.height/2))
             }
         }
         
-        // Check for color matches
-        for row in 0..<GameConstants.gridSize {
-            for col in 0..<GameConstants.gridSize {
-                if let color = grid[row][col] {
-                    var matchCount = 0
-                    // Check horizontal matches
-                    for c in 0..<GameConstants.gridSize {
-                        if grid[row][c] == color {
-                            matchCount += 1
+        // Check for X pattern (10+ blocks in X formation)
+        for row in 1..<GameConstants.gridSize-1 {
+            for col in 1..<GameConstants.gridSize-1 {
+                if let centerColor = grid[row][col] {
+                    var xPatternCount = 1 // Count the center block
+                    var positions = [(row, col)]
+                    
+                    // Check in all four diagonal directions
+                    let directions = [(1,1), (1,-1), (-1,1), (-1,-1)]
+                    for (dx, dy) in directions {
+                        var currentRow = row + dx
+                        var currentCol = col + dy
+                        while currentRow >= 0 && currentRow < GameConstants.gridSize &&
+                              currentCol >= 0 && currentCol < GameConstants.gridSize &&
+                              grid[currentRow][currentCol] == centerColor {
+                            xPatternCount += 1
+                            positions.append((currentRow, currentCol))
+                            currentRow += dx
+                            currentCol += dy
                         }
                     }
-                    if matchCount >= 3 {
-                        colorMatchCount += 1
+                    
+                    if xPatternCount >= 10 {
+                        addScore(1000, at: CGPoint(x: CGFloat(col) * GameConstants.blockSize, y: CGFloat(row) * GameConstants.blockSize))
+                        print("[Bonus] X pattern with \(xPatternCount) blocks found! +1000 points!")
                     }
                 }
             }
         }
         
-        if colorMatchCount >= 2 {
-            let multiMatchBonus = colorMatchCount * 1000
-            addScore(multiMatchBonus, at: CGPoint(x: frameSize.width/2, y: frameSize.height/2))
-            print("[Super Bonus] \(colorMatchCount) color matches! +\(multiMatchBonus) bonus points!")
-        }
-        
-        if !clearedPositions.isEmpty {
-            print("[Clear] Total lines cleared: \(linesCleared)")
-            delegate?.gameStateDidClearLines(at: clearedPositions)
-            
-            // Update line clearing achievements
-            if self.linesCleared == 0 {
-                achievementsManager.increment(id: "first_clear")
-            }
-            self.linesCleared += linesCleared
-            achievementsManager.updateAchievement(id: "clear_10", value: self.linesCleared)
-            achievementsManager.updateAchievement(id: "clear_50", value: self.linesCleared)
-            achievementsManager.updateAchievement(id: "clear_100", value: self.linesCleared)
-            
-            // Update combo achievements
-            if linesCleared >= 3 {
-                achievementsManager.updateAchievement(id: "combo_3", value: 1)
-            }
-            if linesCleared >= 5 {
-                achievementsManager.updateAchievement(id: "combo_5", value: 1)
-            }
-            if linesCleared >= 10 {
-                achievementsManager.updateAchievement(id: "combo_10", value: 1)
-            }
-            
-            // Update chain achievements
-            if currentChain >= 3 {
-                achievementsManager.updateAchievement(id: "chain_3", value: 1)
-            }
-            if currentChain >= 5 {
-                achievementsManager.updateAchievement(id: "chain_5", value: 1)
-            }
-            if currentChain >= 10 {
-                achievementsManager.updateAchievement(id: "chain_10", value: 1)
-            }
-            
-            checkGroups()
-        }
-        
-        if isGridEmpty() {
-            print("[Level] Grid empty, level complete!")
-            levelComplete = true
-            if isPerfectLevel {
-                // Update perfect level achievements
-                achievementsManager.updateAchievement(id: "perfect_level", value: 1)
-                perfectLevels += 1
-                achievementsManager.updateAchievement(id: "perfect_levels_3", value: perfectLevels)
-                achievementsManager.updateAchievement(id: "perfect_levels_5", value: perfectLevels)
+        // Check for diagonal patterns (10+ blocks in a row)
+        for row in 0..<GameConstants.gridSize {
+            for col in 0..<GameConstants.gridSize {
+                if let startColor = grid[row][col] {
+                    // Check forward diagonal (/)
+                    var forwardCount = 1
+                    var currentRow = row - 1
+                    var currentCol = col + 1
+                    while currentRow >= 0 && currentCol < GameConstants.gridSize &&
+                          grid[currentRow][currentCol] == startColor {
+                        forwardCount += 1
+                        currentRow -= 1
+                        currentCol += 1
+                    }
+                    
+                    if forwardCount >= 10 {
+                        let patternKey = "forward_\(row),\(col)"
+                        if !diagonalPatternsFound.contains(patternKey) {
+                            diagonalPatternsFound.insert(patternKey)
+                            addScore(500, at: CGPoint(x: CGFloat(col) * GameConstants.blockSize, y: CGFloat(row) * GameConstants.blockSize))
+                            print("[Bonus] Forward diagonal with \(forwardCount) blocks found! +500 points!")
+                        }
+                    }
+                    
+                    // Check backward diagonal (\)
+                    var backwardCount = 1
+                    currentRow = row - 1
+                    currentCol = col - 1
+                    while currentRow >= 0 && currentCol >= 0 &&
+                          grid[currentRow][currentCol] == startColor {
+                        backwardCount += 1
+                        currentRow -= 1
+                        currentCol -= 1
+                    }
+                    
+                    if backwardCount >= 10 {
+                        let patternKey = "backward_\(row),\(col)"
+                        if !diagonalPatternsFound.contains(patternKey) {
+                            diagonalPatternsFound.insert(patternKey)
+                            addScore(500, at: CGPoint(x: CGFloat(col) * GameConstants.blockSize, y: CGFloat(row) * GameConstants.blockSize))
+                            print("[Bonus] Backward diagonal with \(backwardCount) blocks found! +500 points!")
+                        }
+                    }
+                }
             }
         }
         
-        currentChain += 1
-        checkAchievements()
+        // Check for groups after clearing lines
+        checkGroups()
+        
+        // Update chain bonus only for line clears
+        if linesCleared > 0 {
+            currentChain += 1
+            let chainBonus = currentChain * 100
+            addScore(chainBonus, at: CGPoint(x: frameSize.width/2, y: frameSize.height/2))
+            print("[Chain] Chain \(currentChain)! +\(chainBonus) bonus points!")
+        } else {
+            currentChain = 0
+        }
+        
+        // Update achievements
+        if linesCleared > 0 {
+            achievementsManager.updateAchievement(id: "clear_10", value: linesCleared)
+            achievementsManager.updateAchievement(id: "clear_50", value: linesCleared)
+            achievementsManager.updateAchievement(id: "clear_100", value: linesCleared)
+        }
+        
+        // Check for perfect level
+        if isGridEmpty() && isPerfectLevel {
+            let perfectBonus = 1000
+            addScore(perfectBonus, at: CGPoint(x: frameSize.width/2, y: frameSize.height/2))
+            print("[Perfect] Perfect level! +\(perfectBonus) bonus points!")
+            achievementsManager.updateAchievement(id: "perfect_level", value: 1)
+            perfectLevels += 1
+            achievementsManager.updateAchievement(id: "perfect_levels_3", value: perfectLevels)
+            achievementsManager.updateAchievement(id: "perfect_levels_5", value: perfectLevels)
+        }
+        
+        delegate?.gameStateDidUpdate()
     }
     
     private func isRowFull(_ row: Int) -> Bool {
@@ -821,13 +837,25 @@ final class GameState: ObservableObject {
     // Award points for grouping 10 or more contiguous squares
     private func checkGroups() {
         var visited = Array(repeating: Array(repeating: false, count: GameConstants.gridSize), count: GameConstants.gridSize)
+        var currentShapePositions = Set<String>()
+        
+        // First mark all positions of the current shape as visited
         for row in 0..<GameConstants.gridSize {
             for col in 0..<GameConstants.gridSize {
-                if let _ = grid[row][col], !visited[row][col] {
+                if grid[row][col] != nil {
+                    currentShapePositions.insert("\(col),\(row)")
+                }
+            }
+        }
+        
+        // Only check for groups among existing blocks
+        for row in 0..<GameConstants.gridSize {
+            for col in 0..<GameConstants.gridSize {
+                if let _ = grid[row][col], !visited[row][col] && !currentShapePositions.contains("\(col),\(row)") {
                     let group = floodFill(row: row, col: col, visited: &visited)
                     if group.count >= 10 {
-                        addScore(200, at: CGPoint(x: frameSize.width/2, y: CGFloat(row) * GameConstants.blockSize))
-                        print("[Bonus] Group of \(group.count) contiguous blocks at (\(row),\(col)). +200 bonus points!")
+                        addScore(500, at: CGPoint(x: frameSize.width/2, y: CGFloat(row) * GameConstants.blockSize))
+                        print("[Bonus] Group of \(group.count) contiguous blocks at (\(row),\(col)). +500 bonus points!")
                         
                         // Track group achievements
                         if group.count >= 10 {
@@ -988,6 +1016,63 @@ final class GameState: ObservableObject {
         handleGameOver()
     }
     
+    func hasSavedGame() -> Bool {
+        return userDefaults.bool(forKey: hasSavedGameKey)
+    }
+    
+    func loadSavedGame() throws {
+        guard let data = userDefaults.data(forKey: progressKey) else {
+            throw GameError.loadFailed(NSError(domain: "GameState", code: -1, userInfo: [NSLocalizedDescriptionKey: "No saved game found"]))
+        }
+        
+        guard let progress = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let score = progress["score"] as? Int,
+              let level = progress["level"] as? Int,
+              let gridData = progress["grid"] as? [[String?]],
+              let trayData = progress["tray"] as? [[String: String]] else {
+            throw GameError.loadFailed(NSError(domain: "GameState", code: -2, userInfo: [NSLocalizedDescriptionKey: "Invalid saved game data"]))
+        }
+        
+        // Restore grid
+        var newGrid: [[BlockColor?]] = []
+        for row in gridData {
+            let rowData: [BlockColor?] = row.map { colorStr in
+                if let colorStr = colorStr,
+                   let color = BlockColor(rawValue: colorStr) {
+                    return color
+                }
+                return nil
+            }
+            newGrid.append(rowData)
+        }
+        
+        // Restore tray
+        var newTray: [Block] = []
+        for blockData in trayData {
+            guard let colorStr = blockData["color"],
+                  let shapeStr = blockData["shape"],
+                  let idStr = blockData["id"],
+                  let color = BlockColor(rawValue: colorStr),
+                  let shape = BlockShape(rawValue: shapeStr),
+                  let id = UUID(uuidString: idStr) else {
+                continue
+            }
+            let block = Block(color: color, shape: shape, id: id)
+            newTray.append(block)
+        }
+        
+        // Update game state
+        self.grid = newGrid
+        self.tray = newTray
+        self.score = score
+        self.level = level
+        self.isGameOver = false
+        self.isPaused = false
+        
+        // Notify delegate of state change
+        delegate?.gameStateDidUpdate()
+    }
+    
     func saveProgress() throws {
         // Save high score and highest level
         if score > userDefaults.integer(forKey: scoreKey) {
@@ -1035,11 +1120,18 @@ final class GameState: ObservableObject {
         
         // Save the data
         userDefaults.set(data, forKey: progressKey)
+        userDefaults.set(true, forKey: hasSavedGameKey)
         
         // Verify the save was successful
         guard userDefaults.synchronize() else {
             throw GameError.saveFailed(NSError(domain: "GameState", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to synchronize UserDefaults"]))
         }
+    }
+    
+    func deleteSavedGame() {
+        userDefaults.removeObject(forKey: progressKey)
+        userDefaults.set(false, forKey: hasSavedGameKey)
+        userDefaults.synchronize()
     }
     
     func cleanup() {
@@ -1171,6 +1263,7 @@ enum GameError: LocalizedError {
     case leaderboardUpdateFailed(Error)
     case invalidMove
     case networkError
+    case loadFailed(Error)
     
     var errorDescription: String? {
         switch self {
@@ -1182,6 +1275,8 @@ enum GameError: LocalizedError {
             return "Invalid move"
         case .networkError:
             return "Network connection error. Please check your internet connection."
+        case .loadFailed(let error):
+            return "Failed to load saved game: \(error.localizedDescription)"
         }
     }
 }

@@ -48,7 +48,19 @@ struct ContentView: View {
                     
                     // Menu Buttons
                     VStack(spacing: 15) {
+                        if gameState.hasSavedGame() {
+                            MenuButton(title: "Resume Game", icon: "play.fill") {
+                                do {
+                                    try gameState.loadSavedGame()
+                                    showingGameView = true
+                                } catch {
+                                    print("[MainMenu] Error loading saved game: \(error.localizedDescription)")
+                                }
+                            }
+                        }
+                        
                         MenuButton(title: "Play Classic", icon: "gamecontroller.fill") {
+                            gameState.deleteSavedGame() // Delete any existing saved game when starting a new one
                             showingGameView = true
                         }
                         

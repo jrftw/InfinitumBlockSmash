@@ -2,12 +2,20 @@ import Foundation
 import SwiftUI
 
 struct Block: Identifiable {
-    let id = UUID()
+    var id: UUID
     let color: BlockColor
     let shape: BlockShape
     var position: CGPoint
     
     init(color: BlockColor, shape: BlockShape = BlockShape.random(for: 1)) {
+        self.id = UUID()
+        self.position = .zero
+        self.color = color
+        self.shape = shape
+    }
+    
+    init(color: BlockColor, shape: BlockShape, id: UUID) {
+        self.id = id
         self.position = .zero
         self.color = color
         self.shape = shape

@@ -4,6 +4,24 @@ struct GameRulesView: View {
     let gameMode: String
     @Environment(\.dismiss) var dismiss
     
+    private var rules: [(String, String)] {
+        [
+            ("Basic Rules", "Place blocks on the grid to create matches and clear lines. Each block must touch at least one other block of the same color."),
+            ("Scoring", """
+                • 1 point for each block that touches another block
+                • 2x bonus multiplier for touching 3 or more blocks
+                • 100 points for clearing a row or column
+                • 500 bonus points for creating a group of 10 or more blocks
+                • Chain bonuses for multiple clears
+                • 500 points for diagonal patterns (both / and \\)
+                • 1000 points for X pattern
+                • 1000 points for perfect level (no mistakes)
+                """),
+            ("Level Progression", "Complete levels by reaching the score threshold. Each level introduces new shapes and challenges."),
+            ("Tips", "Plan your moves carefully to create large groups and special patterns for maximum points!")
+        ]
+    }
+    
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {

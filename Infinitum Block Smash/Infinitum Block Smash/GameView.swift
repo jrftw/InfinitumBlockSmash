@@ -130,6 +130,7 @@ struct GameView: View {
             PauseMenuOverlay(isPresented: isPaused, onResume: { isPaused = false }, onSave: {
                 do {
                     try gameState.saveProgress()
+                    presentationMode.wrappedValue.dismiss()
                 } catch {
                     print("[PauseMenu] Error saving progress: \(error.localizedDescription)")
                 }

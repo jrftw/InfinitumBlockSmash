@@ -10,6 +10,11 @@ struct AppVersion {
             "Added secure in-app Discord invite link",
             "Improved settings organization",
             "Enhanced user engagement features",
+            "Fixed tray visibility and block placement issues",
+            "Improved achievement tracking and progress display",
+            "Added daily login achievement with 5 points reward",
+            "Fixed achievement duplication and progress tracking",
+            "Enhanced achievement notifications",
             "Bug fixes and performance improvements"
         ],
         "1.0.0 (Build 6)": [
