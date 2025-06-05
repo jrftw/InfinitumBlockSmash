@@ -2,9 +2,16 @@ import Foundation
 
 struct AppVersion {
     static let current = "1.0.0"
-    static let build = "6"
+    static let build = "7"
     
     static let changelog: [String: [String]] = [
+        "1.0.0 (Build 7)": [
+            "Added Discord community integration",
+            "Added secure in-app Discord invite link",
+            "Improved settings organization",
+            "Enhanced user engagement features",
+            "Bug fixes and performance improvements"
+        ],
         "1.0.0 (Build 6)": [
             "Added daily notification system with fun reminders",
             "Notification permission requested on first launch",
