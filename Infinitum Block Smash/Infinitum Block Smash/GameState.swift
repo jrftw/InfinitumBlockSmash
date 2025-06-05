@@ -1001,7 +1001,7 @@ final class GameState: ObservableObject {
             delegate?.gameStateDidUpdate()
         } else {
             // In production, show ad automatically
-            if let rootViewController = UIApplication.main {
+            if let rootViewController = UIApplication.shared.windows.first?.rootViewController {
                 AdManager.shared.showRewardedInterstitial(from: rootViewController) {
                     self.continueGame()
                 }
@@ -1443,7 +1443,7 @@ final class GameState: ObservableObject {
             return false
         }
 
-        if let rootViewController = UIApplication.main {
+        if let rootViewController = UIApplication.shared.windows.first?.rootViewController {
             print("[Hint] Showing rewarded ad for hint")
             AdManager.shared.showRewardedInterstitial(from: rootViewController) {
                 print("[Hint] Ad completed, showing hint")
