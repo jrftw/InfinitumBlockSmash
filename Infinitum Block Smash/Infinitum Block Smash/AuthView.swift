@@ -403,6 +403,12 @@ struct AuthView: View {
             errorMessage = "Please enter a username."
             return
         }
+        
+        guard ProfanityFilter.isAppropriate(username) else {
+            errorMessage = "Username contains inappropriate language."
+            return
+        }
+        
         isLoading = true
         
         switch tempAuthProvider {

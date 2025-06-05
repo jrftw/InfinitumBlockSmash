@@ -158,6 +158,8 @@ struct ChangeInformationView: View {
             usernameValidationError = "Only lowercase letters, numbers, and underscores allowed."
         } else if !canEditUsername {
             usernameValidationError = "You can only change your username once every 30 days."
+        } else if !ProfanityFilter.isAppropriate(username) {
+            usernameValidationError = "Username contains inappropriate language."
         } else {
             usernameValidationError = ""
         }

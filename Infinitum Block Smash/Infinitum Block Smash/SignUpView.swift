@@ -52,7 +52,8 @@ struct SignUpView: View {
     
     private var isValidInput: Bool {
         !email.isEmpty && !password.isEmpty && !username.isEmpty &&
-        password == confirmPassword && password.count >= 6
+        password == confirmPassword && password.count >= 6 &&
+        ProfanityFilter.isAppropriate(username)
     }
     
     private func createAccount() {
