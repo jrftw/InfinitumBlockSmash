@@ -114,6 +114,11 @@ final class GameState: ObservableObject {
     
     private let adManager = AdManager.shared
     
+    // New properties for level-based shape spawning
+    private var randomShapesOnBoard: Int = 0
+    private var requiredShapesToFit: Int = 3
+    private var levelScoreThreshold: Int = 1000
+    
     // MARK: - Initialization
     init() {
         self.grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
@@ -320,11 +325,11 @@ final class GameState: ObservableObject {
     }
     
     func refillTray() {
-        // Only refill if we have less than 3 blocks
-        guard tray.count < 3 else { return }
+        // Clear existing tray
+        tray.removeAll(keepingCapacity: true)
         
-        // Generate new blocks until we have 3
-        while tray.count < 3 {
+        // Add new blocks to tray
+        for _ in 0..<requiredShapesToFit {
             let newBlock = nextBlockRandom()
             tray.append(newBlock)
         }
@@ -1517,6 +1522,78 @@ final class GameState: ObservableObject {
         adsWatchedThisGame = 0
         hintsUsedThisGame = 0
         hasUsedContinueAd = false
+    }
+    
+    private func getLevelScoreThreshold() -> Int {
+        switch level {
+        case 1...5:
+            return 1000
+        case 6...10:
+            return 2000
+        case 11...50:
+            return 3000
+        case 51...99:
+            return 5000
+        case 100...:
+            return 10000
+        default:
+            return 5000
+        }
+    }
+    
+    private func updateLevelRequirements() {
+        levelScoreThreshold = getLevelScoreThreshold()
+        
+        // Update random shapes on board
+        if level >= 350 {
+            randomShapesOnBoard = 0
+            requiredShapesToFit = 3
+        } else if level >= 150 {
+            randomShapesOnBoard = 4
+            requiredShapesToFit = 3
+        } else if level >= 100 {
+            randomShapesOnBoard = 3
+            requiredShapesToFit = 3
+        } else if level >= 75 {
+            randomShapesOnBoard = 2
+            requiredShapesToFit = 3
+        } else if level >= 60 {
+            randomShapesOnBoard = 1
+            requiredShapesToFit = 3
+        } else {
+            randomShapesOnBoard = 0
+            requiredShapesToFit = 3
+        }
+    }
+    
+    private func spawnRandomShapesOnBoard() {
+        guard randomShapesOnBoard > 0 else { return }
+        
+        for _ in 0..<randomShapesOnBoard {
+            let newBlock = nextBlockRandom()
+            // Find a random empty position on the grid
+            var emptyPositions: [(Int, Int)] = []
+            for row in 0..<GameConstants.gridSize {
+                for col in 0..<GameConstants.gridSize {
+                    if grid[row][col] == nil {
+                        emptyPositions.append((row, col))
+                    }
+                }
+            }
+            
+            if let randomPosition = emptyPositions.randomElement() {
+                grid[randomPosition.0][randomPosition.1] = newBlock.color
+            }
+        }
+    }
+    
+    func startNewLevel() {
+        level += 1
+        updateLevelRequirements()
+        spawnRandomShapesOnBoard()
+        refillTray()
+        levelComplete = false
+        isPerfectLevel = true
     }
 }
 

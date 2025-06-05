@@ -68,9 +68,21 @@ struct GameRulesView: View {
                         RuleItem(icon: "1.square.fill", text: "Level 1-5: 1000 points per level")
                         RuleItem(icon: "2.square.fill", text: "Level 6-10: 2000 points per level")
                         RuleItem(icon: "3.square.fill", text: "Level 11-50: 3000 points per level")
-                        RuleItem(icon: "4.square.fill", text: "Level 51+: 5000 points per level")
+                        RuleItem(icon: "4.square.fill", text: "Level 51-99: 5000 points per level")
+                        RuleItem(icon: "5.square.fill", text: "Level 100+: 10,000 points required")
                         RuleItem(icon: "plus.circle.fill", text: "New shapes unlock as you progress")
                         RuleItem(icon: "calendar", text: "Track consecutive days played")
+                    }
+                }
+                
+                // Special Level Mechanics
+                Group {
+                    RuleSection(title: "Special Level Mechanics", icon: "sparkles") {
+                        RuleItem(icon: "60.circle.fill", text: "Level 60+: 1 random shape spawns on the board")
+                        RuleItem(icon: "75.circle.fill", text: "Level 75+: 2 random shapes spawn on the board")
+                        RuleItem(icon: "100.circle.fill", text: "Level 100+: 3 random shapes spawn + 10,000 points needed")
+                        RuleItem(icon: "150.circle.fill", text: "Level 150+: 4 random shapes spawn on the board")
+                        RuleItem(icon: "350.circle.fill", text: "Level 350+: All 3 shapes must fit before getting new ones")
                     }
                 }
                 
