@@ -553,10 +553,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             // Update last placement time
             lastPlacementTime = currentTime
             // Play placement sound
-            run(SKAction.playSoundFileNamed("place.mp3", waitForCompletion: false))
+            AudioManager.shared.playPlacementSound()
         } else {
             // Play error sound
-            run(SKAction.playSoundFileNamed("error.mp3", waitForCompletion: false))
+            AudioServicesPlaySystemSound(1521) // System sound for error
         }
         
         // Clean up
@@ -640,7 +640,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         node.run(scaleAction)
         
         // Play sound and haptic
-        AudioManager.shared.playSound("placement")
+        AudioManager.shared.playPlacementSound()
         playHaptic(style: .medium)
     }
 
@@ -657,7 +657,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 particles.run(SKAction.sequence([wait, remove]))
             }
         }
-        AudioManager.shared.playSound("combo")
+        AudioManager.shared.playLevelCompleteSound()
         playHaptic(style: .heavy)
     }
 

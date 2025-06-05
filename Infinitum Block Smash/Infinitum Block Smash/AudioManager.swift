@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import AudioToolbox
 
 class AudioManager {
     static let shared = AudioManager()
@@ -103,6 +104,18 @@ class AudioManager {
         for player in soundEffects.values {
             player.volume = volume
         }
+    }
+    
+    func playPlacementSound() {
+        guard !isMuted else { return }
+        // System sound for block placement (a light tap sound)
+        AudioServicesPlaySystemSound(1104) // System sound for a light tap
+    }
+    
+    func playLevelCompleteSound() {
+        guard !isMuted else { return }
+        // System sound for level completion (a success sound)
+        AudioServicesPlaySystemSound(1519) // System sound for success
     }
     
     func toggleMute() {
