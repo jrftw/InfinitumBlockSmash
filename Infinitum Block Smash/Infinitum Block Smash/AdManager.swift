@@ -68,7 +68,9 @@ class AdManager: NSObject, ObservableObject, FullScreenContentDelegate {
             let leaderboard = try await LeaderboardService.shared.getLeaderboard(type: .score, period: "alltime")
             if let userID = UserDefaults.standard.string(forKey: "userID"),
                let userIndex = leaderboard.firstIndex(where: { $0.id == userID }) {
-                isTopThreePlayer = userIndex < 3
+                await MainActor.run {
+                    isTopThreePlayer = userIndex < 3
+                }
             }
         } catch {
             print("[AdManager] Error checking top three status: \(error.localizedDescription)")
@@ -144,12 +146,16 @@ class AdManager: NSObject, ObservableObject, FullScreenContentDelegate {
         RewardedInterstitialAd.load(with: AdConfig.getRewardedAdUnitID(), request: request) { [weak self] ad, error in
             if let error = error {
                 print("Failed to load rewarded interstitial ad with error: \(error.localizedDescription)")
-                self?.adLoadFailed = true
+                DispatchQueue.main.async {
+                    self?.adLoadFailed = true
+                }
                 return
             }
             self?.rewardedInterstitial = ad
             self?.rewardedInterstitial?.fullScreenContentDelegate = self
-            self?.adLoadFailed = false
+            DispatchQueue.main.async {
+                self?.adLoadFailed = false
+            }
         }
     }
     
@@ -172,7 +178,9 @@ class AdManager: NSObject, ObservableObject, FullScreenContentDelegate {
     
     // MARK: - GADFullScreenContentDelegate
     func adDidDismissFullScreenContent(_ ad: FullScreenPresentingAd) {
-        adDidDismiss = true
+        DispatchQueue.main.async {
+            self.adDidDismiss = true
+        }
         // Reload the ad for next time
         if ad is InterstitialAd {
             loadInterstitial()
@@ -183,7 +191,9 @@ class AdManager: NSObject, ObservableObject, FullScreenContentDelegate {
     
     func ad(_ ad: FullScreenPresentingAd, didFailToPresentFullScreenContentWithError error: Error) {
         print("Ad failed to present with error: \(error.localizedDescription)")
-        self.adLoadFailed = true // Silent fail
+        DispatchQueue.main.async {
+            self.adLoadFailed = true // Silent fail
+        }
         // Reload the ad for next time
         if ad is InterstitialAd {
             loadInterstitial()

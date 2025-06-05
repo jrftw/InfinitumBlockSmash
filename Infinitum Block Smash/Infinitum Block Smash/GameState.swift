@@ -325,11 +325,8 @@ final class GameState: ObservableObject {
     }
     
     func refillTray() {
-        // Clear existing tray
-        tray.removeAll(keepingCapacity: true)
-        
-        // Add new blocks to tray
-        for _ in 0..<requiredShapesToFit {
+        // Only add new blocks if we have less than requiredShapesToFit
+        while tray.count < requiredShapesToFit {
             let newBlock = nextBlockRandom()
             tray.append(newBlock)
         }
