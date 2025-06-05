@@ -28,6 +28,8 @@ struct SettingsView: View {
     @State private var showingDiscordWebView = false
     @State private var showingPlacementPrecisionInfo = false
     @State private var showingBlockDragInfo = false
+    @State private var showingTestFlightAlert = false
+    @State private var showingTestFlightWebView = false
     
     private let difficulties = ["easy", "normal", "hard", "expert"]
     private let themes = ["light", "dark", "auto"]
@@ -184,6 +186,10 @@ struct SettingsView: View {
                         showingDiscordWebView = true
                     }
                     
+                    Button("Test New Features") {
+                        showingTestFlightAlert = true
+                    }
+                    
                     Button("Send Feedback") {
                         showingFeedbackMail = true
                     }
@@ -262,6 +268,17 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showingDiscordWebView) {
                 SafariView(url: URL(string: "https://discord.gg/8xx4QzceRA")!)
+            }
+            .alert("Test New Features", isPresented: $showingTestFlightAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Join TestFlight") {
+                    showingTestFlightWebView = true
+                }
+            } message: {
+                Text("Join our TestFlight program to experience upcoming features before they're released. Your feedback helps us improve the game and ensure the highest quality experience for all players.")
+            }
+            .sheet(isPresented: $showingTestFlightWebView) {
+                SafariView(url: URL(string: "https://testflight.apple.com/join/nd4DWxbT")!)
             }
         }
     }
