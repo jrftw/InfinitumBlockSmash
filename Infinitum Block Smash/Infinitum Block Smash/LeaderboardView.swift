@@ -10,6 +10,7 @@ struct LeaderboardView: View {
     @State private var error: String?
     @State private var searchText = ""
     @State private var userPosition: Int?
+    @State private var allTimeUserPosition: Int?
     @State private var lastUpdated: Date?
     @State private var totalUsers: Int = 0
     
@@ -67,6 +68,30 @@ struct LeaderboardView: View {
                     }
                 }
                 .padding()
+                
+                // Elite Player Status Banner (show only for High Scores All Time)
+                if selectedType == .score && selectedPeriod == "alltime" && leaderboardData.count >= 3 {
+                    HStack(spacing: 8) {
+                        Image(systemName: "star.fill")
+                            .foregroundColor(.yellow)
+                        Text("Elite Player: Top 3 in All Time - Ad Free!")
+                            .font(.subheadline)
+                            .foregroundColor(.primary)
+                        Image(systemName: "star.fill")
+                            .foregroundColor(.yellow)
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.yellow.opacity(0.15))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.yellow.opacity(0.3), lineWidth: 1)
+                            )
+                    )
+                    .padding(.horizontal)
+                }
                 
                 // Search bar
                 HStack {
@@ -180,7 +205,8 @@ struct LeaderboardView: View {
                 }
                 return LeaderboardEntry(id: document.documentID, username: username, score: score, timestamp: timestamp)
             }
-            // Find user's position in top 10
+            
+            // Find user's position in current period
             if let userID = UserDefaults.standard.string(forKey: "userID") {
                 if let idx = leaderboardData.firstIndex(where: { $0.id == userID }) {
                     userPosition = idx + 1
@@ -196,6 +222,22 @@ struct LeaderboardView: View {
                     }
                 }
             }
+            
+            // Always check All Time position
+            if let userID = UserDefaults.standard.string(forKey: "userID") {
+                let allTimeCollection = db.collection(selectedType.collectionName)
+                    .document("alltime")
+                    .collection("scores")
+                let allTimeSnapshot = try await allTimeCollection
+                    .order(by: selectedType.scoreField, descending: true)
+                    .getDocuments()
+                if let idx = allTimeSnapshot.documents.firstIndex(where: { $0.documentID == userID }) {
+                    allTimeUserPosition = idx + 1
+                } else {
+                    allTimeUserPosition = nil
+                }
+            }
+            
             // Update last updated time
             lastUpdated = Date()
             // Query for total users

@@ -200,6 +200,12 @@ struct GameView: View {
                 }
             }
         }
+        .onChange(of: gameState.score) { _ in
+            // Check top three status when score changes
+            Task {
+                await adManager.checkTopThreeStatus()
+            }
+        }
         .onDisappear {
             gameState.cleanup()
         }

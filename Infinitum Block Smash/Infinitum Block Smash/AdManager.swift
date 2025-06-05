@@ -48,6 +48,7 @@ class AdManager: NSObject, ObservableObject, FullScreenContentDelegate {
     @Published var adDidDismiss = false
     @Published var isAdLoading = false
     @Published var adLoadFailed = false // For silent debugging only
+    @Published var isTopThreePlayer = false
     
     var isRewardedAdReady: Bool {
         rewardedInterstitial != nil
@@ -57,10 +58,30 @@ class AdManager: NSObject, ObservableObject, FullScreenContentDelegate {
         super.init()
         // Load ads only when needed
         preloadBanner()
+        Task {
+            await checkTopThreeStatus()
+        }
+    }
+    
+    func checkTopThreeStatus() async {
+        do {
+            let leaderboard = try await LeaderboardService.shared.getLeaderboard(type: .score, period: "alltime")
+            if let userID = UserDefaults.standard.string(forKey: "userID"),
+               let userIndex = leaderboard.firstIndex(where: { $0.id == userID }) {
+                isTopThreePlayer = userIndex < 3
+            }
+        } catch {
+            print("[AdManager] Error checking top three status: \(error.localizedDescription)")
+        }
     }
     
     // MARK: - Banner Ad Preloading
     func preloadBanner() {
+        // Don't load banner if user is in top 3
+        if isTopThreePlayer {
+            return
+        }
+        
         // Clean up existing banner if any
         bannerView?.removeFromSuperview()
         bannerView = nil
@@ -76,6 +97,11 @@ class AdManager: NSObject, ObservableObject, FullScreenContentDelegate {
     
     // MARK: - Interstitial Ads
     func loadInterstitial() {
+        // Don't load interstitial if user is in top 3
+        if isTopThreePlayer {
+            return
+        }
+        
         // Clean up existing interstitial if any
         interstitial = nil
         
@@ -91,6 +117,11 @@ class AdManager: NSObject, ObservableObject, FullScreenContentDelegate {
     }
     
     func showInterstitial(from root: UIViewController) {
+        // Don't show interstitial if user is in top 3
+        if isTopThreePlayer {
+            return
+        }
+        
         if let ad = interstitial {
             ad.present(from: root)
         } else {
@@ -101,6 +132,11 @@ class AdManager: NSObject, ObservableObject, FullScreenContentDelegate {
     
     // MARK: - Rewarded Interstitial Ads
     func loadRewardedInterstitial() {
+        // Don't load rewarded interstitial if user is in top 3
+        if isTopThreePlayer {
+            return
+        }
+        
         // Clean up existing rewarded interstitial if any
         rewardedInterstitial = nil
         
@@ -118,6 +154,12 @@ class AdManager: NSObject, ObservableObject, FullScreenContentDelegate {
     }
     
     func showRewardedInterstitial(from root: UIViewController, onReward: @escaping () -> Void) {
+        // Don't show rewarded interstitial if user is in top 3
+        if isTopThreePlayer {
+            onReward()
+            return
+        }
+        
         if let ad = rewardedInterstitial {
             ad.present(from: root) {
                 onReward()
