@@ -677,13 +677,31 @@ final class GameState: ObservableObject {
                     return
                 }
                 
+                // Get the user ID and username
+                let userID = currentUser.uid
+                let displayName = currentUser.displayName ?? username
+                
+                // Store the user ID and username in UserDefaults for all users
+                UserDefaults.standard.set(userID, forKey: "userID")
+                UserDefaults.standard.set(displayName, forKey: "username")
+                
+                // Update both leaderboards
                 try await LeaderboardService.shared.updateLeaderboard(
                     type: .score,
                     score: score,
-                    username: username,
-                    userID: currentUser.uid
+                    username: displayName,
+                    userID: userID
                 )
-                print("[GameState] Leaderboard update completed successfully")
+                
+                // Also update achievements leaderboard
+                try await LeaderboardService.shared.updateLeaderboard(
+                    type: .achievement,
+                    score: achievementsManager.totalPoints,
+                    username: displayName,
+                    userID: userID
+                )
+                
+                print("[GameState] Leaderboard updates completed successfully")
             } catch LeaderboardError.notAuthenticated {
                 print("[GameState] User not authenticated - skipping leaderboard update")
             } catch {

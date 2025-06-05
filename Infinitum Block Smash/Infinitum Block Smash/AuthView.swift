@@ -79,12 +79,14 @@ struct AuthView: View {
                         }
                         .buttonStyle(ModernButtonStyle(filled: false))
 
+                        /* Commenting out phone sign-in for now
                         Button(action: { showPhoneSignIn = true }) {
                             Label("Sign Up with Phone", systemImage: "phone.fill")
                                 .font(.headline)
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(ModernButtonStyle(filled: false))
+                        */
 
                         Button(action: { signInWithGameCenter() }) {
                             Label("Sign In with Game Center", systemImage: "gamecontroller.fill")
@@ -142,10 +144,12 @@ struct AuthView: View {
                     }
                     
                     if showPhoneSignIn {
+                        /* Commenting out phone sign-in view for now
                         PhoneSignInView(isSignedIn: $showPhoneSignIn, userID: $userID, storedUsername: $storedUsername)
                         Button("Back") { showPhoneSignIn = false }
                             .frame(maxWidth: .infinity)
                             .buttonStyle(ModernButtonStyle(filled: false, accent: .gray))
+                        */
                     }
                     
                     if showAdditionalInfo {
@@ -569,116 +573,6 @@ struct ModernTextFieldStyle: TextFieldStyle {
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(Color.white.opacity(0.25), lineWidth: 1)
             )
-    }
-}
-
-// MARK: - PhoneSignInView
-
-struct PhoneSignInView: View {
-    @Binding var isSignedIn: Bool
-    @Binding var userID: String
-    @Binding var storedUsername: String
-    @State private var phoneNumber: String = ""
-    @State private var verificationCode: String = ""
-    @State private var verificationID: String? = nil
-    @State private var isVerifying = false
-    @State private var errorMessage: String = ""
-    @State private var isLoading = false
-    @State private var step: Int = 0 // 0: enter phone, 1: enter code
-
-    var body: some View {
-        VStack(spacing: 16) {
-            if step == 0 {
-                Text("Sign Up with Phone")
-                    .font(.title2.bold())
-                    .foregroundColor(.white)
-                TextField("Phone Number (+1...)", text: $phoneNumber)
-                    .keyboardType(.phonePad)
-                    .textFieldStyle(ModernTextFieldStyle())
-                TextField("Username", text: $storedUsername)
-                    .textFieldStyle(ModernTextFieldStyle())
-                Button(action: sendCode) {
-                    Text("Send Verification Code")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(ModernButtonStyle())
-            } else {
-                Text("Enter Verification Code")
-                    .font(.title2.bold())
-                    .foregroundColor(.white)
-                TextField("6-digit Code", text: $verificationCode)
-                    .keyboardType(.numberPad)
-                    .textFieldStyle(ModernTextFieldStyle())
-                Button(action: verifyCode) {
-                    Text("Verify & Sign In")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(ModernButtonStyle())
-            }
-            if isLoading {
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-            }
-            if !errorMessage.isEmpty {
-                Text(errorMessage)
-                    .foregroundColor(.red)
-                    .multilineTextAlignment(.center)
-            }
-        }
-        .padding(20)
-        .background(BlurView(style: .systemUltraThinMaterialDark))
-        .cornerRadius(20)
-        .padding(.horizontal, 8)
-    }
-
-    private func sendCode() {
-        errorMessage = ""
-        guard !phoneNumber.isEmpty, !storedUsername.isEmpty else {
-            errorMessage = "Please enter your phone number and username."
-            return
-        }
-        isLoading = true
-        PhoneAuthProvider.provider().verifyPhoneNumber(phoneNumber, uiDelegate: nil) { verificationID, error in
-            isLoading = false
-            if let error = error {
-                errorMessage = error.localizedDescription
-                return
-            }
-            self.verificationID = verificationID
-            self.step = 1
-        }
-    }
-
-    private func verifyCode() {
-        errorMessage = ""
-        guard let verificationID = verificationID, !verificationCode.isEmpty else {
-            errorMessage = "Please enter the verification code."
-            return
-        }
-        isLoading = true
-        let credential = PhoneAuthProvider.provider().credential(withVerificationID: verificationID, verificationCode: verificationCode)
-        Auth.auth().signIn(with: credential) { result, error in
-            isLoading = false
-            if let error = error {
-                errorMessage = error.localizedDescription
-                return
-            }
-            guard let user = result?.user else {
-                errorMessage = "Failed to sign in."
-                return
-            }
-            userID = user.uid
-            saveUsernameToFirestore()
-            isSignedIn = true
-        }
-    }
-
-    private func saveUsernameToFirestore() {
-        guard !userID.isEmpty, !storedUsername.isEmpty else { return }
-        let db = Firestore.firestore()
-        db.collection("users").document(userID).setData([
-            "username": storedUsername
-        ], merge: true)
     }
 }
 

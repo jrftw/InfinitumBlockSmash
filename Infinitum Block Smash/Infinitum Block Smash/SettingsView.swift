@@ -1,6 +1,7 @@
 import SwiftUI
 import AppTrackingTransparency
 import MessageUI
+import SafariServices
 
 struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
@@ -22,6 +23,7 @@ struct SettingsView: View {
     @State private var showingChangelog = false
     @State private var showingFeedbackMail = false
     @State private var showingFeatureMail = false
+    @State private var showingDiscordWebView = false
     
     private let difficulties = ["easy", "normal", "hard", "expert"]
     private let themes = ["light", "dark", "auto"]
@@ -108,6 +110,10 @@ struct SettingsView: View {
                         Text("Changelog")
                     }
                     
+                    Button("Join the Discord") {
+                        showingDiscordWebView = true
+                    }
+                    
                     Button("Send Feedback") {
                         showingFeedbackMail = true
                     }
@@ -174,6 +180,9 @@ struct SettingsView: View {
             .sheet(isPresented: $showingFeatureMail) {
                 MailView(isShowing: $showingFeatureMail, recipient: "jrftw@infinitumlive.com", subject: "Infinitum Block Smash Feature Suggestion")
             }
+            .sheet(isPresented: $showingDiscordWebView) {
+                SafariView(url: URL(string: "https://discord.gg/8xx4QzceRA")!)
+            }
         }
     }
     
@@ -198,6 +207,17 @@ struct SettingsView: View {
             ATTrackingManager.requestTrackingAuthorization { status in
                 // Handle tracking authorization status
             }
+        }
+    }
+    
+    private func openDiscord() {
+        let discordURL = URL(string: "discord://discord.com/invite/8xx4QzceRA")!
+        let appStoreURL = URL(string: "https://apps.apple.com/app/discord/id985746746")!
+        
+        if UIApplication.shared.canOpenURL(discordURL) {
+            UIApplication.shared.open(discordURL)
+        } else {
+            UIApplication.shared.open(appStoreURL)
         }
     }
 }
@@ -231,5 +251,19 @@ struct MailView: UIViewControllerRepresentable {
         func mailComposeController(_ controller: MFMailComposeViewController, didFinishWith result: MFMailComposeResult, error: Error?) {
             isShowing = false
         }
+    }
+}
+
+struct SafariView: UIViewControllerRepresentable {
+    let url: URL
+    
+    func makeUIViewController(context: UIViewControllerRepresentableContext<SafariView>) -> SFSafariViewController {
+        let config = SFSafariViewController.Configuration()
+        config.entersReaderIfAvailable = false
+        let safariVC = SFSafariViewController(url: url, configuration: config)
+        return safariVC
+    }
+    
+    func updateUIViewController(_ uiViewController: SFSafariViewController, context: UIViewControllerRepresentableContext<SafariView>) {
     }
 } 
