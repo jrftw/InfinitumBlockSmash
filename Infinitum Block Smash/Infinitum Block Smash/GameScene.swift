@@ -10,6 +10,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var draggingBlock: Block?
     private var dragNode: SKNode?
     private var previewNode: SKNode?
+    private var lastPlacementTime: TimeInterval = 0
+    private let placementDebounceInterval: TimeInterval = 0.3 // 300ms debounce
     
     // Visual effects
     private var particleEmitter: SKEmitterNode?
@@ -29,6 +31,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         super.init(size: size)
         print("[DEBUG] GameScene init(size:) called")
         setupScene()
+        
+        // Set up memory critical notification handler
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleMemoryWarning),
+            name: .memoryCritical,
+            object: nil
+        )
     }
     
     required init?(coder aDecoder: NSCoder) {
@@ -157,11 +167,18 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Optional: Add a visible debug border for the grid
         #if DEBUG
-        let debugBorder = SKShapeNode(rectOf: CGSize(width: totalWidth, height: totalHeight))
-        debugBorder.strokeColor = .red
-        debugBorder.lineWidth = 2
-        debugBorder.zPosition = 10
-        gridNode.addChild(debugBorder)
+        // Only show debug border if there are no blocks placed
+        let hasBlocks = gameState.grid.contains { row in
+            row.contains { $0 != nil }
+        }
+        if !hasBlocks {
+            let debugBorder = SKShapeNode(rectOf: CGSize(width: totalWidth, height: totalHeight))
+            debugBorder.strokeColor = .red
+            debugBorder.lineWidth = 2
+            debugBorder.zPosition = 10
+            debugBorder.name = "debugBorder"
+            gridNode.addChild(debugBorder)
+        }
         #endif
         
         // Draw grid lines (as children of gridNode)
@@ -184,6 +201,53 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             horizontalLine.zPosition = 2
             horizontalLine.name = "gridLine"
             gridNode.addChild(horizontalLine)
+        }
+        
+        // Create container for blocks
+        let containerNode = SKNode()
+        containerNode.zPosition = 1
+        containerNode.name = "blockContainer"
+        gridNode.addChild(containerNode)
+        
+        // Draw all placed blocks
+        for row in 0..<gridSize {
+            for col in 0..<gridSize {
+                if let color = gameState.grid[row][col] {
+                    let cellNode = SKShapeNode(rectOf: CGSize(width: blockSize, height: blockSize), cornerRadius: blockSize * 0.18)
+                    // Gradient fill
+                    let colors = [color.gradientColors.start, color.gradientColors.end]
+                    let locations: [CGFloat] = [0.0, 1.0]
+                    if let gradientImage = createGradientImage(size: CGSize(width: blockSize, height: blockSize), colors: colors, locations: locations) {
+                        cellNode.fillTexture = SKTexture(image: gradientImage)
+                        cellNode.fillColor = .white
+                    } else {
+                        cellNode.fillColor = SKColor.from(color.color)
+                    }
+                    // Shadow
+                    let shadowNode = SKShapeNode(rectOf: CGSize(width: blockSize, height: blockSize))
+                    shadowNode.fillColor = UIColor(cgColor: color.shadowColor)
+                    shadowNode.alpha = 0.3
+                    shadowNode.position = CGPoint(x: 2, y: -2)
+                    shadowNode.zPosition = -1
+                    cellNode.addChild(shadowNode)
+                    // Border
+                    cellNode.strokeColor = .white
+                    cellNode.lineWidth = 1
+                    // Shine
+                    let shineNode = SKShapeNode(rectOf: CGSize(width: blockSize * 0.3, height: blockSize * 0.3))
+                    shineNode.fillColor = .white
+                    shineNode.alpha = 0.3
+                    shineNode.position = CGPoint(x: -blockSize * 0.25, y: blockSize * 0.25)
+                    shineNode.zRotation = .pi / 4
+                    cellNode.addChild(shineNode)
+                    
+                    // Position cell in the grid
+                    let x = -totalWidth / 2 + CGFloat(col) * blockSize + blockSize / 2
+                    let y = -totalHeight / 2 + CGFloat(row) * blockSize + blockSize / 2
+                    cellNode.position = CGPoint(x: x, y: y)
+                    containerNode.addChild(cellNode)
+                }
+            }
         }
     }
     
@@ -394,7 +458,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             // Create drag node at full grid size
             dragNode = ShapeNode(block: block, blockSize: GameConstants.blockSize)
             let touchLocation = touch.location(in: self)
-            dragNode?.position = CGPoint(x: touchLocation.x, y: touchLocation.y + GameConstants.blockSize * 1.5)
+            let blockDragOffset = UserDefaults.standard.double(forKey: "blockDragOffset")
+            dragNode?.position = CGPoint(x: touchLocation.x, y: touchLocation.y + GameConstants.blockSize * blockDragOffset)
             dragNode?.alpha = 0.7
             dragNode?.zPosition = 50
             addChild(dragNode!)
@@ -410,8 +475,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let gridPoint = convertToGridCoordinates(touchPoint)
         
         // Update drag node position to follow touch more precisely
-        // Reduced offset for better visibility of placement
-        dragNode.position = CGPoint(x: touchPoint.x, y: touchPoint.y + GameConstants.blockSize * 0.4)
+        let blockDragOffset = UserDefaults.standard.double(forKey: "blockDragOffset")
+        dragNode.position = CGPoint(x: touchPoint.x, y: touchPoint.y + GameConstants.blockSize * blockDragOffset)
         
         // Remove any existing preview
         previewNode?.removeFromParent()
@@ -468,11 +533,25 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
               let dragNode = dragNode,
               let draggingBlock = draggingBlock else { return }
         
+        // Check if enough time has passed since last placement
+        let currentTime = CACurrentMediaTime()
+        guard currentTime - lastPlacementTime >= placementDebounceInterval else {
+            // Too soon since last placement, ignore this touch
+            dragNode.removeFromParent()
+            previewNode?.removeFromParent()
+            self.dragNode = nil
+            self.draggingBlock = nil
+            self.previewNode = nil
+            return
+        }
+        
         let touchPoint = touch.location(in: self)
         let gridPoint = convertToGridCoordinates(touchPoint)
         
         // Try to place the block
         if gameState.tryPlaceBlockFromTray(draggingBlock, at: gridPoint) {
+            // Update last placement time
+            lastPlacementTime = currentTime
             // Play placement sound
             run(SKAction.playSoundFileNamed("place.mp3", waitForCompletion: false))
         } else {
@@ -511,8 +590,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let remainderX = abs(exactCol.truncatingRemainder(dividingBy: 1))
         let remainderY = abs(exactRow.truncatingRemainder(dividingBy: 1))
         
-        // Use a smaller snap threshold (15% of cell size) for more precise control
-        let snapThreshold = 0.15
+        // Get the placement precision from UserDefaults
+        let snapThreshold = UserDefaults.standard.double(forKey: "placementPrecision")
         
         // Determine final grid position
         let finalCol: Int
@@ -674,25 +753,39 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
     }
     
+    @objc private func handleMemoryWarning() {
+        // Show warning
+        memoryWarningLabel?.text = "⚠️ High Memory Usage"
+        memoryWarningLabel?.isHidden = false
+        
+        // Clear any cached resources
+        removeAllActions()
+        removeAllChildren()
+        
+        // Reload essential game elements
+        setupScene()
+        setupGrid()
+        setupTray()
+        setupUI()
+        setupParticles()
+        
+        // Notify the game state to clean up any cached data
+        gameState.cleanupMemory()
+        
+        // Log memory usage
+        MemoryMonitor.shared.logMemoryUsage()
+    }
+    
     private func handleCriticalMemory() {
         // Show warning
         memoryWarningLabel?.text = "⚠️ Memory Critical"
         memoryWarningLabel?.isHidden = false
         
         // Force cleanup
-        cleanupMemory()
+        handleMemoryWarning()
         
         // Notify user
         NotificationCenter.default.post(name: .memoryCritical, object: nil)
-    }
-    
-    private func handleMemoryWarning() {
-        // Show warning
-        memoryWarningLabel?.text = "⚠️ High Memory Usage"
-        memoryWarningLabel?.isHidden = false
-        
-        // Perform cleanup
-        cleanupMemory()
     }
     
     private func hideMemoryWarning() {
@@ -720,9 +813,71 @@ extension GameScene: GameStateDelegate {
     func gameStateDidUpdate() {
         print("[DEBUG] gameStateDidUpdate called")
         print("[DEBUG] trayNode in parent before update: \(trayNode.parent != nil)")
+        
+        // Update tray
         setupTray()
-        renderGrid(gridNode: gridNode, gameState: gameState, blockSize: GameConstants.blockSize)
+        
+        // Update grid
+        let blockSize = GameConstants.blockSize
+        let gridSize = GameConstants.gridSize
+        let totalWidth = CGFloat(gridSize) * blockSize
+        let totalHeight = CGFloat(gridSize) * blockSize
+        
+        // Find or create block container
+        var blockContainer = gridNode.childNode(withName: "blockContainer")
+        if blockContainer == nil {
+            blockContainer = SKNode()
+            blockContainer?.name = "blockContainer"
+            blockContainer?.zPosition = 1
+            gridNode.addChild(blockContainer!)
+        }
+        
+        // Remove existing blocks
+        blockContainer?.removeAllChildren()
+        
+        // Draw all placed blocks
+        for row in 0..<gridSize {
+            for col in 0..<gridSize {
+                if let color = gameState.grid[row][col] {
+                    let cellNode = SKShapeNode(rectOf: CGSize(width: blockSize, height: blockSize), cornerRadius: blockSize * 0.18)
+                    // Gradient fill
+                    let colors = [color.gradientColors.start, color.gradientColors.end]
+                    let locations: [CGFloat] = [0.0, 1.0]
+                    if let gradientImage = createGradientImage(size: CGSize(width: blockSize, height: blockSize), colors: colors, locations: locations) {
+                        cellNode.fillTexture = SKTexture(image: gradientImage)
+                        cellNode.fillColor = .white
+                    } else {
+                        cellNode.fillColor = SKColor.from(color.color)
+                    }
+                    // Shadow
+                    let shadowNode = SKShapeNode(rectOf: CGSize(width: blockSize, height: blockSize))
+                    shadowNode.fillColor = UIColor(cgColor: color.shadowColor)
+                    shadowNode.alpha = 0.3
+                    shadowNode.position = CGPoint(x: 2, y: -2)
+                    shadowNode.zPosition = -1
+                    cellNode.addChild(shadowNode)
+                    // Border
+                    cellNode.strokeColor = .white
+                    cellNode.lineWidth = 1
+                    // Shine
+                    let shineNode = SKShapeNode(rectOf: CGSize(width: blockSize * 0.3, height: blockSize * 0.3))
+                    shineNode.fillColor = .white
+                    shineNode.alpha = 0.3
+                    shineNode.position = CGPoint(x: -blockSize * 0.25, y: blockSize * 0.25)
+                    shineNode.zRotation = .pi / 4
+                    cellNode.addChild(shineNode)
+                    
+                    // Position cell in the grid
+                    let x = -totalWidth / 2 + CGFloat(col) * blockSize + blockSize / 2
+                    let y = -totalHeight / 2 + CGFloat(row) * blockSize + blockSize / 2
+                    cellNode.position = CGPoint(x: x, y: y)
+                    blockContainer?.addChild(cellNode)
+                }
+            }
+        }
+        
         print("[DEBUG] trayNode in parent after update: \(trayNode.parent != nil)")
+        
         // Refill tray if needed (after UI update)
         if gameState.tray.count < 3 {
             gameState.refillTray()
@@ -732,7 +887,7 @@ extension GameScene: GameStateDelegate {
     func gameStateDidClearLines(at positions: [(Int, Int)]) {
         let points = positions.map { CGPoint(x: $0.1, y: $0.0) }
         playComboAnimation(at: points)
-        renderGrid(gridNode: gridNode, gameState: gameState, blockSize: GameConstants.blockSize)
+        gameStateDidUpdate() // Use the same update logic
     }
     
     func showScoreAnimation(points: Int, at position: CGPoint) {

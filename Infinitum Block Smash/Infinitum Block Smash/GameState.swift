@@ -39,7 +39,7 @@ final class GameState: ObservableObject {
     @Published private(set) var achievementsManager = AchievementsManager()
     @Published private(set) var canUndo: Bool = false
     @Published private(set) var levelComplete: Bool = false
-    @Published private(set) var adUndoCount: Int = 0
+    @Published private(set) var adUndoCount: Int = 3  // Start with 3 undos per game
     @Published private(set) var showingAchievementNotification: Bool = false
     @Published private(set) var currentAchievement: Achievement?
     @Published private(set) var blocksPlaced: Int = 0
@@ -90,6 +90,20 @@ final class GameState: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     
     private var totalPlayTime: TimeInterval = 0
+    
+    #if DEBUG
+    private var isTestFlightOrSimulator: Bool {
+        #if targetEnvironment(simulator)
+        return true
+        #else
+        return Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
+        #endif
+    }
+    #else
+    private var isTestFlightOrSimulator: Bool = false
+    #endif
+    
+    private let adManager = AdManager.shared
     
     // MARK: - Initialization
     init() {
@@ -183,7 +197,7 @@ final class GameState: ObservableObject {
     }
     
     // MARK: - Memory Management
-    private func cleanupMemory() {
+    func cleanupMemory() {
         // Clear cached data
         previousGrid = nil
         previousTray = nil
@@ -206,15 +220,27 @@ final class GameState: ObservableObject {
                 self.isGameOver = false
                 self.grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
                 self.tray.removeAll(keepingCapacity: true)
-                self.refillTray()
                 self.levelComplete = false
                 self.canUndo = false
                 self.lastMove = nil
-                do {
-                    try self.saveProgress()
-                } catch {
-                    print("[Reset] Error saving progress: \(error.localizedDescription)")
-                }
+                self.blocksPlaced = 0
+                self.linesCleared = 0
+                self.currentChain = 0
+                self.usedColors.removeAll(keepingCapacity: true)
+                self.usedShapes.removeAll(keepingCapacity: true)
+                self.isPerfectLevel = true
+                self.gameStartTime = Date()
+                
+                // Set the seed for the new game
+                self.setSeed(for: self.level)
+                
+                // Delete any saved game
+                self.deleteSavedGame()
+                
+                // Refill tray after all state is reset
+                self.refillTray()
+                
+                // Notify delegate of state change
                 self.delegate?.gameStateDidUpdate()
             }
         }
@@ -260,18 +286,39 @@ final class GameState: ObservableObject {
     }
 
     func undoLastMove() {
-        guard canUndo && adUndoCount > 0 else { return }
-        print("[Undo] Undoing last move. Restoring previous grid, tray, score, and level.")
-        if let prevGrid = previousGrid {
-            grid = prevGrid
+        guard canUndo else { return }
+        
+        if isTestFlightOrSimulator {
+            // In test flight or simulator, allow unlimited undos (1 per turn)
+            performUndo()
+        } else {
+            // In production, require video ad and check remaining undos
+            guard adUndoCount > 0 else { return }
+            
+            // Show video ad
+            showVideoAd { [weak self] success in
+                guard let self = self, success else { return }
+                self.performUndo()
+            }
         }
+    }
+    
+    private func performUndo() {
+        guard let prevGrid = previousGrid else { return }
+        
+        print("[Undo] Undoing last move. Restoring previous grid, tray, score, and level.")
+        grid = prevGrid
         if let prevTray = previousTray {
             tray = prevTray
         }
         score = previousScore
         level = previousLevel
         canUndo = false
-        adUndoCount -= 1
+        
+        if !isTestFlightOrSimulator {
+            adUndoCount -= 1
+        }
+        
         undoCount += 1
         
         // Update undo achievements
@@ -281,6 +328,26 @@ final class GameState: ObservableObject {
         isPerfectLevel = false
         delegate?.gameStateDidUpdate()
         checkAchievements()
+    }
+    
+    private func showVideoAd(completion: @escaping (Bool) -> Void) {
+        guard let rootViewController = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first?.windows
+            .first?.rootViewController else {
+            completion(false)
+            return
+        }
+        
+        // Load the rewarded interstitial ad if not already loaded
+        if !adManager.isRewardedAdReady {
+            adManager.loadRewardedInterstitial()
+        }
+        
+        // Show the rewarded interstitial ad
+        adManager.showRewardedInterstitial(from: rootViewController) {
+            completion(true)
+        }
     }
 
     // In tryPlaceBlockFromTray, save state before placement and reset undo after
@@ -320,9 +387,6 @@ final class GameState: ObservableObject {
         
         // Check for matches
         checkMatches()
-        
-        // Reset undo after successful placement
-        canUndo = false
         
         delegate?.gameStateDidUpdate()
         return true
@@ -521,6 +585,7 @@ final class GameState: ObservableObject {
         var clearedPositions: [(Int, Int)] = []
         var linesCleared = 0
         var diagonalPatternsFound = Set<String>() // Track which diagonal patterns we've found
+        var achievementsToUpdate: [String: Int] = [:] // Track achievements to update
         
         // Check rows
         for row in 0..<GameConstants.gridSize {
@@ -632,11 +697,16 @@ final class GameState: ObservableObject {
             currentChain = 0
         }
         
-        // Update achievements
+        // Update achievements in batch
         if linesCleared > 0 {
-            achievementsManager.updateAchievement(id: "clear_10", value: linesCleared)
-            achievementsManager.updateAchievement(id: "clear_50", value: linesCleared)
-            achievementsManager.updateAchievement(id: "clear_100", value: linesCleared)
+            achievementsToUpdate["clear_10"] = linesCleared
+            achievementsToUpdate["clear_50"] = linesCleared
+            achievementsToUpdate["clear_100"] = linesCleared
+        }
+        
+        // Batch update achievements
+        if !achievementsToUpdate.isEmpty {
+            achievementsManager.batchUpdateAchievements(achievementsToUpdate)
         }
         
         // Check for perfect level
@@ -804,15 +874,10 @@ final class GameState: ObservableObject {
         achievementsManager.updateAchievement(id: "games_50", value: gamesCompleted)
         achievementsManager.updateAchievement(id: "games_100", value: gamesCompleted)
         
-        // Save game state and update leaderboard safely
-        do {
-            try saveProgress()
-            if score > 0 {
-                updateLeaderboard()
-            }
-        } catch {
-            print("[GameOver] Error saving progress: \(error.localizedDescription)")
-            // Continue with game over even if save fails
+        // Delete saved game and update leaderboard safely
+        deleteSavedGame()
+        if score > 0 {
+            updateLeaderboard()
         }
         
         // Save last play date and check achievements
@@ -1033,7 +1098,10 @@ final class GameState: ObservableObject {
             throw GameError.loadFailed(NSError(domain: "GameState", code: -2, userInfo: [NSLocalizedDescriptionKey: "Invalid saved game data"]))
         }
         
-        // Restore grid
+        // Set the seed for the current level first
+        setSeed(for: level)
+        
+        // Initialize grid with saved data
         var newGrid: [[BlockColor?]] = []
         for row in gridData {
             let rowData: [BlockColor?] = row.map { colorStr in
@@ -1046,7 +1114,7 @@ final class GameState: ObservableObject {
             newGrid.append(rowData)
         }
         
-        // Restore tray
+        // Initialize tray with saved data
         var newTray: [Block] = []
         for blockData in trayData {
             guard let colorStr = blockData["color"],
@@ -1068,6 +1136,13 @@ final class GameState: ObservableObject {
         self.level = level
         self.isGameOver = false
         self.isPaused = false
+        self.blocksPlaced = 0
+        self.linesCleared = 0
+        self.currentChain = 0
+        self.usedColors.removeAll(keepingCapacity: true)
+        self.usedShapes.removeAll(keepingCapacity: true)
+        self.isPerfectLevel = true
+        self.gameStartTime = Date()
         
         // Notify delegate of state change
         delegate?.gameStateDidUpdate()

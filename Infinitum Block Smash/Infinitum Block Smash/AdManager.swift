@@ -27,6 +27,10 @@ class AdManager: NSObject, ObservableObject, FullScreenContentDelegate {
     @Published var isAdLoading = false
     @Published var adLoadFailed = false // For silent debugging only
     
+    var isRewardedAdReady: Bool {
+        rewardedInterstitial != nil
+    }
+    
     override init() {
         super.init()
         // Load ads only when needed

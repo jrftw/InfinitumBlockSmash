@@ -18,12 +18,16 @@ struct SettingsView: View {
     @AppStorage("hasAcceptedAds") private var hasAcceptedAds = false
     @AppStorage("allowAnalytics") private var allowAnalytics = true
     @AppStorage("allowDataSharing") private var allowDataSharing = true
+    @AppStorage("placementPrecision") private var placementPrecision: Double = 0.15
+    @AppStorage("blockDragOffset") private var blockDragOffset: Double = 0.4
     @Environment(\.presentationMode) var presentationMode
     @State private var showingResetConfirmation = false
     @State private var showingChangelog = false
     @State private var showingFeedbackMail = false
     @State private var showingFeatureMail = false
     @State private var showingDiscordWebView = false
+    @State private var showingPlacementPrecisionInfo = false
+    @State private var showingBlockDragInfo = false
     
     private let difficulties = ["easy", "normal", "hard", "expert"]
     private let themes = ["light", "dark", "auto"]
@@ -43,6 +47,72 @@ struct SettingsView: View {
                     
                     Toggle("Show Tutorial", isOn: $showTutorial)
                     Toggle("Auto Save", isOn: $autoSave)
+                }
+                
+                Section(header: Text("Gameplay Settings")) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Placement Precision")
+                            Button(action: {
+                                showingPlacementPrecisionInfo = true
+                            }) {
+                                Image(systemName: "info.circle")
+                                    .foregroundColor(.secondary)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            Spacer()
+                            Text("\(Int((1 - placementPrecision) * 100))%")
+                                .foregroundColor(.secondary)
+                        }
+                        HStack {
+                            Image(systemName: "hand.tap")
+                            Slider(value: $placementPrecision, in: 0.05...0.3)
+                            Image(systemName: "hand.tap.fill")
+                        }
+                        HStack {
+                            Text("Lower = More Precise")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Button("Reset") {
+                                placementPrecision = 0.15
+                            }
+                            .font(.caption)
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Block Drag Position")
+                            Button(action: {
+                                showingBlockDragInfo = true
+                            }) {
+                                Image(systemName: "info.circle")
+                                    .foregroundColor(.secondary)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            Spacer()
+                            Text("\(Int(blockDragOffset * 100))%")
+                                .foregroundColor(.secondary)
+                        }
+                        HStack {
+                            Image(systemName: "hand.point.up")
+                            Slider(value: $blockDragOffset, in: 0.0...2.0)
+                            Image(systemName: "hand.point.up.fill")
+                        }
+                        HStack {
+                            Text("Higher = Block Above Finger")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Button("Reset") {
+                                blockDragOffset = 0.4
+                            }
+                            .font(.caption)
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                    }
                 }
                 
                 Section(header: Text("Game Mode Rules")) {
@@ -173,6 +243,16 @@ struct SettingsView: View {
                 }
             } message: {
                 Text("This will reset all game data including high scores and achievements. This action cannot be undone.")
+            }
+            .alert("Placement Precision", isPresented: $showingPlacementPrecisionInfo) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("Controls how precisely you need to place blocks on the grid. Lower values require more precise placement, while higher values are more forgiving.")
+            }
+            .alert("Block Drag Position", isPresented: $showingBlockDragInfo) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("Controls how high above your finger the block appears while dragging. Higher values make it easier to see where you're placing the block, while lower values keep it closer to your finger.")
             }
             .sheet(isPresented: $showingFeedbackMail) {
                 MailView(isShowing: $showingFeedbackMail, recipient: "support@infinitumlive.com", subject: "Infinitum Block Smash Feedback")

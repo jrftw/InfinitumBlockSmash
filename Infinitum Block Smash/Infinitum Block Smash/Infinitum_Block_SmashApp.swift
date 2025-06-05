@@ -56,6 +56,7 @@ struct Infinitum_Block_SmashApp: App {
     @AppStorage("userID") private var userID: String = ""
     @AppStorage("username") private var username: String = ""
     @AppStorage("isGuest") private var isGuest: Bool = false
+    @Environment(\.scenePhase) private var scenePhase
 
     // MARK: - Scene Definition
     var body: some Scene {
@@ -66,7 +67,58 @@ struct Infinitum_Block_SmashApp: App {
                 ContentView()
             }
         }
+        .onChange(of: scenePhase) { newPhase in
+            if newPhase == .background {
+                // Save game state when app moves to background
+                if let gameState = (UIApplication.shared.connectedScenes.first?.delegate as? SceneDelegate)?.gameState {
+                    do {
+                        try gameState.saveProgress()
+                    } catch {
+                        print("[App] Error saving game progress: \(error.localizedDescription)")
+                    }
+                }
+            }
+        }
     }
+}
+
+// MARK: - SceneDelegate
+class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+    var gameState: GameState?
+    
+    func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
+        guard let windowScene = (scene as? UIWindowScene) else { return }
+        let window = UIWindow(windowScene: windowScene)
+        window.rootViewController = UIHostingController(rootView: ContentView())
+        self.window = window
+        window.makeKeyAndVisible()
+    }
+    
+    func sceneDidEnterBackground(_ scene: UIScene) {
+        // Save game state when app moves to background
+        if let gameState = gameState {
+            do {
+                try gameState.saveProgress()
+                print("[SceneDelegate] Successfully saved game progress")
+            } catch {
+                print("[SceneDelegate] Error saving game progress: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    func sceneWillTerminate(_ scene: UIScene) {
+        // Save game state when app is about to terminate
+        if let gameState = gameState {
+            do {
+                try gameState.saveProgress()
+                print("[SceneDelegate] Successfully saved game progress before termination")
+            } catch {
+                print("[SceneDelegate] Error saving game progress before termination: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    var window: UIWindow?
 }
 
 // MARK: - HomeView

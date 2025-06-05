@@ -13,6 +13,7 @@ struct ContentView: View {
     @AppStorage("userID") private var userID: String = ""
     @AppStorage("username") private var username: String = ""
     @AppStorage("isGuest") private var isGuest: Bool = false
+    @State private var showingNewGameConfirmation = false
     
     var isLoggedIn: Bool {
         !userID.isEmpty && (!username.isEmpty || isGuest)
@@ -49,19 +50,20 @@ struct ContentView: View {
                     // Menu Buttons
                     VStack(spacing: 15) {
                         if gameState.hasSavedGame() {
-                            MenuButton(title: "Resume Game", icon: "play.fill") {
-                                do {
-                                    try gameState.loadSavedGame()
-                                    showingGameView = true
-                                } catch {
-                                    print("[MainMenu] Error loading saved game: \(error.localizedDescription)")
-                                }
+                            MenuButton(title: "Resume Game", icon: "play.fill", onDelete: {
+                                gameState.deleteSavedGame()
+                            }) {
+                                showingGameView = true
                             }
                         }
                         
                         MenuButton(title: "Play Classic", icon: "gamecontroller.fill") {
-                            gameState.deleteSavedGame() // Delete any existing saved game when starting a new one
-                            showingGameView = true
+                            if gameState.hasSavedGame() {
+                                showingNewGameConfirmation = true
+                            } else {
+                                gameState.resetGame()
+                                showingGameView = true
+                            }
                         }
                         
                         MenuButton(title: "Leaderboard", icon: "trophy.fill") {
@@ -98,8 +100,24 @@ struct ContentView: View {
                 .padding()
             }
         }
+        .onAppear {
+            // Connect GameState to SceneDelegate
+            if let sceneDelegate = UIApplication.shared.connectedScenes.first?.delegate as? SceneDelegate {
+                sceneDelegate.gameState = gameState
+            }
+            
+            // Load saved game if it exists
+            if gameState.hasSavedGame() {
+                do {
+                    try gameState.loadSavedGame()
+                    print("[ContentView] Successfully loaded saved game")
+                } catch {
+                    print("[ContentView] Error loading saved game: \(error.localizedDescription)")
+                }
+            }
+        }
         .fullScreenCover(isPresented: $showingGameView) {
-            GameView()
+            GameView(gameState: gameState)
         }
         .fullScreenCover(isPresented: $showingLeaderboard) {
             LeaderboardView()
@@ -113,37 +131,100 @@ struct ContentView: View {
         .sheet(isPresented: $showingAuth) {
             AuthView()
         }
+        .alert("Start New Game?", isPresented: $showingNewGameConfirmation) {
+            Button("No", role: .cancel) { }
+            Button("Yes", role: .destructive) {
+                gameState.resetGame()
+                showingGameView = true
+            }
+        } message: {
+            Text("This will delete your saved game and start a new one. Are you sure?")
+        }
     }
 }
 
 struct MenuButton: View {
     let title: String
     let icon: String
+    var onDelete: (() -> Void)? = nil
     let action: () -> Void
+    @State private var offset: CGFloat = 0
+    @State private var isSwiped = false
     
     var body: some View {
-        Button(action: action) {
-            HStack {
-                Image(systemName: icon)
-                    .font(.title2)
-                Text(title)
-                    .font(.title3)
-                    .fontWeight(.semibold)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.title3)
-                    .foregroundColor(.gray)
+        ZStack(alignment: .trailing) {
+            // Delete button
+            if onDelete != nil {
+                Button(action: {
+                    withAnimation(.spring()) {
+                        onDelete?()
+                        offset = 0
+                        isSwiped = false
+                    }
+                }) {
+                    Image(systemName: "trash")
+                        .font(.title2)
+                        .foregroundColor(.white)
+                        .frame(width: 90, height: 50)
+                        .background(Color.red)
+                        .cornerRadius(15)
+                }
+                .opacity(isSwiped ? 1 : 0)
+                .padding(.trailing, 5)
             }
-            .foregroundColor(.white)
-            .padding()
-            .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 15)
-                    .fill(Color.white.opacity(0.1))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 15)
-                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                    )
+            
+            // Main button
+            Button(action: {
+                if !isSwiped {
+                    action()
+                }
+            }) {
+                HStack {
+                    Image(systemName: icon)
+                        .font(.title2)
+                    Text(title)
+                        .font(.title3)
+                        .fontWeight(.semibold)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.title3)
+                        .foregroundColor(.gray)
+                }
+                .foregroundColor(.white)
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 15)
+                        .fill(Color.white.opacity(0.1))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 15)
+                                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                        )
+                )
+            }
+            .offset(x: offset)
+            .gesture(
+                DragGesture()
+                    .onChanged { gesture in
+                        if onDelete != nil {
+                            if gesture.translation.width < 0 {
+                                offset = max(gesture.translation.width, -90)
+                            }
+                        }
+                    }
+                    .onEnded { gesture in
+                        if onDelete != nil {
+                            withAnimation(.spring()) {
+                                if gesture.translation.width < -50 {
+                                    offset = -90
+                                    isSwiped = true
+                                } else {
+                                    offset = 0
+                                    isSwiped = false
+                                }
+                            }
+                        }
+                    }
             )
         }
     }

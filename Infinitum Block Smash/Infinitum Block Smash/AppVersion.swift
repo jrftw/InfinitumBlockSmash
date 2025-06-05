@@ -6,7 +6,10 @@ struct AppVersion {
     
     static let changelog: [String: [String]] = [
         "1.0.0 (Build 7)": [
-            "Added Discord community integration",
+            "Added Block Drag Position setting",
+            "Added Placement Precision setting",
+            "Fixed game save/load functionality",
+            "Improved block placement mechanics",
             "Added secure in-app Discord invite link",
             "Improved settings organization",
             "Enhanced user engagement features",

@@ -175,16 +175,49 @@ class AchievementsManager: ObservableObject {
         guard var achievement = achievements[id] else { return }
         
         // Update progress
-        achievement.progress = value
+        achievement.progress = min(achievement.progress + value, achievement.goal)
         
-        // Check if achievement should be unlocked
-        if value >= achievement.goal && !achievement.unlocked {
+        // Check if achievement is completed
+        if !achievement.unlocked && achievement.progress >= achievement.goal {
             achievement.unlocked = true
             achievement.wasNotified = false  // Reset notification flag when newly unlocked
-            updateLeaderboard()
+            NotificationCenter.default.post(name: .achievementUnlocked, object: nil, userInfo: ["achievement": achievement])
         }
         
-        saveAchievement(achievement)
+        // Save progress
+        achievements[id] = achievement
+        saveAchievements()
+    }
+    
+    func batchUpdateAchievements(_ updates: [String: Int]) {
+        var anyCompleted = false
+        var updatedAchievements: [Achievement] = []
+        
+        for (id, value) in updates {
+            guard var achievement = achievements[id] else { continue }
+            
+            // Update progress
+            achievement.progress = min(achievement.progress + value, achievement.goal)
+            
+            // Check if achievement is completed
+            if !achievement.unlocked && achievement.progress >= achievement.goal {
+                achievement.unlocked = true
+                achievement.wasNotified = false  // Reset notification flag when newly unlocked
+                anyCompleted = true
+                updatedAchievements.append(achievement)
+            }
+            
+            // Update the achievement in the dictionary
+            achievements[id] = achievement
+        }
+        
+        // Only post notification if any achievement was completed
+        if anyCompleted {
+            NotificationCenter.default.post(name: .achievementUnlocked, object: nil, userInfo: ["achievements": updatedAchievements])
+        }
+        
+        // Save progress
+        saveAchievements()
     }
     
     func increment(id: String) {
@@ -378,4 +411,9 @@ class AchievementsManager: ObservableObject {
             userDefaults.set(encoded, forKey: "achievements")
         }
     }
+}
+
+// Add at the top of the file with other extensions
+extension Notification.Name {
+    static let achievementUnlocked = Notification.Name("achievementUnlocked")
 }

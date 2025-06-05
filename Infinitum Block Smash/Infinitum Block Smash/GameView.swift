@@ -5,7 +5,7 @@ import GoogleMobileAds
 import AppTrackingTransparency
 
 struct GameView: View {
-    @StateObject private var gameState = GameState()
+    @ObservedObject var gameState: GameState
     @StateObject private var adManager = AdManager.shared
     @State private var showingSettings = false
     @State private var showingAchievements = false
@@ -130,11 +130,14 @@ struct GameView: View {
             PauseMenuOverlay(isPresented: isPaused, onResume: { isPaused = false }, onSave: {
                 do {
                     try gameState.saveProgress()
-                    presentationMode.wrappedValue.dismiss()
+                    isPaused = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        presentationMode.wrappedValue.dismiss()
+                    }
                 } catch {
                     print("[PauseMenu] Error saving progress: \(error.localizedDescription)")
+                    isPaused = false
                 }
-                isPaused = false
             }, onRestart: {
                 gameState.resetGame(); isPaused = false
             }, onHome: {
