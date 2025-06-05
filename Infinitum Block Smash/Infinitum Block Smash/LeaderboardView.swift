@@ -8,9 +8,33 @@ struct LeaderboardView: View {
     @State private var leaderboardData: [LeaderboardEntry] = []
     @State private var isLoading = true
     @State private var error: String?
+    @State private var searchText = ""
+    @State private var userPosition: Int?
+    @State private var lastUpdated: Date?
+    @State private var totalUsers: Int = 0
     
     private let periods = ["daily", "weekly", "monthly", "alltime"]
     private let periodNames = ["Daily", "Weekly", "Monthly", "All Time"]
+    
+    private var filteredData: [LeaderboardEntry] {
+        if searchText.isEmpty {
+            return leaderboardData
+        }
+        return leaderboardData.filter { $0.username.localizedCaseInsensitiveContains(searchText) }
+    }
+    
+    private func getBackgroundColor(for index: Int) -> Color {
+        switch index {
+        case 0:
+            return Color.yellow.opacity(0.3) // Gold
+        case 1:
+            return Color.gray.opacity(0.3) // Silver
+        case 2:
+            return Color.orange.opacity(0.3) // Bronze
+        default:
+            return Color.clear
+        }
+    }
     
     var body: some View {
         NavigationView {
@@ -44,6 +68,29 @@ struct LeaderboardView: View {
                 }
                 .padding()
                 
+                // Search bar
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.gray)
+                    TextField("Search users...", text: $searchText)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                }
+                .padding(.horizontal)
+                
+                // Stats section
+                HStack {
+                    if let lastUpdated = lastUpdated {
+                        Text("Last updated: \(lastUpdated, style: .time)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Text("Total users: \(totalUsers)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal)
+                
                 if isLoading {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle())
@@ -55,7 +102,17 @@ struct LeaderboardView: View {
                         .padding()
                 } else {
                     List {
-                        ForEach(Array(leaderboardData.enumerated()), id: \.element.id) { index, entry in
+                        if let userPosition = userPosition {
+                            HStack {
+                                Text("Your Position: \(userPosition)")
+                                    .font(.headline)
+                                    .foregroundColor(.blue)
+                            }
+                            .padding(.vertical, 4)
+                            .listRowBackground(Color.blue.opacity(0.1))
+                        }
+                        
+                        ForEach(Array(filteredData.enumerated()), id: \.element.id) { index, entry in
                             HStack {
                                 Text("\(index + 1)")
                                     .font(.headline)
@@ -72,6 +129,7 @@ struct LeaderboardView: View {
                                     .foregroundColor(.blue)
                             }
                             .padding(.vertical, 4)
+                            .listRowBackground(getBackgroundColor(for: index))
                         }
                     }
                 }
@@ -104,16 +162,48 @@ struct LeaderboardView: View {
     private func loadLeaderboardData() async {
         isLoading = true
         error = nil
-        
+        let db = Firestore.firestore()
+        let scoresCollection = db.collection(selectedType.collectionName)
+            .document(selectedPeriod)
+            .collection("scores")
         do {
-            leaderboardData = try await LeaderboardService.shared.getLeaderboard(
-                type: selectedType,
-                period: selectedPeriod
-            )
+            // Query for top 10
+            let snapshot = try await scoresCollection
+                .order(by: selectedType.scoreField, descending: true)
+                .limit(to: 10)
+                .getDocuments()
+            leaderboardData = snapshot.documents.compactMap { document -> LeaderboardEntry? in
+                guard let username = document.data()["username"] as? String,
+                      let score = document.data()[selectedType.scoreField] as? Int,
+                      let timestamp = (document.data()["timestamp"] as? Timestamp)?.dateValue() else {
+                    return nil
+                }
+                return LeaderboardEntry(id: document.documentID, username: username, score: score, timestamp: timestamp)
+            }
+            // Find user's position in top 10
+            if let userID = UserDefaults.standard.string(forKey: "userID") {
+                if let idx = leaderboardData.firstIndex(where: { $0.id == userID }) {
+                    userPosition = idx + 1
+                } else {
+                    // If not in top 10, find user's position in the whole leaderboard
+                    let allSnapshot = try await scoresCollection
+                        .order(by: selectedType.scoreField, descending: true)
+                        .getDocuments()
+                    if let idx = allSnapshot.documents.firstIndex(where: { $0.documentID == userID }) {
+                        userPosition = idx + 1
+                    } else {
+                        userPosition = nil
+                    }
+                }
+            }
+            // Update last updated time
+            lastUpdated = Date()
+            // Query for total users
+            let totalSnapshot = try await scoresCollection.getDocuments()
+            totalUsers = totalSnapshot.documents.count
         } catch {
             self.error = error.localizedDescription
         }
-        
         isLoading = false
     }
 }

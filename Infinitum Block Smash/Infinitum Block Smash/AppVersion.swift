@@ -1,10 +1,17 @@
 import Foundation
 
 struct AppVersion {
-    static let current = "1.0.0"
-    static let build = "7"
+    static let current = "1.0.1"
+    static let build = "1"
     
     static let changelog: [String: [String]] = [
+        "1.0.1 (Build 1)": [
+            "Fixed ad implementation for production builds",
+            "Test ads now only show in development and TestFlight",
+            "Production ads properly configured for App Store release",
+            "Improved ad loading and error handling",
+            "Bug fixes and performance improvements"
+        ],
         "1.0.0 (Build 7)": [
             "Added Block Drag Position setting",
             "Added Placement Precision setting",

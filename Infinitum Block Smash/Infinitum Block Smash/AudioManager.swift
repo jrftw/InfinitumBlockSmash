@@ -118,6 +118,12 @@ class AudioManager {
         AudioServicesPlaySystemSound(1519) // System sound for success
     }
     
+    func playFailSound() {
+        guard !isMuted else { return }
+        // System sound for failure (warning sound)
+        AudioServicesPlaySystemSound(1005) // System sound for warning/alert
+    }
+    
     func toggleMute() {
         isMuted.toggle()
         if isMuted {

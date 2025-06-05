@@ -10,44 +10,62 @@ final class LeaderboardService {
     private var cancellables = Set<AnyCancellable>()
     
     private init() {
-        setupDailyReset()
+        setupPeriodResets()
     }
     
-    private func setupDailyReset() {
-        // Check if we need to reset daily scores
-        if let lastReset = UserDefaults.standard.object(forKey: "lastDailyReset") as? Date {
-            let calendar = Calendar.current
-            if !calendar.isDateInToday(lastReset) {
-                print("[Leaderboard] Resetting daily scores - last reset was: \(lastReset)")
-                resetDailyScores()
+    private func setupPeriodResets() {
+        let calendar = Calendar.current
+        let now = Date()
+        // Daily reset
+        if let lastDailyReset = UserDefaults.standard.object(forKey: "lastDailyReset") as? Date {
+            if !calendar.isDateInToday(lastDailyReset) {
+                resetPeriodScores(period: "daily", collection: "classic_leaderboard")
+                resetPeriodScores(period: "daily", collection: "achievement_leaderboard")
+                UserDefaults.standard.set(now, forKey: "lastDailyReset")
             }
         } else {
-            print("[Leaderboard] First time setup - resetting daily scores")
-            resetDailyScores()
+            resetPeriodScores(period: "daily", collection: "classic_leaderboard")
+            resetPeriodScores(period: "daily", collection: "achievement_leaderboard")
+            UserDefaults.standard.set(now, forKey: "lastDailyReset")
+        }
+        // Weekly reset
+        if let lastWeeklyReset = UserDefaults.standard.object(forKey: "lastWeeklyReset") as? Date {
+            if !calendar.isDate(now, equalTo: lastWeeklyReset, toGranularity: .weekOfYear) {
+                resetPeriodScores(period: "weekly", collection: "classic_leaderboard")
+                resetPeriodScores(period: "weekly", collection: "achievement_leaderboard")
+                UserDefaults.standard.set(now, forKey: "lastWeeklyReset")
+            }
+        } else {
+            resetPeriodScores(period: "weekly", collection: "classic_leaderboard")
+            resetPeriodScores(period: "weekly", collection: "achievement_leaderboard")
+            UserDefaults.standard.set(now, forKey: "lastWeeklyReset")
+        }
+        // Monthly reset
+        if let lastMonthlyReset = UserDefaults.standard.object(forKey: "lastMonthlyReset") as? Date {
+            if !calendar.isDate(now, equalTo: lastMonthlyReset, toGranularity: .month) {
+                resetPeriodScores(period: "monthly", collection: "classic_leaderboard")
+                resetPeriodScores(period: "monthly", collection: "achievement_leaderboard")
+                UserDefaults.standard.set(now, forKey: "lastMonthlyReset")
+            }
+        } else {
+            resetPeriodScores(period: "monthly", collection: "classic_leaderboard")
+            resetPeriodScores(period: "monthly", collection: "achievement_leaderboard")
+            UserDefaults.standard.set(now, forKey: "lastMonthlyReset")
         }
     }
     
-    private func resetDailyScores() {
+    private func resetPeriodScores(period: String, collection: String) {
         Task {
             do {
-                print("[Leaderboard] Starting daily scores reset")
-                // Delete all daily scores
-                let dailyScores = try await db.collection("classic_leaderboard")
-                    .document("daily")
+                let scores = try await db.collection(collection)
+                    .document(period)
                     .collection("scores")
                     .getDocuments()
-                
-                print("[Leaderboard] Found \(dailyScores.documents.count) daily scores to reset")
-                
-                for document in dailyScores.documents {
+                for document in scores.documents {
                     try await document.reference.delete()
                 }
-                
-                // Update last reset date
-                UserDefaults.standard.set(Date(), forKey: "lastDailyReset")
-                print("[Leaderboard] Daily scores reset completed")
             } catch {
-                print("[Leaderboard] Error resetting daily scores: \(error.localizedDescription)")
+                print("[Leaderboard] Error resetting \(period) scores for \(collection): \(error.localizedDescription)")
             }
         }
     }
@@ -149,7 +167,7 @@ final class LeaderboardService {
                 .document(period)
                 .collection("scores")
                 .order(by: type.scoreField, descending: true)
-                .limit(to: 100)
+                .limit(to: 10)
             
             if let startDate = startDate {
                 query = query.whereField("timestamp", isGreaterThanOrEqualTo: Timestamp(date: startDate))

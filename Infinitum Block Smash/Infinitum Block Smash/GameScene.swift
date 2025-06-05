@@ -25,6 +25,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var lastMemoryCheck: TimeInterval = 0
     private let memoryCheckInterval: TimeInterval = 5.0 // Check every 5 seconds
     
+    // Add this property to track hint highlight
+    private var hintHighlight: SKNode?
+    
     // MARK: - Initialization
     init(size: CGSize, gameState: GameState) {
         self.gameState = gameState
@@ -464,6 +467,23 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             dragNode?.zPosition = 50
             addChild(dragNode!)
         }
+        
+        let nodes = nodes(at: touch.location(in: self))
+        
+        for node in nodes {
+            if node.name == "tryAgainButton" {
+                gameState.resetGame()
+                node.parent?.removeFromParent()
+                return
+            } else if node.name == "mainMenuButton" {
+                gameState.gameOver()
+                node.parent?.removeFromParent()
+                return
+            }
+        }
+        
+        // Handle other touches if not on buttons
+        super.touchesBegan(touches, with: event)
     }
     
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -556,7 +576,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             AudioManager.shared.playPlacementSound()
         } else {
             // Play error sound
-            AudioServicesPlaySystemSound(1521) // System sound for error
+            AudioManager.shared.playFailSound()
         }
         
         // Clean up
@@ -806,6 +826,130 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Log memory usage
         MemoryMonitor.shared.logMemoryUsage()
+    }
+
+    private func handleGameOver() {
+        // Play fail sound
+        AudioManager.shared.playFailSound()
+        
+        // Create a container node for the game over overlay
+        let overlayNode = SKNode()
+        overlayNode.zPosition = 1000
+        
+        // Create a semi-transparent black background
+        let background = SKShapeNode(rectOf: size)
+        background.fillColor = .black
+        background.alpha = 0.7
+        background.strokeColor = .clear
+        overlayNode.addChild(background)
+        
+        // Create game over text
+        let gameOverLabel = SKLabelNode(text: "Game Over")
+        gameOverLabel.fontName = "AvenirNext-Bold"
+        gameOverLabel.fontSize = 36
+        gameOverLabel.fontColor = .white
+        gameOverLabel.position = CGPoint(x: 0, y: 50)
+        overlayNode.addChild(gameOverLabel)
+        
+        // Create score text
+        let scoreLabel = SKLabelNode(text: "Final Score: \(gameState.score)")
+        scoreLabel.fontName = "AvenirNext-Regular"
+        scoreLabel.fontSize = 24
+        scoreLabel.fontColor = .white
+        scoreLabel.position = CGPoint(x: 0, y: 0)
+        overlayNode.addChild(scoreLabel)
+        
+        // Create level text
+        let levelLabel = SKLabelNode(text: "Level Reached: \(gameState.level)")
+        levelLabel.fontName = "AvenirNext-Regular"
+        levelLabel.fontSize = 20
+        levelLabel.fontColor = .yellow
+        levelLabel.position = CGPoint(x: 0, y: -30)
+        overlayNode.addChild(levelLabel)
+        
+        // Create Try Again button
+        let tryAgainButton = SKLabelNode(text: "Try Again")
+        tryAgainButton.fontName = "AvenirNext-Bold"
+        tryAgainButton.fontSize = 24
+        tryAgainButton.fontColor = .white
+        tryAgainButton.position = CGPoint(x: 0, y: -80)
+        tryAgainButton.name = "tryAgainButton"
+        overlayNode.addChild(tryAgainButton)
+        
+        // Create Main Menu button
+        let mainMenuButton = SKLabelNode(text: "Main Menu")
+        mainMenuButton.fontName = "AvenirNext-Bold"
+        mainMenuButton.fontSize = 24
+        mainMenuButton.fontColor = .white
+        mainMenuButton.position = CGPoint(x: 0, y: -120)
+        mainMenuButton.name = "mainMenuButton"
+        overlayNode.addChild(mainMenuButton)
+        
+        // Add the overlay to the scene
+        addChild(overlayNode)
+    }
+
+    // Add this method to handle hint highlighting
+    func highlightHint(block: Block, at position: (row: Int, col: Int)) {
+        print("[Hint] Highlighting hint for block \(block.shape) at position: row \(position.row), col \(position.col)")
+        
+        // Remove existing hint highlight if any
+        if hintHighlight != nil {
+            print("[Hint] Removing existing hint highlight")
+            hintHighlight?.removeFromParent()
+        }
+        
+        // Create new hint highlight container
+        let highlightContainer = SKNode()
+        highlightContainer.zPosition = 5 // Higher than grid but lower than UI
+        
+        // Create new hint highlight for each cell in the shape
+        let blockSize = GameConstants.blockSize
+        let gridSize = GameConstants.gridSize
+        let totalWidth = CGFloat(gridSize) * blockSize
+        let totalHeight = CGFloat(gridSize) * blockSize
+        
+        // Create highlight for each cell in the shape
+        for (dx, dy) in block.shape.cells {
+            let x = -totalWidth / 2 + CGFloat(position.col + dx) * blockSize + blockSize / 2
+            let y = -totalHeight / 2 + CGFloat(position.row + dy) * blockSize + blockSize / 2
+            
+            print("[Hint] Creating highlight cell at grid position: x \(x), y \(y)")
+            
+            let highlight = SKShapeNode(rectOf: CGSize(width: blockSize * 0.9, height: blockSize * 0.9))
+            highlight.fillColor = .clear
+            highlight.strokeColor = .yellow
+            highlight.lineWidth = 3
+            highlight.position = CGPoint(x: x, y: y)
+            highlight.alpha = 0.7
+            
+            // Add pulsing animation
+            let pulse = SKAction.sequence([
+                SKAction.fadeAlpha(to: 0.3, duration: 0.5),
+                SKAction.fadeAlpha(to: 0.7, duration: 0.5)
+            ])
+            highlight.run(SKAction.repeatForever(pulse))
+            
+            highlightContainer.addChild(highlight)
+        }
+        
+        // Add to grid node
+        gridNode.addChild(highlightContainer)
+        hintHighlight = highlightContainer
+        print("[Hint] Hint highlight added to grid node")
+        
+        // Remove highlight after 3 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+            print("[Hint] Removing hint highlight after timeout")
+            self?.hintHighlight?.removeFromParent()
+            self?.hintHighlight = nil
+        }
+    }
+    
+    // Add the old method for backward compatibility
+    func highlightHint(at position: (row: Int, col: Int)) {
+        // This is kept for backward compatibility but should not be used
+        print("[Hint] Warning: Using deprecated highlightHint method")
     }
 }
 

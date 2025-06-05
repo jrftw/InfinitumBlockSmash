@@ -22,7 +22,7 @@ struct GameView: View {
         ZStack {
             GameSceneProvider(gameState: gameState)
             VStack(spacing: 0) {
-                GameTopBar(showingSettings: $showingSettings, showingAchievements: $showingAchievements, isPaused: $isPaused)
+                GameTopBar(showingSettings: $showingSettings, showingAchievements: $showingAchievements, isPaused: $isPaused, gameState: gameState)
                 // Custom Score/Level/Undo Bar
                 ZStack(alignment: .bottom) {
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -42,15 +42,21 @@ struct GameView: View {
                             
                             Spacer()
                             
-                            Button(action: { gameState.undoLastMove() }) {
-                                Text("Undo Last Move")
-                                    .font(.headline)
-                                    .foregroundColor(gameState.canUndo ? Color(#colorLiteral(red: 0.2, green: 0.5, blue: 1, alpha: 1)) : Color.gray)
+                            VStack(spacing: 2) {
+                                Button(action: { gameState.undoLastMove() }) {
+                                    Text("Undo Last Move")
+                                        .font(.headline)
+                                        .foregroundColor(gameState.canUndo ? Color(#colorLiteral(red: 0.2, green: 0.5, blue: 1, alpha: 1)) : Color.gray)
+                                }
+                                .disabled(!gameState.canUndo)
+                                .buttonStyle(PlainButtonStyle())
+                                .accessibilityLabel("Undo Last Move")
+                                .accessibilityHint(gameState.canUndo ? "Tap to undo your last move" : "Undo is not available")
+                                
+                                Text("Need: \(gameState.calculateRequiredScore() - gameState.score)")
+                                    .font(.caption2)
+                                    .foregroundColor(.white.opacity(0.9))
                             }
-                            .disabled(!gameState.canUndo)
-                            .buttonStyle(PlainButtonStyle())
-                            .accessibilityLabel("Undo Last Move")
-                            .accessibilityHint(gameState.canUndo ? "Tap to undo your last move" : "Undo is not available")
                             
                             Spacer()
                             
@@ -122,7 +128,15 @@ struct GameView: View {
                 },
                 onMainMenu: {
                     presentationMode.wrappedValue.dismiss()
-                }
+                },
+                onContinue: {
+                    if let root = getRootViewController() {
+                        adManager.showRewardedInterstitial(from: root) {
+                            gameState.continueGame()
+                        }
+                    }
+                },
+                canContinue: !gameState.hasUsedContinueAd
             )
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Game Over. Final Score: \(gameState.score), Level: \(gameState.level)")
@@ -259,5 +273,3 @@ struct TutorialModal: View {
         .padding(32)
     }
 }
-
-

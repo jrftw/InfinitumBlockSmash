@@ -6,6 +6,8 @@ struct GameOverOverlay: View {
     let level: Int
     let onRetry: () -> Void
     let onMainMenu: () -> Void
+    let onContinue: () -> Void
+    let canContinue: Bool
     
     var body: some View {
         if isPresented {
@@ -31,6 +33,14 @@ struct GameOverOverlay: View {
                         }
                         
                         VStack(spacing: 16) {
+                            if canContinue {
+                                Button(action: onContinue) {
+                                    Label("Continue (Watch Ad)", systemImage: "play.fill")
+                                }
+                                .primaryButton()
+                                .accessibilityHint("Watch an ad to continue from where you left off")
+                            }
+                            
                             Button(action: onRetry) {
                                 Label("Try Again", systemImage: "arrow.clockwise")
                             }

@@ -151,6 +151,9 @@ struct SettingsView: View {
                             Slider(value: $sfxVolume, in: 0...1)
                             Image(systemName: "speaker.wave.3.fill")
                         }
+                        Text("Note: For optimal sound experience, ensure your device's ringer volume is turned up and not muted.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                 }
                 

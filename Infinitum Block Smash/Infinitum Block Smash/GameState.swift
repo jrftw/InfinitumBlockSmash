@@ -26,6 +26,8 @@ protocol GameStateDelegate: AnyObject {
     func gameStateDidUpdate()
     func gameStateDidClearLines(at positions: [(Int, Int)])
     func showScoreAnimation(points: Int, at position: CGPoint)
+    func highlightHint(at position: (row: Int, col: Int))
+    func highlightHint(block: Block, at position: (row: Int, col: Int))
 }
 
 @MainActor
@@ -55,6 +57,12 @@ final class GameState: ObservableObject {
     @Published private(set) var gamesCompleted: Int = 0
     @Published private(set) var undoCount: Int = 0
     @Published var isPaused: Bool = false
+    
+    // Ad-related state
+    @Published private(set) var levelsCompletedSinceLastAd = 0
+    @Published private(set) var adsWatchedThisGame = 0
+    @Published private(set) var hintsUsedThisGame = 0
+    @Published private(set) var hasUsedContinueAd = false
     
     // Add frame size property
     var frameSize: CGSize = .zero
@@ -240,6 +248,9 @@ final class GameState: ObservableObject {
                 // Refill tray after all state is reset
                 self.refillTray()
                 
+                // Reset ad-related state
+                self.resetAdState()
+                
                 // Notify delegate of state change
                 self.delegate?.gameStateDidUpdate()
             }
@@ -257,11 +268,18 @@ final class GameState: ObservableObject {
     }
     
     func refillTray() {
-        // Keep 3 shapes in the tray, using nextBlockRandom for proper shape/level
-        while tray.count < traySize {
+        // Only refill if we have less than 3 blocks
+        guard tray.count < 3 else { return }
+        
+        // Generate new blocks until we have 3
+        while tray.count < 3 {
             let newBlock = nextBlockRandom()
             tray.append(newBlock)
         }
+        
+        // Check for game over after refilling
+        checkGameOver()
+        
         delegate?.gameStateDidUpdate()
     }
     
@@ -387,6 +405,9 @@ final class GameState: ObservableObject {
         
         // Check for matches
         checkMatches()
+        
+        // Check for game over after placement
+        checkGameOver()
         
         delegate?.gameStateDidUpdate()
         return true
@@ -792,7 +813,7 @@ final class GameState: ObservableObject {
         checkAchievements()
     }
     
-    private func calculateRequiredScore() -> Int {
+    func calculateRequiredScore() -> Int {
         if level <= 5 {
             return level * 1000
         } else if level <= 10 {
@@ -810,6 +831,36 @@ final class GameState: ObservableObject {
             print("[Level] Not enough score to level up. Required: \(requiredScore), Current: \(score)")
             return
         }
+        
+        levelsCompletedSinceLastAd += 1
+        
+        // Check if we need to show an ad
+        if levelsCompletedSinceLastAd >= 7 {
+            if adsWatchedThisGame < 3 {
+                // Show ad with skip option
+                if let rootViewController = UIApplication.shared.connectedScenes
+                    .compactMap({ $0 as? UIWindowScene })
+                    .first?.windows
+                    .first?.rootViewController {
+                    AdManager.shared.showRewardedInterstitial(from: rootViewController) {
+                        self.adsWatchedThisGame += 1
+                        self.levelsCompletedSinceLastAd = 0
+                        self.continueLevelUp()
+                    }
+                } else {
+                    continueLevelUp()
+                }
+            } else {
+                // Skip ad after 3 ads watched
+                levelsCompletedSinceLastAd = 0
+                continueLevelUp()
+            }
+        } else {
+            continueLevelUp()
+        }
+    }
+    
+    private func continueLevelUp() {
         level += 1
         print("[Level] Level up! Now at level \(level)")
         setSeed(for: level)
@@ -817,7 +868,6 @@ final class GameState: ObservableObject {
         tray = []
         if level > userDefaults.integer(forKey: levelKey) {
             achievementsManager.updateAchievement(id: "highest_level", value: level)
-            // Remove leaderboard update from here
         }
         let availableShapes = BlockShape.availableShapes(for: level)
         print("[Level] Level \(level) - Available shapes: \(availableShapes.map { String(describing: $0) }.joined(separator: ", "))")
@@ -1238,6 +1288,142 @@ final class GameState: ObservableObject {
         previousTray = nil
         lastMove = nil
         refillTray()
+    }
+    
+    // Add this method to handle continuing the game after watching an ad
+    func continueGame() {
+        guard !hasUsedContinueAd else { return }
+        
+        // Save current state
+        let currentScore = score
+        let currentLevel = level
+        let currentGrid = grid
+        let currentTray = tray
+        
+        // Reset game state
+        resetGame()
+        
+        // Restore previous state
+        score = currentScore
+        level = currentLevel
+        grid = currentGrid
+        tray = currentTray
+        hasUsedContinueAd = true
+        isGameOver = false
+        
+        delegate?.gameStateDidUpdate()
+    }
+    
+    // Add this method to handle hints
+    func showHint() -> Bool {
+        print("[Hint] Attempting to show hint. Current hints used: \(hintsUsedThisGame)")
+        
+        #if DEBUG
+        // In debug/simulator, show hint immediately without ad
+        print("[Hint] Debug mode - showing hint without ad")
+        if let (block, position) = findValidMove() {
+            delegate?.highlightHint(block: block, at: position)
+            return true
+        }
+        print("[Hint] No valid moves found")
+        return false
+        #else
+        // In production, check if we're in TestFlight
+        if Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt" {
+            print("[Hint] TestFlight mode - showing hint without ad")
+            if let (block, position) = findValidMove() {
+                delegate?.highlightHint(block: block, at: position)
+                return true
+            }
+            print("[Hint] No valid moves found")
+            return false
+        }
+        
+        // In production, require ad and limit hints
+        guard hintsUsedThisGame < 3 else {
+            print("[Hint] Maximum hints (3) already used")
+            return false
+        }
+
+        if let rootViewController = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first?.windows
+            .first?.rootViewController {
+            print("[Hint] Showing rewarded ad for hint")
+            AdManager.shared.showRewardedInterstitial(from: rootViewController) {
+                print("[Hint] Ad completed, showing hint")
+                self.hintsUsedThisGame += 1
+                if let (block, position) = self.findValidMove() {
+                    self.delegate?.highlightHint(block: block, at: position)
+                } else {
+                    print("[Hint] No valid moves found after ad")
+                }
+            }
+            return true
+        }
+        print("[Hint] Failed to get root view controller")
+        return false
+        #endif
+    }
+    
+    private func findValidMove() -> (block: Block, position: (row: Int, col: Int))? {
+        // First check if we have any blocks in the tray
+        guard !tray.isEmpty else { return nil }
+        
+        // Try each block in the tray
+        for block in tray {
+            // Try each position in the grid
+            for row in 0..<GameConstants.gridSize {
+                for col in 0..<GameConstants.gridSize {
+                    // Check if we can place the block at this position
+                    if canPlaceBlock(block, at: CGPoint(x: col, y: row)) {
+                        // Count how many blocks this placement would touch
+                        var touchingCount = 0
+                        var currentShapePositions = Set<String>()
+                        
+                        // Add current shape positions to the set
+                        for (dx, dy) in block.shape.cells {
+                            let x = col + dx
+                            let y = row + dy
+                            currentShapePositions.insert("\(x),\(y)")
+                        }
+                        
+                        // Count touches for each cell in the shape
+                        for (dx, dy) in block.shape.cells {
+                            let x = col + dx
+                            let y = row + dy
+                            touchingCount += countTouchingBlocks(at: x, y: y, excluding: currentShapePositions)
+                        }
+                        
+                        // If this placement touches at least one block, it's a good hint
+                        if touchingCount > 0 {
+                            return (block, (row, col))
+                        }
+                    }
+                }
+            }
+        }
+        
+        // If no touching placements found, return any valid placement
+        for block in tray {
+            for row in 0..<GameConstants.gridSize {
+                for col in 0..<GameConstants.gridSize {
+                    if canPlaceBlock(block, at: CGPoint(x: col, y: row)) {
+                        return (block, (row, col))
+                    }
+                }
+            }
+        }
+        
+        return nil
+    }
+    
+    // Add this to resetGame to reset ad-related state
+    private func resetAdState() {
+        levelsCompletedSinceLastAd = 0
+        adsWatchedThisGame = 0
+        hintsUsedThisGame = 0
+        hasUsedContinueAd = false
     }
 }
 
