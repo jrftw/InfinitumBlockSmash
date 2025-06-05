@@ -141,6 +141,10 @@ class AchievementsManager: ObservableObject {
     @Published var totalPoints: Int = 0
     private let userDefaults = UserDefaults.standard
     
+    var allAchievements: [Achievement] {
+        Array(achievements.values)
+    }
+    
     init() {
         loadAchievements()
         calculateTotalPoints()

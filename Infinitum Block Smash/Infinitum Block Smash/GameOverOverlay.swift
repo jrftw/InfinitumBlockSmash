@@ -35,10 +35,10 @@ struct GameOverOverlay: View {
                         VStack(spacing: 16) {
                             if canContinue {
                                 Button(action: onContinue) {
-                                    Label("Continue (Watch Ad)", systemImage: "play.fill")
+                                    Label("Continue", systemImage: "play.fill")
                                 }
                                 .primaryButton()
-                                .accessibilityHint("Watch an ad to continue from where you left off")
+                                .accessibilityHint("Continue from where you left off")
                             }
                             
                             Button(action: onRetry) {

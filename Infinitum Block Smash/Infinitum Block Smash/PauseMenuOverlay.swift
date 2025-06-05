@@ -7,6 +7,7 @@ struct PauseMenuOverlay: View {
     let onSave: () -> Void
     let onRestart: () -> Void
     let onHome: () -> Void
+    let onEndGame: () -> Void
     var body: some View {
         if isPresented {
             Color.black.opacity(0.7)
@@ -32,6 +33,15 @@ struct PauseMenuOverlay: View {
                                 .padding(.horizontal, 40)
                                 .padding(.vertical, 14)
                                 .background(Color.green)
+                                .cornerRadius(12)
+                        }
+                        Button(action: onEndGame) {
+                            Text("End Game")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 40)
+                                .padding(.vertical, 14)
+                                .background(Color.purple)
                                 .cornerRadius(12)
                         }
                         Button(action: onRestart) {

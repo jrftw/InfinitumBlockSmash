@@ -6,6 +6,19 @@ struct AppVersion {
     
     static let changelog: [String: [String]] = [
         "1.0.1 (Build 1)": [
+            "Added 'Block Drag Position' setting under Gameplay settings to adjust how high above your finger the block appears while dragging",
+            "Added 'Placement Precision' setting under Gameplay settings to adjust how precisely you need to place blocks on the grid",
+            "Added info buttons with descriptions for all settings",
+            "Fixed game save/load functionality:",
+            "  - Game now automatically saves when app moves to background or is terminated",
+            "  - Game automatically loads saved progress when app starts",
+            "  - Added proper scene lifecycle handling for reliable saves",
+            "  - Added debug logging for save/load operations",
+            "Fixed preview position to align perfectly with grid cells",
+            "Improved drag node visibility while maintaining crisp placement mechanics",
+            "Default settings:",
+            "  - Placement Precision: 85%",
+            "  - Block Drag Position: 40%",
             "Fixed ad implementation for production builds",
             "Test ads now only show in development and TestFlight",
             "Production ads properly configured for App Store release",

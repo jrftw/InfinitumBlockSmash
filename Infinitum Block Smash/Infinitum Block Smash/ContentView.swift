@@ -10,6 +10,7 @@ struct ContentView: View {
     @State private var showingChangeInfo = false
     @State private var showingGameView = false
     @State private var showingAuth = false
+    @State private var showingStats = false
     @AppStorage("userID") private var userID: String = ""
     @AppStorage("username") private var username: String = ""
     @AppStorage("isGuest") private var isGuest: Bool = false
@@ -70,6 +71,10 @@ struct ContentView: View {
                             showingLeaderboard = true
                         }
                         
+                        MenuButton(title: "Statistics", icon: "chart.bar.fill") {
+                            showingStats = true
+                        }
+                        
                         MenuButton(title: "Change Information", icon: "person.fill") {
                             showingChangeInfo = true
                         }
@@ -127,6 +132,9 @@ struct ContentView: View {
         }
         .fullScreenCover(isPresented: $showingChangeInfo) {
             ChangeInformationView()
+        }
+        .sheet(isPresented: $showingStats) {
+            StatsView(gameState: gameState)
         }
         .sheet(isPresented: $showingAuth) {
             AuthView()

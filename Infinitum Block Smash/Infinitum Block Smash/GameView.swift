@@ -17,6 +17,16 @@ struct GameView: View {
     @Environment(\.presentationMode) var presentationMode
     @State private var scoreAnimator = ScoreAnimationContainer()
     @Environment(\.colorScheme) private var colorScheme
+    @State private var showingStats = false
+    
+    private enum SettingsAction {
+        case resume
+        case restart
+        case endGame
+        case showTutorial
+        case showAchievements
+        case showStats
+    }
 
     var body: some View {
         ZStack {
@@ -141,22 +151,25 @@ struct GameView: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Game Over. Final Score: \(gameState.score), Level: \(gameState.level)")
             
-            PauseMenuOverlay(isPresented: isPaused, onResume: { isPaused = false }, onSave: {
-                do {
-                    try gameState.saveProgress()
-                    isPaused = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        presentationMode.wrappedValue.dismiss()
+            PauseMenuOverlay(
+                isPresented: isPaused,
+                onResume: { handleSettingsAction(.resume) },
+                onSave: {
+                    do {
+                        try gameState.saveProgress()
+                        isPaused = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            presentationMode.wrappedValue.dismiss()
+                        }
+                    } catch {
+                        print("[PauseMenu] Error saving progress: \(error.localizedDescription)")
+                        isPaused = false
                     }
-                } catch {
-                    print("[PauseMenu] Error saving progress: \(error.localizedDescription)")
-                    isPaused = false
-                }
-            }, onRestart: {
-                gameState.resetGame(); isPaused = false
-            }, onHome: {
-                presentationMode.wrappedValue.dismiss()
-            })
+                },
+                onRestart: { handleSettingsAction(.restart) },
+                onHome: { presentationMode.wrappedValue.dismiss() },
+                onEndGame: { handleSettingsAction(.endGame) }
+            )
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Pause Menu")
             
@@ -167,6 +180,19 @@ struct GameView: View {
                 Spacer()
                 BannerAdView()
                     .frame(width: 320, height: 50)
+            }
+            
+            // Overlay views
+            if showingTutorial {
+                TutorialModal(showingTutorial: $showingTutorial, showTutorial: $showTutorial)
+            }
+            
+            if showingAchievements {
+                AchievementsView(achievementsManager: gameState.achievementsManager)
+            }
+            
+            if showingStats {
+                StatsView(gameState: gameState)
             }
         }
         .sheet(isPresented: $showingSettings) {
@@ -215,6 +241,27 @@ struct GameView: View {
         return UIApplication.shared.connectedScenes
             .compactMap({ ($0 as? UIWindowScene)?.windows.first?.rootViewController })
             .first
+    }
+    
+    private func handleSettingsAction(_ action: SettingsAction) {
+        switch action {
+        case .resume:
+            gameState.isPaused = false
+            isPaused = false
+        case .restart:
+            gameState.resetGame()
+            isPaused = false
+        case .endGame:
+            gameState.endGameFromSettings()
+            isPaused = false
+            presentationMode.wrappedValue.dismiss()
+        case .showTutorial:
+            showingTutorial = true
+        case .showAchievements:
+            showingAchievements = true
+        case .showStats:
+            showingStats = true
+        }
     }
 }
 

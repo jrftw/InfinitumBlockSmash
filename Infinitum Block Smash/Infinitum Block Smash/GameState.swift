@@ -97,7 +97,8 @@ final class GameState: ObservableObject {
     // MARK: - Private Properties
     private var cancellables = Set<AnyCancellable>()
     
-    private var totalPlayTime: TimeInterval = 0
+    private(set) var totalPlayTime: TimeInterval = 0
+    private var playTimeTimer: Timer?
     
     #if DEBUG
     private var isTestFlightOrSimulator: Bool {
@@ -122,6 +123,7 @@ final class GameState: ObservableObject {
         setupInitialGame()
         gameStartTime = Date()
         loadLastPlayDate()
+        startPlayTimeTimer()
     }
     
     deinit {
@@ -130,6 +132,16 @@ final class GameState: ObservableObject {
             await MainActor.run {
                 self.cleanupMemory()
                 self.cancellables.removeAll()
+                self.playTimeTimer?.invalidate()
+            }
+        }
+    }
+    
+    private func startPlayTimeTimer() {
+        playTimeTimer?.invalidate()
+        playTimeTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.updatePlayTime()
             }
         }
     }
@@ -264,19 +276,42 @@ final class GameState: ObservableObject {
     func nextBlockRandom() -> Block {
         var availableShapes = BlockShape.availableShapes(for: level)
         
-        // Implement rarity for single blocks and tiny shapes
+        // Remove single blocks and tiny shapes from base available shapes
         if level <= 25 {
-            // 5% chance for single block
-            if Double.random(in: 0...1, using: &rng) < 0.05 {
+            availableShapes = availableShapes.filter { $0 != .single }
+            // 1% chance for single block
+            if Double.random(in: 0...1, using: &rng) < 0.01 {
                 availableShapes = [.single]
             }
         }
         
         if level <= 35 {
-            // 3% chance for tiny shapes
-            if Double.random(in: 0...1, using: &rng) < 0.03 {
-                availableShapes = [.tinyLUp, .tinyLDown, .tinyLLeft, .tinyLRight, .tinyI]
+            let tinyShapes: [BlockShape] = [.tinyLUp, .tinyLDown, .tinyLLeft, .tinyLRight, .tinyI]
+            availableShapes = availableShapes.filter { !tinyShapes.contains($0) }
+            // 1% chance for tiny shapes
+            if Double.random(in: 0...1, using: &rng) < 0.01 {
+                availableShapes = [tinyShapes.randomElement(using: &rng) ?? .tinyLUp]
             }
+        }
+        
+        // Filter out shapes that are already in the tray
+        if !tray.isEmpty {
+            let existingShapes = Set(tray.map { $0.shape })
+            availableShapes = availableShapes.filter { !existingShapes.contains($0) }
+        }
+        
+        // If this is the first spawn (tray is empty), ensure we don't get 3 of the same shape
+        if tray.isEmpty {
+            // Remove shapes that would result in 3 of the same
+            let shapesToRemove = Set(availableShapes.filter { shape in
+                availableShapes.filter { $0 == shape }.count >= 3
+            })
+            availableShapes = availableShapes.filter { !shapesToRemove.contains($0) }
+        }
+        
+        // If we somehow filtered out all shapes, fall back to basic shapes
+        if availableShapes.isEmpty {
+            availableShapes = [.bar2H, .bar2V, .bar3H, .bar3V, .square]
         }
         
         let shape = availableShapes.randomElement(using: &rng) ?? .bar2H
@@ -621,7 +656,7 @@ final class GameState: ObservableObject {
 
     private func checkMatches() {
         var clearedPositions: [(Int, Int)] = []
-        var linesCleared = 0
+        var linesClearedThisTurn = 0
         var diagonalPatternsFound = Set<String>() // Track which diagonal patterns we've found
         var achievementsToUpdate: [String: Int] = [:] // Track achievements to update
         
@@ -630,7 +665,7 @@ final class GameState: ObservableObject {
             if isRowFull(row) {
                 clearRow(row)
                 clearedPositions.append((row, -1))  // -1 indicates entire row
-                linesCleared += 1
+                linesClearedThisTurn += 1
                 addScore(100, at: CGPoint(x: frameSize.width/2, y: CGFloat(row) * GameConstants.blockSize))
             }
         }
@@ -640,7 +675,7 @@ final class GameState: ObservableObject {
             if isColumnFull(col) {
                 clearColumn(col)
                 clearedPositions.append((-1, col))  // -1 indicates entire column
-                linesCleared += 1
+                linesClearedThisTurn += 1
                 addScore(100, at: CGPoint(x: CGFloat(col) * GameConstants.blockSize, y: frameSize.height/2))
             }
         }
@@ -726,20 +761,22 @@ final class GameState: ObservableObject {
         checkGroups()
         
         // Update chain bonus only for line clears
-        if linesCleared > 0 {
+        if linesClearedThisTurn > 0 {
             currentChain += 1
             let chainBonus = currentChain * 100
             addScore(chainBonus, at: CGPoint(x: frameSize.width/2, y: frameSize.height/2))
             print("[Chain] Chain \(currentChain)! +\(chainBonus) bonus points!")
+            // Update total lines cleared
+            linesCleared += linesClearedThisTurn
         } else {
             currentChain = 0
         }
         
         // Update achievements in batch
-        if linesCleared > 0 {
-            achievementsToUpdate["clear_10"] = linesCleared
-            achievementsToUpdate["clear_50"] = linesCleared
-            achievementsToUpdate["clear_100"] = linesCleared
+        if linesClearedThisTurn > 0 {
+            achievementsToUpdate["clear_10"] = linesClearedThisTurn
+            achievementsToUpdate["clear_50"] = linesClearedThisTurn
+            achievementsToUpdate["clear_100"] = linesClearedThisTurn
         }
         
         // Batch update achievements
@@ -951,8 +988,26 @@ final class GameState: ObservableObject {
         saveLastPlayDate()
         checkAchievements()
         
-        // Notify delegate of state change
+        #if DEBUG
+        // In debug/simulator, skip ad
+        print("[GameOver] Debug mode - skipping ad")
         delegate?.gameStateDidUpdate()
+        #else
+        // In production, check if we're in TestFlight
+        if Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt" {
+            print("[GameOver] TestFlight mode - skipping ad")
+            delegate?.gameStateDidUpdate()
+        } else {
+            // In production, show ad automatically
+            if let rootViewController = UIApplication.main {
+                AdManager.shared.showRewardedInterstitial(from: rootViewController) {
+                    self.continueGame()
+                }
+            } else {
+                delegate?.gameStateDidUpdate()
+            }
+        }
+        #endif
     }
     
     private func hasValidMoves() -> Bool {
@@ -1136,7 +1191,26 @@ final class GameState: ObservableObject {
     }
     
     func gameOver() {
-        handleGameOver()
+        isGameOver = true
+        // Only increment gamesCompleted if the game was lost (not manually ended)
+        if !isPaused {
+            gamesCompleted += 1
+        }
+        playTimeTimer?.invalidate()
+        Task { @MainActor in
+            updatePlayTime() // Final update of play time
+            try? saveProgress()
+        }
+    }
+    
+    // Add a new function for manually ending the game from settings
+    func endGameFromSettings() {
+        isGameOver = true
+        playTimeTimer?.invalidate()
+        Task { @MainActor in
+            updatePlayTime() // Final update of play time
+            try? saveProgress()
+        }
     }
     
     func hasSavedGame() -> Bool {
@@ -1154,6 +1228,11 @@ final class GameState: ObservableObject {
               let gridData = progress["grid"] as? [[String?]],
               let trayData = progress["tray"] as? [[String: String]] else {
             throw GameError.loadFailed(NSError(domain: "GameState", code: -2, userInfo: [NSLocalizedDescriptionKey: "Invalid saved game data"]))
+        }
+        
+        // Load total play time if available
+        if let savedPlayTime = progress["totalPlayTime"] as? TimeInterval {
+            totalPlayTime = savedPlayTime
         }
         
         // Set the seed for the current level first
@@ -1218,13 +1297,13 @@ final class GameState: ObservableObject {
         }
         
         // Convert grid to a property list compatible format
-        var gridData: [[String?]] = []
+        var gridData: [[String]] = []
         for row in grid {
-            let rowData: [String?] = row.map { color in
+            let rowData: [String] = row.map { color in
                 if let color = color {
                     return String(describing: color.rawValue)
                 }
-                return nil
+                return "empty" // Use "empty" instead of nil
             }
             gridData.append(rowData)
         }
@@ -1243,21 +1322,21 @@ final class GameState: ObservableObject {
             "score": score,
             "level": level,
             "grid": gridData,
-            "tray": trayData
+            "tray": trayData,
+            "blocksPlaced": blocksPlaced,
+            "linesCleared": linesCleared,
+            "gamesCompleted": gamesCompleted,
+            "totalPlayTime": totalPlayTime
         ]
         
-        // Convert to Data first to ensure it's property list compatible
-        guard let data = try? JSONSerialization.data(withJSONObject: progress) else {
-            throw GameError.saveFailed(NSError(domain: "GameState", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to serialize game state"]))
-        }
-        
-        // Save the data
-        userDefaults.set(data, forKey: progressKey)
-        userDefaults.set(true, forKey: hasSavedGameKey)
-        
-        // Verify the save was successful
-        guard userDefaults.synchronize() else {
-            throw GameError.saveFailed(NSError(domain: "GameState", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to synchronize UserDefaults"]))
+        do {
+            let data = try PropertyListSerialization.data(fromPropertyList: progress, format: .binary, options: 0)
+            userDefaults.set(data, forKey: progressKey)
+            userDefaults.set(true, forKey: hasSavedGameKey)
+            userDefaults.synchronize() // Ensure data is written immediately
+        } catch {
+            print("[Error] Failed to save game progress: \(error)")
+            throw error
         }
     }
     
@@ -1362,10 +1441,7 @@ final class GameState: ObservableObject {
             return false
         }
 
-        if let rootViewController = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first?.windows
-            .first?.rootViewController {
+        if let rootViewController = UIApplication.main {
             print("[Hint] Showing rewarded ad for hint")
             AdManager.shared.showRewardedInterstitial(from: rootViewController) {
                 print("[Hint] Ad completed, showing hint")
