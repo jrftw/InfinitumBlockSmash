@@ -58,34 +58,40 @@ class TrayNode: SKNode {
         // 2. Compute total width (shapes + spacing) and max height
         let shapeWidths = blockBounds.map { CGFloat($0.maxX - $0.minX + 1) * blockSize }
         let shapeHeights = blockBounds.map { CGFloat($0.maxY - $0.minY + 1) * blockSize }
-        let totalWidth = shapeWidths.reduce(0, +) + baseSpacing * CGFloat(max(blocks.count - 1, 0))
         let maxHeight = shapeHeights.max() ?? 0
 
-        // 3. Compute scale - make tray shapes smaller than grid shapes
-        let scaleX = availableWidth / totalWidth
+        // 3. Calculate scale to fit height first
         let scaleY = availableHeight / maxHeight
-        let scale = min(0.6, scaleX, scaleY)
+        let scale = min(0.6, scaleY) // Use height-based scaling to ensure vertical fit
         lastScale = scale
         lastBlockSize = blockSize * scale
-        let scaledSpacing = baseSpacing * scale
-        let scaledTotalWidth = shapeWidths.reduce(0, +) * scale + scaledSpacing * CGFloat(max(blocks.count - 1, 0))
 
-        // 4. Center all shapes as a group
-        var xOffset: CGFloat = -scaledTotalWidth / 2
+        // 4. Calculate scaled widths and total width needed for shapes
+        let scaledShapeWidths = shapeWidths.map { $0 * scale }
+        let totalShapesWidth = scaledShapeWidths.reduce(0, +)
+        
+        // 5. Calculate even spacing between shapes
+        let totalSpacing = availableWidth - totalShapesWidth
+        let spacingBetweenShapes = totalSpacing / CGFloat(blocks.count + 1) // +1 for edges
+
+        // 6. Position shapes with even spacing
+        var xOffset: CGFloat = -availableWidth / 2 + spacingBetweenShapes
         for (i, block) in blocks.enumerated() {
-            let shapeWidth = shapeWidths[i] * scale
+            let shapeWidth = scaledShapeWidths[i]
             let shapeHeight = shapeHeights[i] * scale
             let node = ShapeNode(block: block, blockSize: blockSize * scale)
             
-            // Center each shape vertically and horizontally
+            // Center each shape vertically
             let verticalOffset = -shapeHeight / 2 + blockSize * scale / 2
             node.position = CGPoint(x: xOffset + shapeWidth / 2, y: verticalOffset)
             node.setScale(1.0)
             node.name = "trayShape_\(block.id.uuidString)"
-            node.zPosition = CGFloat(i) // Set zPosition based on index to prevent overlapping
+            node.zPosition = CGFloat(i)
             addChild(node)
             blockNodes.append(node)
-            xOffset += shapeWidth + scaledSpacing
+            
+            // Move to next position, adding shape width and spacing
+            xOffset += shapeWidth + spacingBetweenShapes
         }
     }
 

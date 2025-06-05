@@ -34,6 +34,7 @@ struct Achievement: Identifiable, Codable, Equatable {
         Achievement(id: "login_7", name: "Weekly Login", description: "Log in for 7 consecutive days", unlocked: false, progress: 0, goal: 7, wasNotified: false, points: 50),
         Achievement(id: "login_30", name: "Monthly Login", description: "Log in for 30 consecutive days", unlocked: false, progress: 0, goal: 30, wasNotified: false, points: 100),
         Achievement(id: "login_100", name: "Dedicated Player", description: "Log in for 100 days", unlocked: false, progress: 0, goal: 100, wasNotified: false, points: 250),
+        Achievement(id: "daily_login", name: "Daily Login", description: "Log in daily to earn 5 points", unlocked: false, progress: 0, goal: 1, wasNotified: false, points: 5),
         
         // Score-based achievements
         Achievement(id: "score_1000", name: "Score Hunter", description: "Reach 1,000 points", unlocked: false, progress: 0, goal: 1000, wasNotified: false, points: 10),
@@ -273,6 +274,7 @@ class AchievementsManager: ObservableObject {
     
     private func checkIfAchievementShouldUnlock(_ achievement: Achievement, score: Int, level: Int) -> Bool {
         switch achievement.id {
+        // Score achievements
         case "score_1000":
             return score >= 1000
         case "score_5000":
@@ -281,6 +283,8 @@ class AchievementsManager: ObservableObject {
             return score >= 10000
         case "score_50000":
             return score >= 50000
+            
+        // Level achievements
         case "level_5":
             return level >= 5
         case "level_10":
@@ -289,6 +293,81 @@ class AchievementsManager: ObservableObject {
             return level >= 20
         case "level_50":
             return level >= 50
+            
+        // Line clearing achievements
+        case "clear_10":
+            return achievement.progress >= 10
+        case "clear_50":
+            return achievement.progress >= 50
+        case "clear_100":
+            return achievement.progress >= 100
+            
+        // Combo achievements
+        case "combo_3", "combo_5", "combo_10":
+            return achievement.progress >= 1
+            
+        // Block placement achievements
+        case "place_100":
+            return achievement.progress >= 100
+        case "place_500":
+            return achievement.progress >= 500
+        case "place_1000":
+            return achievement.progress >= 1000
+            
+        // Group achievements
+        case "group_10", "group_20", "group_30":
+            return achievement.progress >= 1
+            
+        // Perfect level achievements
+        case "perfect_level":
+            return achievement.progress >= 1
+        case "perfect_levels_3":
+            return achievement.progress >= 3
+        case "perfect_levels_5":
+            return achievement.progress >= 5
+            
+        // Special achievements
+        case "color_master", "shape_master", "rainbow_clear", "shape_clear":
+            return achievement.progress >= 1
+            
+        // Grid achievements
+        case "grid_quarter", "grid_half", "grid_full":
+            return achievement.progress >= 1
+            
+        // Chain achievements
+        case "chain_3", "chain_5", "chain_10":
+            return achievement.progress >= 1
+            
+        // Time-based achievements
+        case "play_1h":
+            return achievement.progress >= 3600
+        case "play_5h":
+            return achievement.progress >= 18000
+        case "play_10h":
+            return achievement.progress >= 36000
+            
+        // Daily achievements
+        case "daily_3":
+            return achievement.progress >= 3
+        case "daily_7":
+            return achievement.progress >= 7
+        case "daily_30":
+            return achievement.progress >= 30
+            
+        // Login achievements
+        case "login_1", "login_3", "login_7", "login_30", "login_100":
+            return achievement.progress >= achievement.goal
+            
+        // Game completion achievements
+        case "first_game", "games_10", "games_50", "games_100":
+            return achievement.progress >= achievement.goal
+            
+        // Undo achievements
+        case "undo_5":
+            return achievement.progress >= 5
+        case "undo_20":
+            return achievement.progress >= 20
+            
         default:
             return false
         }

@@ -410,7 +410,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let gridPoint = convertToGridCoordinates(touchPoint)
         
         // Update drag node position to follow touch more precisely
-        dragNode.position = CGPoint(x: touchPoint.x, y: touchPoint.y + GameConstants.blockSize * 0.5)
+        // Reduced offset for better visibility of placement
+        dragNode.position = CGPoint(x: touchPoint.x, y: touchPoint.y + GameConstants.blockSize * 0.4)
         
         // Remove any existing preview
         previewNode?.removeFromParent()
@@ -502,24 +503,42 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let relativeX = point.x - gridOrigin.x
         let relativeY = point.y - gridOrigin.y
         
-        // Add a small snap threshold (20% of cell size) for more precise placement
-        let snapThreshold = cellSize * 0.2
-        let snappedX = relativeX.truncatingRemainder(dividingBy: cellSize)
-        let snappedY = relativeY.truncatingRemainder(dividingBy: cellSize)
+        // Calculate the exact grid position without any snapping
+        let exactCol = relativeX / cellSize
+        let exactRow = relativeY / cellSize
         
-        // If we're within the snap threshold of a cell center, snap to it
-        let finalX = abs(snappedX - cellSize/2) < snapThreshold ? 
-            round(relativeX / cellSize) : 
-            floor(relativeX / cellSize)
-        let finalY = abs(snappedY - cellSize/2) < snapThreshold ? 
-            round(relativeY / cellSize) : 
-            floor(relativeY / cellSize)
+        // Calculate the remainder to determine how close we are to cell centers
+        let remainderX = abs(exactCol.truncatingRemainder(dividingBy: 1))
+        let remainderY = abs(exactRow.truncatingRemainder(dividingBy: 1))
+        
+        // Use a smaller snap threshold (15% of cell size) for more precise control
+        let snapThreshold = 0.15
+        
+        // Determine final grid position
+        let finalCol: Int
+        let finalRow: Int
+        
+        if remainderX < snapThreshold {
+            // Snap to nearest cell center horizontally
+            finalCol = Int(round(exactCol))
+        } else {
+            // Use exact position for more precise placement
+            finalCol = Int(exactCol)
+        }
+        
+        if remainderY < snapThreshold {
+            // Snap to nearest cell center vertically
+            finalRow = Int(round(exactRow))
+        } else {
+            // Use exact position for more precise placement
+            finalRow = Int(exactRow)
+        }
         
         // Ensure we stay within grid bounds
-        let col = max(0, min(gridSize - 1, Int(finalX)))
-        let row = max(0, min(gridSize - 1, Int(finalY)))
-        
-        return CGPoint(x: col, y: row)
+        return CGPoint(
+            x: max(0, min(gridSize - 1, finalCol)),
+            y: max(0, min(gridSize - 1, finalRow))
+        )
     }
     
     private func playPlacementAnimation(at position: CGPoint) {

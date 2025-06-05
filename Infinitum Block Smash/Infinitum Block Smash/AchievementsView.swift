@@ -128,9 +128,15 @@ struct AchievementRow: View {
                     .foregroundColor(.secondary)
                 
                 if !achievement.unlocked {
-                    ProgressView(value: Double(achievement.progress), total: Double(achievement.goal))
-                        .progressViewStyle(LinearProgressViewStyle())
-                        .frame(height: 4)
+                    VStack(alignment: .leading, spacing: 2) {
+                        ProgressView(value: Double(achievement.progress), total: Double(achievement.goal))
+                            .progressViewStyle(LinearProgressViewStyle())
+                            .frame(height: 4)
+                        
+                        Text("\(achievement.progress)/\(achievement.goal) (\(Int((Double(achievement.progress) / Double(achievement.goal)) * 100))%)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                 }
             }
             

@@ -39,6 +39,8 @@ struct GameRulesView: View {
                         RuleItem(icon: "sparkles.fill", text: "200 points for creating a group of 10 or more blocks")
                         RuleItem(icon: "arrow.triangle.2.circlepath", text: "Chain bonuses for multiple clears")
                         RuleItem(icon: "checkmark.seal.fill", text: "Perfect level bonus for clearing without mistakes")
+                        RuleItem(icon: "xmark", text: "1000 bonus points for creating an X pattern with same color")
+                        RuleItem(icon: "slash", text: "500 bonus points for creating a diagonal pattern with same color")
                     }
                 }
                 

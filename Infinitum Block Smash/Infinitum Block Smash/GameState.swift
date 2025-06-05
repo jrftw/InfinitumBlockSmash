@@ -88,6 +88,8 @@ final class GameState: ObservableObject {
     // MARK: - Private Properties
     private var cancellables = Set<AnyCancellable>()
     
+    private var totalPlayTime: TimeInterval = 0
+    
     // MARK: - Initialization
     init() {
         self.grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
@@ -126,6 +128,7 @@ final class GameState: ObservableObject {
         usedColors.removeAll(keepingCapacity: true)
         usedShapes.removeAll(keepingCapacity: true)
         isPerfectLevel = true
+        gameStartTime = Date()
     }
     
     private func setupSubscriptions() {
@@ -139,7 +142,21 @@ final class GameState: ObservableObject {
             .store(in: &cancellables)
     }
     
+    private func updatePlayTime() {
+        guard let startTime = gameStartTime else { return }
+        let currentTime = Date()
+        totalPlayTime += currentTime.timeIntervalSince(startTime)
+        gameStartTime = currentTime
+        
+        // Update time-based achievements
+        let playTimeInSeconds = Int(totalPlayTime)
+        achievementsManager.updateAchievement(id: "play_1h", value: playTimeInSeconds)
+        achievementsManager.updateAchievement(id: "play_5h", value: playTimeInSeconds)
+        achievementsManager.updateAchievement(id: "play_10h", value: playTimeInSeconds)
+    }
+    
     private func checkAchievements(for score: Int) {
+        updatePlayTime()
         Task {
             do {
                 let newAchievements = try await achievementsManager.checkAchievementProgress(score: score, level: level)
@@ -255,38 +272,82 @@ final class GameState: ObservableObject {
         canUndo = false
         adUndoCount -= 1
         undoCount += 1
+        
+        // Update undo achievements
+        achievementsManager.updateAchievement(id: "undo_5", value: undoCount)
+        achievementsManager.updateAchievement(id: "undo_20", value: undoCount)
+        
         isPerfectLevel = false
         delegate?.gameStateDidUpdate()
         checkAchievements()
     }
 
     // In tryPlaceBlockFromTray, save state before placement and reset undo after
-    func tryPlaceBlockFromTray(_ block: Block, at anchor: CGPoint) -> Bool {
-        guard !isGameOver && !levelComplete else {
-            print("[DEBUG] Block placement prevented: isGameOver=", isGameOver, "levelComplete=", levelComplete)
+    func tryPlaceBlockFromTray(_ block: Block, at position: CGPoint) -> Bool {
+        let row = Int(position.y)
+        let col = Int(position.x)
+        
+        guard row >= 0 && row < GameConstants.gridSize && col >= 0 && col < GameConstants.gridSize else {
+            print("[Place] Invalid position: (\(row), \(col))")
             return false
         }
-        guard let trayIndex = tray.firstIndex(where: { $0.id == block.id }) else { return false }
-        guard canPlaceBlock(block, at: anchor) else { return false }
-        // Final defensive check: ensure all cells are within bounds
-        for (dx, dy) in block.shape.cells {
-            let x = Int(anchor.x) + dx
-            let y = Int(anchor.y) + dy
-            if x < 0 || x >= GameConstants.gridSize || y < 0 || y >= GameConstants.gridSize {
-                print("[Placement] Block \(block.shape.rawValue) at \(anchor) would be out of bounds. Skipping placement.")
-                return false
-            }
+        
+        guard grid[row][col] == nil else {
+            print("[Place] Position (\(row), \(col)) already occupied")
+            return false
         }
-        print("[Placement] Placing block \(block.shape.rawValue) at \(anchor)")
+        
+        // Save state for undo before making changes
         saveStateForUndo()
-        placeBlock(block, at: anchor)
-        tray.remove(at: trayIndex)
-        // refillTray() will be called after UI update
+        
+        // Place the block
+        grid[row][col] = block.color
+        blocksPlaced += 1
+        
+        // Track color and shape usage
+        usedColors.insert(block.color)
+        usedShapes.insert(block.shape)
+        
+        // Update achievements
+        achievementsManager.updateAchievement(id: "place_100", value: blocksPlaced)
+        achievementsManager.updateAchievement(id: "place_500", value: blocksPlaced)
+        achievementsManager.updateAchievement(id: "place_1000", value: blocksPlaced)
+        
+        // Check for color and shape master achievements
+        if usedColors.count == BlockColor.allCases.count {
+            achievementsManager.updateAchievement(id: "color_master", value: 1)
+        }
+        if usedShapes.count == BlockShape.availableShapes(for: level).count {
+            achievementsManager.updateAchievement(id: "shape_master", value: 1)
+        }
+        
+        // Check for grid achievements
+        let totalCells = GameConstants.gridSize * GameConstants.gridSize
+        let filledCells = blocksPlaced
+        let fillPercentage = Double(filledCells) / Double(totalCells)
+        
+        if fillPercentage >= 0.25 {
+            achievementsManager.updateAchievement(id: "grid_quarter", value: 1)
+        }
+        if fillPercentage >= 0.50 {
+            achievementsManager.updateAchievement(id: "grid_half", value: 1)
+        }
+        if fillPercentage >= 0.75 {
+            achievementsManager.updateAchievement(id: "grid_full", value: 1)
+        }
+        
+        // Remove block from tray
+        if let index = tray.firstIndex(where: { $0.id == block.id }) {
+            tray.remove(at: index)
+        }
+        
+        // Check for matches
         checkMatches()
-        checkGameOver()
-        adUndoCount = 2
+        
+        // Reset undo after successful placement
+        canUndo = false
+        
         delegate?.gameStateDidUpdate()
-        checkAchievements()
         return true
     }
     
@@ -370,10 +431,109 @@ final class GameState: ObservableObject {
         blocksPlaced += 1
         usedColors.insert(block.color)
         usedShapes.insert(block.shape)
+        
+        // Check for color and shape achievements
+        if usedColors.count == BlockColor.allCases.count {
+            achievementsManager.increment(id: "color_master")
+        }
+        if usedShapes.count == BlockShape.allCases.count {
+            achievementsManager.increment(id: "shape_master")
+        }
+        
         isPerfectLevel = false
         checkAchievements()
     }
     
+    private func checkDiagonalPattern() -> [(Int, Int)]? {
+        // Check forward diagonal (/)
+        var forwardDiagonal: [(Int, Int)] = []
+        var forwardColor: BlockColor? = nil
+        var isForwardValid = true
+        
+        // Check backward diagonal (\)
+        var backwardDiagonal: [(Int, Int)] = []
+        var backwardColor: BlockColor? = nil
+        var isBackwardValid = true
+        
+        for i in 0..<GameConstants.gridSize {
+            // Check forward diagonal (/)
+            let forwardRow = GameConstants.gridSize - 1 - i
+            let forwardCol = i
+            if let color = grid[forwardRow][forwardCol] {
+                if forwardColor == nil {
+                    forwardColor = color
+                } else if color != forwardColor {
+                    isForwardValid = false
+                }
+                forwardDiagonal.append((forwardRow, forwardCol))
+            } else {
+                isForwardValid = false
+            }
+            
+            // Check backward diagonal (\)
+            if let color = grid[i][i] {
+                if backwardColor == nil {
+                    backwardColor = color
+                } else if color != backwardColor {
+                    isBackwardValid = false
+                }
+                backwardDiagonal.append((i, i))
+            } else {
+                isBackwardValid = false
+            }
+        }
+        
+        // Return the valid diagonal pattern if found
+        if isForwardValid && forwardDiagonal.count == GameConstants.gridSize {
+            return forwardDiagonal
+        }
+        if isBackwardValid && backwardDiagonal.count == GameConstants.gridSize {
+            return backwardDiagonal
+        }
+        return nil
+    }
+    
+    private func checkXPattern() -> [(Int, Int)]? {
+        var xPattern: [(Int, Int)] = []
+        var xColor: BlockColor? = nil
+        var isValid = true
+        
+        // Check if we have a valid X pattern
+        for i in 0..<GameConstants.gridSize {
+            // Check both diagonals
+            let forwardRow = GameConstants.gridSize - 1 - i
+            let forwardCol = i
+            let backwardRow = i
+            let backwardCol = i
+            
+            // Check forward diagonal (/)
+            if let color = grid[forwardRow][forwardCol] {
+                if xColor == nil {
+                    xColor = color
+                } else if color != xColor {
+                    isValid = false
+                }
+                xPattern.append((forwardRow, forwardCol))
+            } else {
+                isValid = false
+            }
+            
+            // Check backward diagonal (\) if it's not the center point
+            if !(forwardRow == backwardRow && forwardCol == backwardCol) {
+                if let color = grid[backwardRow][backwardCol] {
+                    if color != xColor {
+                        isValid = false
+                    }
+                    xPattern.append((backwardRow, backwardCol))
+                } else {
+                    isValid = false
+                }
+            }
+        }
+        
+        return isValid && xPattern.count == (GameConstants.gridSize * 2 - 1) ? xPattern : nil
+    }
+
     private func checkMatches() {
         var clearedPositions: [(Int, Int)] = []
         var linesCleared = 0
@@ -382,46 +542,41 @@ final class GameState: ObservableObject {
         // Check rows
         for row in 0..<GameConstants.gridSize {
             if isRowFull(row) {
-                let rowColors = grid[row].compactMap { $0 }
-                let allSameColor = rowColors.allSatisfy { $0 == rowColors.first }
-                for col in 0..<GameConstants.gridSize {
-                    clearedPositions.append((row, col))
-                }
                 clearRow(row)
-                let position = CGPoint(x: frameSize.width/2, y: CGFloat(row) * GameConstants.blockSize)
-                addScore(100, at: position)
-                print("[Clear] Row \(row) cleared. +100 points.")
-                if allSameColor && !rowColors.isEmpty {
-                    colorMatchCount += 1
-                    addScore(500, at: position) // Increased from 200 to 500 for color match
-                    print("[Bonus] Row \(row) all same color (\(rowColors.first!)). +500 bonus points!")
-                }
+                clearedPositions.append((row, -1))  // -1 indicates entire row
                 linesCleared += 1
+                addScore(1000, at: CGPoint(x: frameSize.width/2, y: CGFloat(row) * GameConstants.blockSize))
             }
         }
         
         // Check columns
         for col in 0..<GameConstants.gridSize {
             if isColumnFull(col) {
-                let colColors = (0..<GameConstants.gridSize).compactMap { grid[$0][col] }
-                let allSameColor = colColors.allSatisfy { $0 == colColors.first }
-                for row in 0..<GameConstants.gridSize {
-                    clearedPositions.append((row, col))
-                }
                 clearColumn(col)
-                let position = CGPoint(x: CGFloat(col) * GameConstants.blockSize, y: frameSize.height/2)
-                addScore(100, at: position)
-                print("[Clear] Column \(col) cleared. +100 points.")
-                if allSameColor && !colColors.isEmpty {
-                    colorMatchCount += 1
-                    addScore(500, at: position) // Increased from 200 to 500 for color match
-                    print("[Bonus] Column \(col) all same color (\(colColors.first!)). +500 bonus points!")
-                }
+                clearedPositions.append((-1, col))  // -1 indicates entire column
                 linesCleared += 1
+                addScore(1000, at: CGPoint(x: frameSize.width/2, y: frameSize.height/2))
             }
         }
         
-        // Additional bonus for multiple color matches
+        // Check for color matches
+        for row in 0..<GameConstants.gridSize {
+            for col in 0..<GameConstants.gridSize {
+                if let color = grid[row][col] {
+                    var matchCount = 0
+                    // Check horizontal matches
+                    for c in 0..<GameConstants.gridSize {
+                        if grid[row][c] == color {
+                            matchCount += 1
+                        }
+                    }
+                    if matchCount >= 3 {
+                        colorMatchCount += 1
+                    }
+                }
+            }
+        }
+        
         if colorMatchCount >= 2 {
             let multiMatchBonus = colorMatchCount * 1000
             addScore(multiMatchBonus, at: CGPoint(x: frameSize.width/2, y: frameSize.height/2))
@@ -431,20 +586,53 @@ final class GameState: ObservableObject {
         if !clearedPositions.isEmpty {
             print("[Clear] Total lines cleared: \(linesCleared)")
             delegate?.gameStateDidClearLines(at: clearedPositions)
-            achievementsManager.increment(id: "first_clear")
-            if linesCleared >= 3 {
-                achievementsManager.increment(id: "combo_3")
+            
+            // Update line clearing achievements
+            if self.linesCleared == 0 {
+                achievementsManager.increment(id: "first_clear")
             }
+            self.linesCleared += linesCleared
+            achievementsManager.updateAchievement(id: "clear_10", value: self.linesCleared)
+            achievementsManager.updateAchievement(id: "clear_50", value: self.linesCleared)
+            achievementsManager.updateAchievement(id: "clear_100", value: self.linesCleared)
+            
+            // Update combo achievements
+            if linesCleared >= 3 {
+                achievementsManager.updateAchievement(id: "combo_3", value: 1)
+            }
+            if linesCleared >= 5 {
+                achievementsManager.updateAchievement(id: "combo_5", value: 1)
+            }
+            if linesCleared >= 10 {
+                achievementsManager.updateAchievement(id: "combo_10", value: 1)
+            }
+            
+            // Update chain achievements
+            if currentChain >= 3 {
+                achievementsManager.updateAchievement(id: "chain_3", value: 1)
+            }
+            if currentChain >= 5 {
+                achievementsManager.updateAchievement(id: "chain_5", value: 1)
+            }
+            if currentChain >= 10 {
+                achievementsManager.updateAchievement(id: "chain_10", value: 1)
+            }
+            
             checkGroups()
         }
         
         if isGridEmpty() {
             print("[Level] Grid empty, level complete!")
             levelComplete = true
-            // Don't call levelUp here - let the UI handle it through the LevelCompleteOverlay
+            if isPerfectLevel {
+                // Update perfect level achievements
+                achievementsManager.updateAchievement(id: "perfect_level", value: 1)
+                perfectLevels += 1
+                achievementsManager.updateAchievement(id: "perfect_levels_3", value: perfectLevels)
+                achievementsManager.updateAchievement(id: "perfect_levels_5", value: perfectLevels)
+            }
         }
         
-        linesCleared += linesCleared
         currentChain += 1
         checkAchievements()
     }
@@ -640,6 +828,17 @@ final class GameState: ObservableObject {
                     if group.count >= 10 {
                         addScore(200, at: CGPoint(x: frameSize.width/2, y: CGFloat(row) * GameConstants.blockSize))
                         print("[Bonus] Group of \(group.count) contiguous blocks at (\(row),\(col)). +200 bonus points!")
+                        
+                        // Track group achievements
+                        if group.count >= 10 {
+                            achievementsManager.increment(id: "group_10")
+                        }
+                        if group.count >= 20 {
+                            achievementsManager.increment(id: "group_20")
+                        }
+                        if group.count >= 30 {
+                            achievementsManager.increment(id: "group_30")
+                        }
                     }
                 }
             }
@@ -719,6 +918,8 @@ final class GameState: ObservableObject {
                     consecutiveDays += 1
                     achievementsManager.updateAchievement(id: "login_\(consecutiveDays)", value: consecutiveDays)
                     achievementsManager.updateAchievement(id: "daily_\(consecutiveDays)", value: consecutiveDays)
+                    // Award daily login points
+                    achievementsManager.updateAchievement(id: "daily_login", value: 1)
                 } else if days > 1 {
                     consecutiveDays = 0
                 }
@@ -726,6 +927,7 @@ final class GameState: ObservableObject {
         } else {
             // First time playing
             achievementsManager.updateAchievement(id: "login_1", value: 1)
+            achievementsManager.updateAchievement(id: "daily_login", value: 1)
         }
     }
     
@@ -757,67 +959,27 @@ final class GameState: ObservableObject {
     }
     
     private func checkAchievements() {
-        // Score achievements
-        achievementsManager.updateAchievement(id: "score_1000", value: score)
-        achievementsManager.updateAchievement(id: "score_5000", value: score)
-        achievementsManager.updateAchievement(id: "score_10000", value: score)
-        achievementsManager.updateAchievement(id: "score_50000", value: score)
-        
-        // Level achievements
-        achievementsManager.updateAchievement(id: "level_5", value: level)
-        achievementsManager.updateAchievement(id: "level_10", value: level)
-        achievementsManager.updateAchievement(id: "level_20", value: level)
-        achievementsManager.updateAchievement(id: "level_50", value: level)
-        
-        // Lines cleared achievements
-        achievementsManager.updateAchievement(id: "lines_10", value: linesCleared)
-        achievementsManager.updateAchievement(id: "lines_50", value: linesCleared)
-        achievementsManager.updateAchievement(id: "lines_100", value: linesCleared)
-        
-        // Blocks placed achievements
-        achievementsManager.updateAchievement(id: "blocks_50", value: blocksPlaced)
-        achievementsManager.updateAchievement(id: "blocks_200", value: blocksPlaced)
-        achievementsManager.updateAchievement(id: "blocks_500", value: blocksPlaced)
-        
-        // Chain achievements
-        achievementsManager.updateAchievement(id: "chain_3", value: currentChain)
-        achievementsManager.updateAchievement(id: "chain_5", value: currentChain)
-        achievementsManager.updateAchievement(id: "chain_10", value: currentChain)
-        
-        // Color achievements
-        achievementsManager.updateAchievement(id: "colors_5", value: usedColors.count)
-        achievementsManager.updateAchievement(id: "colors_8", value: usedColors.count)
-        
-        // Grid fill achievements
-        let gridFillPercentage = Double(blocksPlaced) / Double(GameConstants.gridSize * GameConstants.gridSize) * 100
-        achievementsManager.updateAchievement(id: "grid_25", value: Int(gridFillPercentage))
-        achievementsManager.updateAchievement(id: "grid_50", value: Int(gridFillPercentage))
-        achievementsManager.updateAchievement(id: "grid_75", value: Int(gridFillPercentage))
-        
-        // Perfect level achievements
-        if isPerfectLevel {
-            achievementsManager.updateAchievement(id: "perfect_level", value: 1)
-        }
-        achievementsManager.updateAchievement(id: "perfect_3", value: perfectLevels)
-        
-        // Undo achievements
-        achievementsManager.updateAchievement(id: "undo_5", value: undoCount)
-        achievementsManager.updateAchievement(id: "undo_20", value: undoCount)
-        
-        // Daily login achievements
-        achievementsManager.updateAchievement(id: "login_3", value: consecutiveDays)
-        achievementsManager.updateAchievement(id: "login_7", value: consecutiveDays)
-        achievementsManager.updateAchievement(id: "login_30", value: consecutiveDays)
-        
-        // Games completed achievements
-        achievementsManager.updateAchievement(id: "games_10", value: gamesCompleted)
-        achievementsManager.updateAchievement(id: "games_50", value: gamesCompleted)
-        achievementsManager.updateAchievement(id: "games_100", value: gamesCompleted)
-        
-        // Check for newly unlocked achievements and show notifications
-        for achievement in achievementsManager.getAllAchievements() {
-            if achievement.unlocked && !achievement.wasNotified {
-                showAchievementNotification(achievement)
+        updatePlayTime()
+        Task {
+            do {
+                let newAchievements = try await achievementsManager.checkAchievementProgress(score: score, level: level)
+                if let achievement = newAchievements.first {
+                    await MainActor.run {
+                        self.currentAchievement = achievement
+                        self.showingAchievementNotification = true
+                        
+                        // Auto-hide achievement notification after 3 seconds
+                        Task {
+                            try? await Task.sleep(nanoseconds: 3_000_000_000)
+                            await MainActor.run {
+                                self.showingAchievementNotification = false
+                                self.currentAchievement = nil
+                            }
+                        }
+                    }
+                }
+            } catch {
+                print("Error checking achievements: \(error.localizedDescription)")
             }
         }
     }
