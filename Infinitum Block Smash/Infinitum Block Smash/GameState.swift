@@ -82,6 +82,13 @@ final class GameState: ObservableObject {
     private let progressKey = "gameProgress"
     private let hasSavedGameKey = "hasSavedGame"
     
+    // Statistics keys
+    private let blocksPlacedKey = "blocksPlaced"
+    private let linesClearedKey = "linesCleared"
+    private let gamesCompletedKey = "gamesCompleted"
+    private let perfectLevelsKey = "perfectLevels"
+    private let totalPlayTimeKey = "totalPlayTime"
+    
     // Undo support - use weak references to prevent memory leaks
     private var previousGrid: [[BlockColor?]]?
     private var previousTray: [Block]?
@@ -121,6 +128,13 @@ final class GameState: ObservableObject {
     
     // MARK: - Initialization
     init() {
+        // Load saved statistics
+        blocksPlaced = userDefaults.integer(forKey: blocksPlacedKey)
+        linesCleared = userDefaults.integer(forKey: linesClearedKey)
+        gamesCompleted = userDefaults.integer(forKey: gamesCompletedKey)
+        perfectLevels = userDefaults.integer(forKey: perfectLevelsKey)
+        totalPlayTime = userDefaults.double(forKey: totalPlayTimeKey)
+        
         self.grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
         self.tray = []
         refillTray()
@@ -1298,6 +1312,22 @@ final class GameState: ObservableObject {
             achievementsManager.updateAchievement(id: "highest_level", value: level)
         }
         
+        // Save statistics
+        userDefaults.set(blocksPlaced, forKey: blocksPlacedKey)
+        userDefaults.set(linesCleared, forKey: linesClearedKey)
+        userDefaults.set(gamesCompleted, forKey: gamesCompletedKey)
+        userDefaults.set(perfectLevels, forKey: perfectLevelsKey)
+        userDefaults.set(totalPlayTime, forKey: totalPlayTimeKey)
+        
+        // Sync with Firebase if user is logged in
+        Task {
+            do {
+                try await FirebaseManager.shared.saveGameProgress(gameState: self)
+            } catch {
+                print("[Error] Failed to sync with Firebase: \(error)")
+            }
+        }
+        
         // Convert grid to a property list compatible format
         var gridData: [[String]] = []
         for row in grid {
@@ -1591,6 +1621,40 @@ final class GameState: ObservableObject {
         refillTray()
         levelComplete = false
         isPerfectLevel = true
+    }
+    
+    // Add new method to load cloud data
+    func loadCloudData() async {
+        do {
+            let progress = try await FirebaseManager.shared.loadGameProgress()
+            
+            // Update local statistics with cloud data
+            await MainActor.run {
+                blocksPlaced = progress.blocksPlaced
+                linesCleared = progress.linesCleared
+                gamesCompleted = progress.gamesCompleted
+                perfectLevels = progress.perfectLevels
+                totalPlayTime = progress.totalPlayTime
+                
+                // Update high score and highest level if cloud data is higher
+                if progress.highScore > userDefaults.integer(forKey: scoreKey) {
+                    userDefaults.set(progress.highScore, forKey: scoreKey)
+                }
+                if progress.highestLevel > userDefaults.integer(forKey: levelKey) {
+                    userDefaults.set(progress.highestLevel, forKey: levelKey)
+                }
+                
+                // Save updated values to UserDefaults
+                userDefaults.set(blocksPlaced, forKey: blocksPlacedKey)
+                userDefaults.set(linesCleared, forKey: linesClearedKey)
+                userDefaults.set(gamesCompleted, forKey: gamesCompletedKey)
+                userDefaults.set(perfectLevels, forKey: perfectLevelsKey)
+                userDefaults.set(totalPlayTime, forKey: totalPlayTimeKey)
+                userDefaults.synchronize()
+            }
+        } catch {
+            print("[Error] Failed to load cloud data: \(error)")
+        }
     }
 }
 

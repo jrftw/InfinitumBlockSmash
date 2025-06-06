@@ -92,6 +92,14 @@ struct ContentView: View {
                     .padding(.top, 20)
                 }
                 .padding()
+                .onChange(of: userID) { newValue in
+                    if !newValue.isEmpty {
+                        // User logged in, load cloud data
+                        Task {
+                            await gameState.loadCloudData()
+                        }
+                    }
+                }
             } else {
                 Button(action: { showingAuth = true }) {
                     Text("Sign In / Sign Up")
