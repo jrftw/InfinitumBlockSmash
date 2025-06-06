@@ -11,7 +11,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var dragNode: SKNode?
     private var previewNode: SKNode?
     private var lastPlacementTime: TimeInterval = 0
-    private let placementDebounceInterval: TimeInterval = 0.3 // 300ms debounce
+    private let placementDebounceInterval: TimeInterval = 0.1 // 100ms debounce
     
     // Visual effects
     private var particleEmitter: SKEmitterNode?
@@ -93,6 +93,27 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         
         print("[DEBUG] Scene setup complete. trayNode in parent: \(trayNode.parent != nil)")
+        
+        super.didMove(to: view)
+        setBackgroundAnimationsActive(true)
+        
+        // Add notification observers
+        NotificationCenter.default.addObserver(self,
+                                             selector: #selector(pauseBackgroundAnimations),
+                                             name: NSNotification.Name("PauseBackgroundAnimations"),
+                                             object: nil)
+        NotificationCenter.default.addObserver(self,
+                                             selector: #selector(resumeBackgroundAnimations),
+                                             name: NSNotification.Name("ResumeBackgroundAnimations"),
+                                             object: nil)
+    }
+    
+    override func willMove(from view: SKView) {
+        super.willMove(from: view)
+        setBackgroundAnimationsActive(false)
+        
+        // Remove notification observers
+        NotificationCenter.default.removeObserver(self)
     }
     
     deinit {
@@ -128,6 +149,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Add subtle background animation
         let backgroundNode = SKSpriteNode(color: .clear, size: size)
         backgroundNode.position = CGPoint(x: size.width/2, y: size.height/2)
+        backgroundNode.name = "backgroundNode"  // Add name for reference
         addChild(backgroundNode)
         
         let backgroundAnimation = SKAction.sequence([
@@ -148,6 +170,25 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Start memory monitoring
         startMemoryMonitoring()
+    }
+    
+    // Add method to manage background animations
+    private func setBackgroundAnimationsActive(_ active: Bool) {
+        // Pause/resume background color animation
+        if let backgroundNode = childNode(withName: "backgroundNode") {
+            if active {
+                backgroundNode.isPaused = false
+            } else {
+                backgroundNode.isPaused = true
+            }
+        }
+        
+        // Pause/resume particle effects
+        enumerateChildNodes(withName: "//") { node, _ in
+            if let emitter = node as? SKEmitterNode {
+                emitter.isPaused = !active
+            }
+        }
     }
     
     private func setupGrid() {
@@ -965,6 +1006,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     func highlightHint(at position: (row: Int, col: Int)) {
         // This is kept for backward compatibility but should not be used
         print("[Hint] Warning: Using deprecated highlightHint method")
+    }
+    
+    @objc private func pauseBackgroundAnimations() {
+        setBackgroundAnimationsActive(false)
+    }
+    
+    @objc private func resumeBackgroundAnimations() {
+        setBackgroundAnimationsActive(true)
     }
 }
 

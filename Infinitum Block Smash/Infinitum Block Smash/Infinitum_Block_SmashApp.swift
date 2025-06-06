@@ -81,6 +81,8 @@ struct Infinitum_Block_SmashApp: App {
                 } catch {
                     print("[App] Error saving game progress in background: \(error.localizedDescription)")
                 }
+                // Notify game scene to pause animations
+                NotificationCenter.default.post(name: NSNotification.Name("PauseBackgroundAnimations"), object: nil)
             case .inactive:
                 // Save game state when app becomes inactive
                 do {
@@ -89,9 +91,13 @@ struct Infinitum_Block_SmashApp: App {
                 } catch {
                     print("[App] Error saving game progress when inactive: \(error.localizedDescription)")
                 }
+                // Notify game scene to pause animations
+                NotificationCenter.default.post(name: NSNotification.Name("PauseBackgroundAnimations"), object: nil)
             case .active:
                 // App became active
                 print("[App] App became active")
+                // Notify game scene to resume animations
+                NotificationCenter.default.post(name: NSNotification.Name("ResumeBackgroundAnimations"), object: nil)
             @unknown default:
                 break
             }
