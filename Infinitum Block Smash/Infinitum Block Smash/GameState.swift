@@ -850,6 +850,9 @@ final class GameState: ObservableObject {
     }
     
     func addScore(_ points: Int, at position: CGPoint? = nil) {
+        // Don't add score if level is already complete
+        guard !levelComplete else { return }
+        
         let oldScore = score
         score += points
         print("[Score] Added \(points) points (from \(oldScore) to \(score))")
@@ -879,6 +882,8 @@ final class GameState: ObservableObject {
             print("[DEBUG] Setting levelComplete = true due to score threshold. Score: \(score), Required: \(requiredScore)")
             print("[Level] Score threshold met for level \(level). Level complete!")
             levelComplete = true
+            // Don't automatically advance - wait for user interaction
+            delegate?.gameStateDidUpdate()
         }
         checkAchievements()
     }
@@ -1229,6 +1234,12 @@ final class GameState: ObservableObject {
             updatePlayTime() // Final update of play time
             try? saveProgress()
         }
+    }
+    
+    // Add a new method to handle user confirmation of level completion
+    func confirmLevelCompletion() {
+        guard levelComplete else { return }
+        advanceToNextLevel()
     }
     
     // Add a new function for manually ending the game from settings

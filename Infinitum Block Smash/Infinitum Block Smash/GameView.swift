@@ -124,7 +124,7 @@ struct GameView: View {
             }
             
             LevelCompleteOverlay(isPresented: gameState.levelComplete, score: gameState.score, level: gameState.level) {
-                gameState.advanceToNextLevel()
+                gameState.confirmLevelCompletion()
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Level \(gameState.level) Complete! Score: \(gameState.score)")
@@ -213,15 +213,7 @@ struct GameView: View {
             if isComplete {
                 if let root = getRootViewController() {
                     adManager.showRewardedInterstitial(from: root) {
-                        // Only reset levelComplete after the ad is shown
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                            gameState.resetLevelComplete()
-                        }
-                    }
-                } else {
-                    // If no ad is shown, still give some time for the overlay to be visible
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                        gameState.resetLevelComplete()
+                        // Don't automatically reset levelComplete - wait for user interaction
                     }
                 }
             }
