@@ -35,11 +35,28 @@ final class FirebaseManager {
     private let db = Firestore.firestore()
     private var cancellables = Set<AnyCancellable>()
     
-    private init() {}
+    // Add caching
+    private var lastSaveTime: Date?
+    private var cachedProgress: GameProgress?
+    private let minimumSaveInterval: TimeInterval = 30 // Only save every 30 seconds
+    private let userDefaults = UserDefaults.standard
+    private let lastSaveTimeKey = "lastFirebaseSaveTime"
+    
+    private init() {
+        // Load last save time from UserDefaults
+        lastSaveTime = userDefaults.object(forKey: lastSaveTimeKey) as? Date
+    }
     
     func saveGameProgress(gameState: GameState) async throws {
         guard let userId = Auth.auth().currentUser?.uid else {
             throw FirebaseError.notAuthenticated
+        }
+        
+        // Check if we should save based on time interval
+        let now = Date()
+        if let lastSave = lastSaveTime,
+           now.timeIntervalSince(lastSave) < minimumSaveInterval {
+            return // Skip save if not enough time has passed
         }
         
         do {
@@ -67,7 +84,35 @@ final class FirebaseManager {
                 "lastUpdated": FieldValue.serverTimestamp()
             ]
             
+            // Only save if data has changed
+            if let cached = cachedProgress,
+               cached.score == gameState.score,
+               cached.level == gameState.level,
+               cached.blocksPlaced == gameState.blocksPlaced,
+               cached.linesCleared == gameState.linesCleared,
+               cached.gamesCompleted == gameState.gamesCompleted,
+               cached.perfectLevels == gameState.perfectLevels,
+               cached.totalPlayTime == gameState.totalPlayTime {
+                return // Skip save if no changes
+            }
+            
             try await db.collection("users").document(userId).setData(newData, merge: true)
+            
+            // Update cache and last save time
+            cachedProgress = GameProgress(
+                score: gameState.score,
+                level: gameState.level,
+                blocksPlaced: gameState.blocksPlaced,
+                linesCleared: gameState.linesCleared,
+                gamesCompleted: gameState.gamesCompleted,
+                perfectLevels: gameState.perfectLevels,
+                totalPlayTime: gameState.totalPlayTime,
+                highScore: newData["highScore"] as? Int ?? 0,
+                highestLevel: newData["highestLevel"] as? Int ?? 1
+            )
+            lastSaveTime = now
+            userDefaults.set(now, forKey: lastSaveTimeKey)
+            
         } catch {
             throw FirebaseError.saveFailed(error)
         }
@@ -78,6 +123,13 @@ final class FirebaseManager {
             throw FirebaseError.notAuthenticated
         }
         
+        // Return cached data if available and recent
+        if let cached = cachedProgress,
+           let lastSave = lastSaveTime,
+           Date().timeIntervalSince(lastSave) < minimumSaveInterval {
+            return cached
+        }
+        
         do {
             let document = try await db.collection("users").document(userId).getDocument()
             guard let data = document.data() else {
@@ -85,7 +137,7 @@ final class FirebaseManager {
             }
             
             // Handle backward compatibility by providing default values for missing fields
-            return GameProgress(
+            let progress = GameProgress(
                 score: data["score"] as? Int ?? 0,
                 level: data["level"] as? Int ?? 1,
                 blocksPlaced: data["blocksPlaced"] as? Int ?? 0,
@@ -93,9 +145,16 @@ final class FirebaseManager {
                 gamesCompleted: data["gamesCompleted"] as? Int ?? 0,
                 perfectLevels: data["perfectLevels"] as? Int ?? 0,
                 totalPlayTime: data["totalPlayTime"] as? TimeInterval ?? 0,
-                highScore: data["highScore"] as? Int ?? data["score"] as? Int ?? 0, // Fallback to score if highScore doesn't exist
-                highestLevel: data["highestLevel"] as? Int ?? data["level"] as? Int ?? 1 // Fallback to level if highestLevel doesn't exist
+                highScore: data["highScore"] as? Int ?? data["score"] as? Int ?? 0,
+                highestLevel: data["highestLevel"] as? Int ?? data["level"] as? Int ?? 1
             )
+            
+            // Update cache
+            cachedProgress = progress
+            lastSaveTime = Date()
+            userDefaults.set(lastSaveTime, forKey: lastSaveTimeKey)
+            
+            return progress
         } catch {
             throw FirebaseError.loadFailed(error)
         }
