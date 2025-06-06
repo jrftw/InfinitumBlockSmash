@@ -1,10 +1,16 @@
 import Foundation
 
 struct AppVersion {
-    static let current = "1.0.1"
+    static let current = "1.0.2"
     static let build = "1"
     
     static let changelog: [String: [String]] = [
+        "1.0.2 (Build 1)": [
+            "Added new version tracking system",
+            "Improved version display in settings",
+            "Enhanced changelog organization",
+            "Bug fixes and performance improvements"
+        ],
         "1.0.1 (Build 1)": [
             "Added 'Block Drag Position' setting under Gameplay settings to adjust how high above your finger the block appears while dragging",
             "Added 'Placement Precision' setting under Gameplay settings to adjust how precisely you need to place blocks on the grid",
