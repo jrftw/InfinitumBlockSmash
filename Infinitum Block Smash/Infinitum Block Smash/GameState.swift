@@ -1270,6 +1270,15 @@ final class GameState: ObservableObject {
         delegate?.gameStateDidUpdate()
     }
     
+    private func saveStatistics() {
+        userDefaults.set(blocksPlaced, forKey: blocksPlacedKey)
+        userDefaults.set(linesCleared, forKey: linesClearedKey)
+        userDefaults.set(gamesCompleted, forKey: gamesCompletedKey)
+        userDefaults.set(perfectLevels, forKey: perfectLevelsKey)
+        userDefaults.set(totalPlayTime, forKey: totalPlayTimeKey)
+        userDefaults.synchronize() // Force immediate save
+    }
+
     func saveProgress() throws {
         // Save high score and highest level
         if score > userDefaults.integer(forKey: scoreKey) {
@@ -1282,11 +1291,7 @@ final class GameState: ObservableObject {
         }
         
         // Save statistics
-        userDefaults.set(blocksPlaced, forKey: blocksPlacedKey)
-        userDefaults.set(linesCleared, forKey: linesClearedKey)
-        userDefaults.set(gamesCompleted, forKey: gamesCompletedKey)
-        userDefaults.set(perfectLevels, forKey: perfectLevelsKey)
-        userDefaults.set(totalPlayTime, forKey: totalPlayTimeKey)
+        saveStatistics()
         
         // Sync with Firebase if user is logged in
         Task {
@@ -1327,6 +1332,7 @@ final class GameState: ObservableObject {
             "blocksPlaced": blocksPlaced,
             "linesCleared": linesCleared,
             "gamesCompleted": gamesCompleted,
+            "perfectLevels": perfectLevels,
             "totalPlayTime": totalPlayTime
         ]
         

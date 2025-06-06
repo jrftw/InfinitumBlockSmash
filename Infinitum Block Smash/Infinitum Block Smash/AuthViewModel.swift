@@ -318,8 +318,7 @@ class AuthViewModel: ObservableObject {
             "timestamp": FieldValue.serverTimestamp()
         ]
         
-        db.collection("users").document(userID).setData(userData) { [weak self] error in
-            guard let self = self else { return }
+        db.collection("users").document(userID).setData(userData) { error in
             if let error = error {
                 print("Error saving username: \(error.localizedDescription)")
             }
