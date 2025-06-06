@@ -5,19 +5,23 @@ import FirebaseCore
 import AppTrackingTransparency
 import AdSupport
 import FirebaseAppCheck
+import FirebaseCrashlytics
+import FirebaseAuth
+import FirebaseFirestore
 
 // MARK: - AppDelegate
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
-        // Configure Firebase
+        // Initialize Firebase on the main thread
         FirebaseApp.configure()
         
         // Configure AppCheck
-        configureAppCheck()
+        let providerFactory = AppCheckDebugProviderFactory()
+        AppCheck.setAppCheckProviderFactory(providerFactory)
         
-        // Initialize AdMob
+        // Configure Google Mobile Ads
         MobileAds.shared.start { status in
-            print("AdMob initialization status: \(status)")
+            print("Google Mobile Ads SDK initialization status: \(status)")
         }
         
         // Request App Tracking Transparency on first launch
@@ -67,7 +71,34 @@ struct Infinitum_Block_SmashApp: App {
                     .environmentObject(gameState)
             }
         }
+        .onChange(of: scenePhase) { newPhase in
+            switch newPhase {
+            case .background:
+                // Save game state when app moves to background
+                do {
+                    try gameState.saveProgress()
+                    print("[App] Successfully saved game progress in background")
+                } catch {
+                    print("[App] Error saving game progress in background: \(error.localizedDescription)")
+                }
+            case .inactive:
+                // Save game state when app becomes inactive
+                do {
+                    try gameState.saveProgress()
+                    print("[App] Successfully saved game progress when inactive")
+                } catch {
+                    print("[App] Error saving game progress when inactive: \(error.localizedDescription)")
+                }
+            case .active:
+                // App became active
+                print("[App] App became active")
+            @unknown default:
+                break
+            }
+        }
     }
+    
+    @Environment(\.scenePhase) private var scenePhase
 }
 
 // MARK: - Loading View

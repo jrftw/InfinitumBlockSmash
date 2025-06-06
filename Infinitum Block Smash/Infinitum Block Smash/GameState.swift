@@ -111,12 +111,9 @@ final class GameState: ObservableObject {
     
     // MARK: - Initialization
     init() {
+        print("[GameState] Initializing GameState")
         // Load saved statistics
-        blocksPlaced = userDefaults.integer(forKey: blocksPlacedKey)
-        linesCleared = userDefaults.integer(forKey: linesClearedKey)
-        gamesCompleted = userDefaults.integer(forKey: gamesCompletedKey)
-        perfectLevels = userDefaults.integer(forKey: perfectLevelsKey)
-        totalPlayTime = userDefaults.double(forKey: totalPlayTimeKey)
+        loadStatistics()
         
         self.grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
         self.tray = []
@@ -126,9 +123,25 @@ final class GameState: ObservableObject {
         gameStartTime = Date()
         loadLastPlayDate()
         startPlayTimeTimer()
+        
+        // Register for app lifecycle notifications
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAppDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAppWillResignActive),
+            name: UIApplication.willResignActiveNotification,
+            object: nil
+        )
     }
     
     deinit {
+        NotificationCenter.default.removeObserver(self)
         Task { [weak self] in
             guard let self = self else { return }
             await MainActor.run {
@@ -136,6 +149,22 @@ final class GameState: ObservableObject {
                 self.cancellables.removeAll()
                 self.playTimeTimer?.invalidate()
             }
+        }
+    }
+    
+    @objc private func handleAppDidBecomeActive() {
+        print("[GameState] App became active - loading statistics")
+        loadStatistics()
+    }
+    
+    @objc private func handleAppWillResignActive() {
+        print("[GameState] App will resign active - saving statistics")
+        saveStatistics()
+        do {
+            try saveProgress()
+            print("[GameState] Successfully saved progress before resigning active")
+        } catch {
+            print("[GameState] Failed to save progress before resigning active: \(error)")
         }
     }
     
@@ -1073,11 +1102,17 @@ final class GameState: ObservableObject {
             return
         }
         
+        // Check if username is set
+        guard let username = UserDefaults.standard.string(forKey: "username"),
+              !username.isEmpty else {
+            print("[Leaderboard] Error: Username not set")
+            return
+        }
+        
         Task {
             do {
-                guard let userID = UserDefaults.standard.string(forKey: "userID"),
-                      let username = UserDefaults.standard.string(forKey: "username") else {
-                    print("[Leaderboard] Error: Missing userID or username")
+                guard let userID = UserDefaults.standard.string(forKey: "userID") else {
+                    print("[Leaderboard] Error: Missing userID")
                     return
                 }
                 
@@ -1087,13 +1122,18 @@ final class GameState: ObservableObject {
                     return
                 }
                 
-                try await LeaderboardService.shared.updateLeaderboard(
-                    type: .score,
-                    score: score,
-                    username: username,
-                    userID: userID
-                )
-                print("[Leaderboard] Successfully updated leaderboard")
+                // Only update if score is greater than 0
+                if score > 0 {
+                    try await LeaderboardService.shared.updateLeaderboard(
+                        type: .score,
+                        score: score,
+                        username: username,
+                        userID: userID
+                    )
+                    print("[Leaderboard] Successfully updated leaderboard")
+                } else {
+                    print("[Leaderboard] Skipping update - score is 0")
+                }
             } catch {
                 print("[Leaderboard] Error updating leaderboard: \(error.localizedDescription)")
             }
@@ -1180,6 +1220,7 @@ final class GameState: ObservableObject {
         // Only increment gamesCompleted if the game was lost (not manually ended)
         if !isPaused {
             gamesCompleted += 1
+            saveStatistics() // Save statistics when game is over
         }
         playTimeTimer?.invalidate()
         Task { @MainActor in
@@ -1191,10 +1232,20 @@ final class GameState: ObservableObject {
     // Add a new function for manually ending the game from settings
     func endGameFromSettings() {
         isGameOver = true
+        saveStatistics() // Save statistics when game is ended from settings
         playTimeTimer?.invalidate()
         Task { @MainActor in
             updatePlayTime() // Final update of play time
             try? saveProgress()
+            
+            // Update leaderboard if user is not guest and has a username
+            if !UserDefaults.standard.bool(forKey: "isGuest") {
+                if let username = UserDefaults.standard.string(forKey: "username"), !username.isEmpty {
+                    updateLeaderboard()
+                } else {
+                    print("[GameState] Cannot update leaderboard: Username not set")
+                }
+            }
         }
     }
     
@@ -1270,16 +1321,49 @@ final class GameState: ObservableObject {
         delegate?.gameStateDidUpdate()
     }
     
+    private func loadStatistics() {
+        print("[GameState] Loading statistics from UserDefaults")
+        // Load statistics from UserDefaults
+        blocksPlaced = userDefaults.integer(forKey: blocksPlacedKey)
+        linesCleared = userDefaults.integer(forKey: linesClearedKey)
+        gamesCompleted = userDefaults.integer(forKey: gamesCompletedKey)
+        perfectLevels = userDefaults.integer(forKey: perfectLevelsKey)
+        totalPlayTime = userDefaults.double(forKey: totalPlayTimeKey)
+        
+        // Load high score and highest level
+        if let savedScore = userDefaults.object(forKey: scoreKey) as? Int {
+            score = savedScore
+        }
+        if let savedLevel = userDefaults.object(forKey: levelKey) as? Int {
+            level = savedLevel
+        }
+        
+        print("[GameState] Loaded statistics - Blocks: \(blocksPlaced), Lines: \(linesCleared), Games: \(gamesCompleted), Perfect: \(perfectLevels)")
+    }
+    
     private func saveStatistics() {
+        print("[GameState] Saving statistics to UserDefaults")
+        // Save statistics to UserDefaults
         userDefaults.set(blocksPlaced, forKey: blocksPlacedKey)
         userDefaults.set(linesCleared, forKey: linesClearedKey)
         userDefaults.set(gamesCompleted, forKey: gamesCompletedKey)
         userDefaults.set(perfectLevels, forKey: perfectLevelsKey)
         userDefaults.set(totalPlayTime, forKey: totalPlayTimeKey)
+        
+        // Save high score and highest level
+        if score > userDefaults.integer(forKey: scoreKey) {
+            userDefaults.set(score, forKey: scoreKey)
+        }
+        if level > userDefaults.integer(forKey: levelKey) {
+            userDefaults.set(level, forKey: levelKey)
+        }
+        
         userDefaults.synchronize() // Force immediate save
+        print("[GameState] Saved statistics - Blocks: \(blocksPlaced), Lines: \(linesCleared), Games: \(gamesCompleted), Perfect: \(perfectLevels)")
     }
 
     func saveProgress() throws {
+        print("[GameState] Saving game progress")
         // Save high score and highest level
         if score > userDefaults.integer(forKey: scoreKey) {
             userDefaults.set(score, forKey: scoreKey)
@@ -1297,8 +1381,9 @@ final class GameState: ObservableObject {
         Task {
             do {
                 try await FirebaseManager.shared.saveGameProgress(gameState: self)
+                print("[GameState] Successfully synced with Firebase")
             } catch {
-                print("[Error] Failed to sync with Firebase: \(error)")
+                print("[GameState] Failed to sync with Firebase: \(error)")
             }
         }
         
@@ -1341,8 +1426,9 @@ final class GameState: ObservableObject {
             userDefaults.set(data, forKey: progressKey)
             userDefaults.set(true, forKey: hasSavedGameKey)
             userDefaults.synchronize() // Ensure data is written immediately
+            print("[GameState] Successfully saved game progress")
         } catch {
-            print("[Error] Failed to save game progress: \(error)")
+            print("[GameState] Failed to save game progress: \(error)")
             throw error
         }
     }

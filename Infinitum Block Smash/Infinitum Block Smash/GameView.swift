@@ -249,8 +249,20 @@ struct GameView: View {
             gameState.isPaused = false
             isPaused = false
         case .restart:
-            gameState.resetGame()
-            isPaused = false
+            // Check username before restarting
+            if !UserDefaults.standard.bool(forKey: "isGuest") {
+                if let username = UserDefaults.standard.string(forKey: "username"), !username.isEmpty {
+                    gameState.resetGame()
+                    isPaused = false
+                } else {
+                    // Show alert or handle missing username
+                    print("[GameView] Cannot start game: Username not set")
+                    // You might want to show an alert here
+                }
+            } else {
+                gameState.resetGame()
+                isPaused = false
+            }
         case .endGame:
             gameState.endGameFromSettings()
             isPaused = false
