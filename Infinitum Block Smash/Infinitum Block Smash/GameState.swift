@@ -4,23 +4,6 @@ import SwiftUI
 import FirebaseFirestore
 import FirebaseAuth
 
-// MARK: - Game Types
-struct GameMove {
-    let block: Block
-    let position: CGPoint
-    let timestamp: Date
-}
-
-class GameBoard {
-    var grid: [[Block?]]
-    var tray: [Block]
-    
-    init() {
-        self.grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
-        self.tray = []
-    }
-}
-
 // MARK: - GameState
 protocol GameStateDelegate: AnyObject {
     func gameStateDidUpdate()
@@ -149,7 +132,7 @@ final class GameState: ObservableObject {
         Task { [weak self] in
             guard let self = self else { return }
             await MainActor.run {
-                self.cleanupMemory()
+                MemoryManager.shared.cleanupMemory()
                 self.cancellables.removeAll()
                 self.playTimeTimer?.invalidate()
             }
@@ -235,25 +218,11 @@ final class GameState: ObservableObject {
         }
     }
     
-    // MARK: - Memory Management
-    func cleanupMemory() {
-        // Clear cached data
-        previousGrid = nil
-        previousTray = nil
-        lastMove = nil
-        
-        // Clear any temporary arrays
-        autoreleasepool {
-            // Additional cleanup if needed
-        }
-    }
-    
     // MARK: - Public Methods
     func resetGame() {
         Task { [weak self] in
             guard let self = self else { return }
             await MainActor.run {
-                self.cleanupMemory()
                 self.score = 0
                 self.level = 1
                 self.isGameOver = false
@@ -1379,15 +1348,7 @@ final class GameState: ObservableObject {
     }
     
     func cleanup() {
-        Task { [weak self] in
-            guard let self = self else { return }
-            await MainActor.run {
-                self.cleanupMemory()
-                self.cancellables.removeAll()
-                self.currentAchievement = nil
-                self.lastMove = nil
-            }
-        }
+        MemoryManager.shared.cleanup()
     }
     
     func resetLevelComplete() {

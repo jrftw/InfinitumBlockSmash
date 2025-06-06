@@ -784,19 +784,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         memoryWarningLabel?.text = "⚠️ High Memory Usage"
         memoryWarningLabel?.isHidden = false
         
-        // Clear any cached resources
-        removeAllActions()
-        removeAllChildren()
-        
-        // Reload essential game elements
-        setupScene()
-        setupGrid()
-        setupTray()
-        setupUI()
-        setupParticles()
-        
-        // Notify the game state to clean up any cached data
-        gameState.cleanupMemory()
+        // Cleanup
+        MemoryManager.shared.cleanupMemory()
         
         // Log memory usage
         MemoryMonitor.shared.logMemoryUsage()
