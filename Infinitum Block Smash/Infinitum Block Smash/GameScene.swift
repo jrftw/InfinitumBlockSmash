@@ -152,9 +152,22 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let totalWidth = CGFloat(gridSize) * blockSize
         let totalHeight = CGFloat(gridSize) * blockSize
         
+        // Calculate available space (accounting for safe areas and UI elements)
+        let availableWidth = frame.width * 0.9 // Use 90% of screen width
+        let availableHeight = frame.height * 0.7 // Use 70% of screen height
+        
+        // Calculate scale to fit the grid within available space
+        let scaleX = availableWidth / totalWidth
+        let scaleY = availableHeight / totalHeight
+        let scale = min(scaleX, scaleY)
+        
+        // Apply scale to grid node
+        gridNode.setScale(scale)
+        
         // Center the grid in the frame
         gridNode.position = CGPoint(x: frame.midX, y: frame.midY)
-        gridNode.zPosition = 0 // Set base z-position for grid
+        gridNode.zPosition = 0
+        
         print("[DEBUG] GridNode position: \(gridNode.position), totalWidth: \(totalWidth), totalHeight: \(totalHeight), frame: \(frame)")
         gridNode.removeAllChildren()
         
@@ -508,42 +521,32 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             let preview = SKNode()
             preview.zPosition = 1 // Set preview z-position just above grid
             
-            // Create preview for each cell in the shape
+            // Create preview for each cell in the shape at BASE size
             for (dx, dy) in draggingBlock.shape.cells {
                 let cellNode = SKShapeNode(rectOf: CGSize(width: GameConstants.blockSize, height: GameConstants.blockSize))
                 cellNode.fillColor = SKColor.from(draggingBlock.color.color)
                 cellNode.strokeColor = .clear
                 cellNode.alpha = 0.5
-                
-                // Position each cell relative to the shape's anchor point
+                // Position each cell relative to the shape's anchor point (BASE size)
                 cellNode.position = CGPoint(
                     x: CGFloat(dx) * GameConstants.blockSize,
                     y: CGFloat(dy) * GameConstants.blockSize
                 )
                 preview.addChild(cellNode)
             }
-            
-            // Calculate the preview position relative to the grid
-            let blockSize = GameConstants.blockSize
-            let gridSize = GameConstants.gridSize
-            let totalWidth = CGFloat(gridSize) * blockSize
-            let totalHeight = CGFloat(gridSize) * blockSize
-            
-            // Position the entire preview at the grid position with precise alignment
-            let previewPosition = CGPoint(
-                x: -totalWidth / 2 + CGFloat(gridPoint.x) * blockSize + blockSize / 2,
-                y: -totalHeight / 2 + CGFloat(gridPoint.y) * blockSize + blockSize / 2
+            // Calculate the grid's total size (BASE size)
+            let totalWidth = CGFloat(GameConstants.gridSize) * GameConstants.blockSize
+            let totalHeight = CGFloat(GameConstants.gridSize) * GameConstants.blockSize
+            // Position the preview at the grid point (BASE size)
+            preview.position = CGPoint(
+                x: -totalWidth / 2 + CGFloat(gridPoint.x) * GameConstants.blockSize + GameConstants.blockSize / 2,
+                y: -totalHeight / 2 + CGFloat(gridPoint.y) * GameConstants.blockSize + GameConstants.blockSize / 2
             )
-            preview.position = previewPosition
-            
-            // Add preview to grid node
+            // DO NOT scale the preview, just add to gridNode (which is already scaled)
             gridNode.addChild(preview)
             previewNode = preview
-            
-            // Make dragged shape more transparent
             dragNode.alpha = 0.7
         } else {
-            // Make dragged shape more opaque when placement is invalid
             dragNode.alpha = 1.0
         }
     }
@@ -588,14 +591,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func convertToGridCoordinates(_ point: CGPoint) -> CGPoint {
-        // Calculate the grid cell size
-        let cellSize = GameConstants.blockSize
-        let gridSize = GameConstants.gridSize
+        // Get the grid's scale
+        let gridScale = gridNode.xScale
+        
+        // Calculate the grid's total size
+        let totalWidth = CGFloat(GameConstants.gridSize) * GameConstants.blockSize * gridScale
+        let totalHeight = CGFloat(GameConstants.gridSize) * GameConstants.blockSize * gridScale
         
         // Calculate the grid's origin (top-left corner)
         let gridOrigin = CGPoint(
-            x: frame.midX - (CGFloat(gridSize) * cellSize) / 2,
-            y: frame.midY - (CGFloat(gridSize) * cellSize) / 2
+            x: frame.midX - totalWidth / 2,
+            y: frame.midY - totalHeight / 2
         )
         
         // Calculate the relative position within the grid
@@ -603,8 +609,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let relativeY = point.y - gridOrigin.y
         
         // Calculate the exact grid position without any snapping
-        let exactCol = relativeX / cellSize
-        let exactRow = relativeY / cellSize
+        let exactCol = relativeX / (GameConstants.blockSize * gridScale)
+        let exactRow = relativeY / (GameConstants.blockSize * gridScale)
         
         // Calculate the remainder to determine how close we are to cell centers
         let remainderX = abs(exactCol.truncatingRemainder(dividingBy: 1))
@@ -635,8 +641,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Ensure we stay within grid bounds
         return CGPoint(
-            x: max(0, min(gridSize - 1, finalCol)),
-            y: max(0, min(gridSize - 1, finalRow))
+            x: max(0, min(GameConstants.gridSize - 1, finalCol)),
+            y: max(0, min(GameConstants.gridSize - 1, finalRow))
         )
     }
     

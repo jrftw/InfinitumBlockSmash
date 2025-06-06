@@ -14,10 +14,14 @@ struct GameConstants {
     static let gridSize = 10
     static let blockSize: CGFloat = {
         #if os(iOS)
+        let screenSize = UIScreen.main.bounds.size
+        let minDimension = min(screenSize.width, screenSize.height)
+        // Calculate block size to fit 10 blocks with some padding
+        let baseSize = minDimension * 0.08 // 8% of screen width/height
         if UIDevice.current.userInterfaceIdiom == .pad {
-            return 54 // Larger block size for iPad
+            return min(baseSize, 54) // Cap at 54 for iPad
         } else {
-            return 34 // Default for iPhone
+            return min(baseSize, 34) // Cap at 34 for iPhone
         }
         #else
         return 34

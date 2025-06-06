@@ -60,9 +60,9 @@ class TrayNode: SKNode {
         let shapeHeights = blockBounds.map { CGFloat($0.maxY - $0.minY + 1) * blockSize }
         let maxHeight = shapeHeights.max() ?? 0
 
-        // 3. Calculate scale to fit height first
+        // 3. Calculate scale to fit height first, with a maximum scale of 0.8
         let scaleY = availableHeight / maxHeight
-        let scale = min(0.6, scaleY) // Use height-based scaling to ensure vertical fit
+        let scale = min(0.8, scaleY) // Increased max scale from 0.6 to 0.8
         lastScale = scale
         lastBlockSize = blockSize * scale
 
