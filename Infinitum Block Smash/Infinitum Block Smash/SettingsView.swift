@@ -15,6 +15,7 @@ struct SettingsView: View {
     @AppStorage("difficulty") private var difficulty: String = "normal"
     @AppStorage("theme") private var theme: String = "auto"
     @AppStorage("autoSave") private var autoSave = true
+    @StateObject private var fpsManager = FPSManager.shared
     @AppStorage("hasAcceptedAds") private var hasAcceptedAds = false
     @AppStorage("allowAnalytics") private var allowAnalytics = true
     @AppStorage("allowDataSharing") private var allowDataSharing = true
@@ -45,6 +46,18 @@ struct SettingsView: View {
                     }
                     .onChange(of: theme) { newValue in
                         updateTheme(newValue)
+                    }
+                    
+                    Picker("Target FPS", selection: Binding(
+                        get: { fpsManager.targetFPS },
+                        set: { newValue in
+                            fpsManager.setTargetFPS(newValue)
+                            gameState.updateTargetFPS(fpsManager.getDisplayFPS(for: newValue))
+                        }
+                    )) {
+                        ForEach(fpsManager.availableFPSOptions, id: \.self) { fps in
+                            Text(fpsManager.getFPSDisplayName(for: fps)).tag(fps)
+                        }
                     }
                     
                     Toggle("Show Tutorial", isOn: $showTutorial)

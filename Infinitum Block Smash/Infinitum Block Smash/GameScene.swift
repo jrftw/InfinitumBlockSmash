@@ -72,7 +72,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         
         // Configure view for better performance
-        view.preferredFramesPerSecond = 60
+        view.preferredFramesPerSecond = gameState.targetFPS
         view.ignoresSiblingOrder = true
         view.allowsTransparency = true
         
@@ -1078,6 +1078,10 @@ extension GameScene: GameStateDelegate {
         
         // Run the animation
         scoreLabel.run(sequence)
+    }
+    
+    func updateFPS(_ newFPS: Int) {
+        view?.preferredFramesPerSecond = newFPS
     }
 }
 

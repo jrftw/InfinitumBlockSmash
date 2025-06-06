@@ -11,6 +11,7 @@ protocol GameStateDelegate: AnyObject {
     func showScoreAnimation(points: Int, at position: CGPoint)
     func highlightHint(at position: (row: Int, col: Int))
     func highlightHint(block: Block, at position: (row: Int, col: Int))
+    func updateFPS(_ newFPS: Int)
 }
 
 @MainActor
@@ -40,6 +41,7 @@ final class GameState: ObservableObject {
     @Published private(set) var gamesCompleted: Int = 0
     @Published private(set) var undoCount: Int = 0
     @Published var isPaused: Bool = false
+    @Published var targetFPS: Int = FPSManager.shared.getDisplayFPS(for: FPSManager.shared.targetFPS)
     
     // Ad-related state
     @Published private(set) var levelsCompletedSinceLastAd = 0
@@ -1708,6 +1710,11 @@ final class GameState: ObservableObject {
         } catch {
             print("[Error] Failed to load cloud data: \(error)")
         }
+    }
+    
+    func updateTargetFPS(_ newFPS: Int) {
+        targetFPS = newFPS
+        delegate?.updateFPS(newFPS)
     }
 }
 
