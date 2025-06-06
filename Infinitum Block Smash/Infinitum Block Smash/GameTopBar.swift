@@ -23,9 +23,7 @@ struct GameTopBar: View {
             
             HStack(spacing: 16) {
                 Button(action: {
-                    if gameState.showHint() {
-                        // Hint will be shown after ad
-                    }
+                    gameState.showHint()
                 }) {
                     Image(systemName: "lightbulb.fill")
                         .font(.title2)

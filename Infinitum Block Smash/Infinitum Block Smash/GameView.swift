@@ -53,7 +53,7 @@ struct GameView: View {
                             Spacer()
                             
                             VStack(spacing: 2) {
-                                Button(action: { gameState.undoLastMove() }) {
+                                Button(action: { gameState.undo() }) {
                                     Text("Undo Last Move")
                                         .font(.headline)
                                         .foregroundColor(gameState.canUndo ? Color(#colorLiteral(red: 0.2, green: 0.5, blue: 1, alpha: 1)) : Color.gray)
@@ -140,10 +140,10 @@ struct GameView: View {
                     presentationMode.wrappedValue.dismiss()
                 },
                 onContinue: {
-                    if let root = getRootViewController() {
-                        adManager.showRewardedInterstitial(from: root) {
+                    Task {
+                        await adManager.showRewardedInterstitial(onReward: {
                             gameState.continueGame()
-                        }
+                        })
                     }
                 },
                 canContinue: !gameState.hasUsedContinueAd
@@ -211,10 +211,10 @@ struct GameView: View {
         }
         .onChange(of: gameState.levelComplete) { isComplete in
             if isComplete {
-                if let root = getRootViewController() {
-                    adManager.showRewardedInterstitial(from: root) {
+                Task {
+                    await adManager.showRewardedInterstitial(onReward: {
                         // Don't automatically reset levelComplete - wait for user interaction
-                    }
+                    })
                 }
             }
         }

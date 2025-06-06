@@ -31,6 +31,7 @@ struct SettingsView: View {
     @State private var showingBlockDragInfo = false
     @State private var showingTestFlightAlert = false
     @State private var showingTestFlightWebView = false
+    @State private var showingSubscriptions = false
     
     private let difficulties = ["easy", "normal", "hard", "expert"]
     private let themes = ["light", "dark", "auto"]
@@ -38,6 +39,21 @@ struct SettingsView: View {
     var body: some View {
         NavigationView {
             List {
+                Section {
+                    Button(action: {
+                        showingSubscriptions = true
+                    }) {
+                        HStack {
+                            Image(systemName: "star.circle.fill")
+                                .foregroundColor(.yellow)
+                            Text("Subscriptions")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.gray)
+                        }
+                    }
+                }
+                
                 Section(header: Text("Game Settings")) {
                     Picker("Theme", selection: $theme) {
                         ForEach(themes, id: \.self) { theme in
@@ -295,6 +311,9 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showingTestFlightWebView) {
                 SafariView(url: URL(string: "https://testflight.apple.com/join/nd4DWxbT")!)
+            }
+            .sheet(isPresented: $showingSubscriptions) {
+                SubscriptionView()
             }
         }
     }

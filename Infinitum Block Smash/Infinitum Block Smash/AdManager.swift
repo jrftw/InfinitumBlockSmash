@@ -1,5 +1,6 @@
 import GoogleMobileAds
 import SwiftUI
+import StoreKit
 
 // MARK: - Ad Configuration
 struct AdConfig {
@@ -36,31 +37,34 @@ struct AdConfig {
     }
 }
 
-class AdManager: NSObject, ObservableObject, FullScreenContentDelegate {
+@MainActor
+class AdManager: NSObject, ObservableObject {
     static let shared = AdManager()
     
-    // Ad instances
-    private var interstitial: InterstitialAd?
-    private var rewardedInterstitial: RewardedInterstitialAd?
-    private(set) var bannerView: BannerView?
-    
-    // Published properties for UI updates
+    @Published private(set) var bannerAd: BannerView?
+    @Published private(set) var interstitialAd: InterstitialAd?
+    @Published private(set) var rewardedInterstitialAd: RewardedInterstitialAd?
+    @Published private(set) var isTopThreePlayer = false
     @Published var adDidDismiss = false
     @Published var isAdLoading = false
-    @Published var adLoadFailed = false // For silent debugging only
-    @Published var isTopThreePlayer = false
+    @Published var adLoadFailed = false
     
-    var isRewardedAdReady: Bool {
-        rewardedInterstitial != nil
-    }
+    private let subscriptionManager = SubscriptionManager.shared
+    private let bannerAdUnitID = "ca-app-pub-3940256099942544/2934735716" // Test ID
+    private let interstitialAdUnitID = "ca-app-pub-3940256099942544/4411468910" // Test ID
+    private let rewardedInterstitialAdUnitID = "ca-app-pub-3940256099942544/1712485313" // Test ID
     
-    override init() {
+    private override init() {
         super.init()
-        // Load ads only when needed
-        preloadBanner()
-        Task {
-            await checkTopThreeStatus()
-        }
+        // Initialize the Google Mobile Ads SDK
+        MobileAds.shared.start(completionHandler: { [weak self] (status: InitializationStatus) in
+            // Handle initialization status if needed
+            print("Google Mobile Ads SDK initialization status: \(status)")
+            // Load initial ads after SDK is initialized
+            Task { @MainActor [weak self] in
+                await self?.preloadBanner()
+            }
+        })
     }
     
     func checkTopThreeStatus() async {
@@ -77,135 +81,142 @@ class AdManager: NSObject, ObservableObject, FullScreenContentDelegate {
         }
     }
     
-    // MARK: - Banner Ad Preloading
-    func preloadBanner() {
-        // Don't load banner if user is in top 3
-        if isTopThreePlayer {
-            return
-        }
+    // MARK: - Ad Display Logic
+    
+    private func shouldShowAds() async -> Bool {
+        // Check if user has purchased the no-ads feature
+        return !(await subscriptionManager.hasFeature(.noAds))
+    }
+    
+    // MARK: - Banner Ads
+    
+    func preloadBanner() async {
+        // Don't load ads if user has purchased no-ads
+        guard await shouldShowAds() else { return }
         
         // Clean up existing banner if any
-        bannerView?.removeFromSuperview()
-        bannerView = nil
+        bannerAd?.removeFromSuperview()
+        bannerAd = nil
         
         let banner = BannerView(adSize: AdSizeBanner)
-        banner.adUnitID = AdConfig.getBannerAdUnitID()
+        banner.adUnitID = bannerAdUnitID
         banner.rootViewController = UIApplication.shared.connectedScenes
             .compactMap { ($0 as? UIWindowScene)?.windows.first?.rootViewController }
             .first
         banner.load(Request())
-        self.bannerView = banner
+        self.bannerAd = banner
     }
     
     // MARK: - Interstitial Ads
-    func loadInterstitial() {
-        // Don't load interstitial if user is in top 3
-        if isTopThreePlayer {
-            return
-        }
+    
+    func loadInterstitial() async {
+        // Don't load ads if user has purchased no-ads
+        guard await shouldShowAds() else { return }
         
         // Clean up existing interstitial if any
-        interstitial = nil
+        interstitialAd = nil
         
-        let request = Request()
-        InterstitialAd.load(with: AdConfig.getInterstitialAdUnitID(), request: request) { [weak self] ad, error in
-            if let error = error {
-                print("Failed to load interstitial ad with error: \(error.localizedDescription)")
-                return
-            }
-            self?.interstitial = ad
-            self?.interstitial?.fullScreenContentDelegate = self
+        do {
+            let request = Request()
+            interstitialAd = try await InterstitialAd.load(with: interstitialAdUnitID, request: request)
+            interstitialAd?.fullScreenContentDelegate = self
+        } catch {
+            print("Failed to load interstitial ad with error: \(error.localizedDescription)")
+            adLoadFailed = true
         }
     }
     
-    func showInterstitial(from root: UIViewController) {
-        // Don't show interstitial if user is in top 3
-        if isTopThreePlayer {
+    func showInterstitial() async {
+        guard let root = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first?.windows.first?.rootViewController else {
             return
         }
         
-        if let ad = interstitial {
+        let shouldShow = await shouldShowAds()
+        guard shouldShow else { return }
+        
+        if let ad = interstitialAd {
             ad.present(from: root)
         } else {
-            print("Interstitial ad wasn't ready")
-            loadInterstitial()
+            await loadInterstitial()
         }
     }
     
     // MARK: - Rewarded Interstitial Ads
-    func loadRewardedInterstitial() {
-        // Don't load rewarded interstitial if user is in top 3
-        if isTopThreePlayer {
-            return
-        }
+    
+    func loadRewardedInterstitial() async {
+        // Don't load ads if user has purchased no-ads
+        guard await shouldShowAds() else { return }
         
         // Clean up existing rewarded interstitial if any
-        rewardedInterstitial = nil
+        rewardedInterstitialAd = nil
         
-        let request = Request()
-        RewardedInterstitialAd.load(with: AdConfig.getRewardedAdUnitID(), request: request) { [weak self] ad, error in
-            if let error = error {
-                print("Failed to load rewarded interstitial ad with error: \(error.localizedDescription)")
-                DispatchQueue.main.async {
-                    self?.adLoadFailed = true
-                }
-                return
-            }
-            self?.rewardedInterstitial = ad
-            self?.rewardedInterstitial?.fullScreenContentDelegate = self
-            DispatchQueue.main.async {
-                self?.adLoadFailed = false
-            }
+        do {
+            let request = Request()
+            rewardedInterstitialAd = try await RewardedInterstitialAd.load(with: rewardedInterstitialAdUnitID, request: request)
+            rewardedInterstitialAd?.fullScreenContentDelegate = self
+            adLoadFailed = false
+        } catch {
+            print("Failed to load rewarded interstitial ad with error: \(error.localizedDescription)")
+            adLoadFailed = true
         }
     }
     
-    func showRewardedInterstitial(from root: UIViewController, onReward: @escaping () -> Void) {
-        // Don't show rewarded interstitial if user is in top 3
-        if isTopThreePlayer {
-            onReward()
+    func showRewardedInterstitial(onReward: @escaping () -> Void) async {
+        guard let root = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first?.windows.first?.rootViewController else {
             return
         }
         
-        if let ad = rewardedInterstitial {
+        let shouldShow = await shouldShowAds()
+        guard shouldShow else { return }
+        
+        if let ad = rewardedInterstitialAd {
             ad.present(from: root) {
                 onReward()
             }
         } else {
-            print("Rewarded interstitial ad wasn't ready")
-            loadRewardedInterstitial()
+            await loadRewardedInterstitial()
         }
     }
     
-    // MARK: - GADFullScreenContentDelegate
+    // MARK: - Cleanup
+    
+    func cleanup() {
+        bannerAd?.removeFromSuperview()
+        bannerAd = nil
+        interstitialAd = nil
+        rewardedInterstitialAd = nil
+    }
+}
+
+// MARK: - FullScreenContentDelegate
+
+extension AdManager: FullScreenContentDelegate {
     func adDidDismissFullScreenContent(_ ad: FullScreenPresentingAd) {
-        DispatchQueue.main.async {
-            self.adDidDismiss = true
-        }
-        // Reload the ad for next time
-        if ad is InterstitialAd {
-            loadInterstitial()
-        } else if ad is RewardedInterstitialAd {
-            loadRewardedInterstitial()
+        Task { @MainActor in
+            adDidDismiss = true
+            // Reload the ad for next time
+            if ad is InterstitialAd {
+                await loadInterstitial()
+            } else if ad is RewardedInterstitialAd {
+                await loadRewardedInterstitial()
+            }
         }
     }
     
     func ad(_ ad: FullScreenPresentingAd, didFailToPresentFullScreenContentWithError error: Error) {
-        print("Ad failed to present with error: \(error.localizedDescription)")
-        DispatchQueue.main.async {
-            self.adLoadFailed = true // Silent fail
+        Task { @MainActor in
+            print("Ad failed to present with error: \(error.localizedDescription)")
+            adLoadFailed = true
+            // Reload the ad for next time
+            if ad is InterstitialAd {
+                await loadInterstitial()
+            } else if ad is RewardedInterstitialAd {
+                await loadRewardedInterstitial()
+            }
         }
-        // Reload the ad for next time
-        if ad is InterstitialAd {
-            loadInterstitial()
-        } else if ad is RewardedInterstitialAd {
-            loadRewardedInterstitial()
-        }
-    }
-    
-    func cleanup() {
-        bannerView?.removeFromSuperview()
-        bannerView = nil
-        interstitial = nil
-        rewardedInterstitial = nil
     }
 } 

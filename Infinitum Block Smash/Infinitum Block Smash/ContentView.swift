@@ -15,6 +15,7 @@ struct ContentView: View {
     @AppStorage("username") private var username: String = ""
     @AppStorage("isGuest") private var isGuest: Bool = false
     @State private var showingNewGameConfirmation = false
+    @State private var showingStore = false
     
     var isLoggedIn: Bool {
         !userID.isEmpty && (!username.isEmpty || isGuest)
@@ -77,6 +78,10 @@ struct ContentView: View {
                         
                         MenuButton(title: "Change Information", icon: "person.fill") {
                             showingChangeInfo = true
+                        }
+                        
+                        MenuButton(title: "Store", icon: "cart.fill") {
+                            showingStore = true
                         }
                         
                         MenuButton(title: "Settings", icon: "gear") {
@@ -146,6 +151,9 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showingAuth) {
             AuthView()
+        }
+        .sheet(isPresented: $showingStore) {
+            StoreView()
         }
         .alert("Start New Game?", isPresented: $showingNewGameConfirmation) {
             Button("No", role: .cancel) { }

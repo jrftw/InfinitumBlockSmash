@@ -451,5 +451,10 @@
 	<false/>
 	<key>com.apple.developer.devicecheck.appattest-environment</key>
 	<string>development</string>
+	<key>StoreKit</key>
+	<dict>
+		<key>InAppPurchase</key>
+		<true/>
+	</dict>
 </dict>
 </plist>

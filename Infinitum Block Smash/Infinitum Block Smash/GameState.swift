@@ -3,6 +3,7 @@ import Combine
 import SwiftUI
 import FirebaseFirestore
 import FirebaseAuth
+import StoreKit
 
 // MARK: - GameState
 protocol GameStateDelegate: AnyObject {
@@ -110,6 +111,8 @@ final class GameState: ObservableObject {
     private var randomShapesOnBoard: Int = 0
     private var requiredShapesToFit: Int = 3
     private var levelScoreThreshold: Int = 1000
+    
+    private let subscriptionManager = SubscriptionManager.shared
     
     // MARK: - Initialization
     init() {
@@ -371,21 +374,26 @@ final class GameState: ObservableObject {
         canUndo = true
     }
 
-    func undoLastMove() {
+    func undo() {
         guard canUndo else { return }
         
-        if isTestFlightOrSimulator {
-            // In test flight or simulator, allow unlimited undos (1 per turn)
-            performUndo()
-        } else {
-            // In production, require video ad and check remaining undos
-            guard adUndoCount > 0 else { return }
-            
-            // Show video ad
-            showVideoAd { [weak self] success in
-                guard let self = self, success else { return }
-                self.performUndo()
+        Task { @MainActor in
+            let hasUnlimitedUndos = await subscriptionManager.hasFeature(.unlimitedUndos)
+            if !hasUnlimitedUndos {
+                undoCount += 1
             }
+            
+            guard let previousGrid = previousGrid,
+                  let previousTray = previousTray else {
+                return
+            }
+            
+            grid = previousGrid
+            tray = previousTray
+            score = previousScore
+            level = previousLevel
+            canUndo = false
+            delegate?.gameStateDidUpdate()
         }
     }
     
@@ -416,24 +424,11 @@ final class GameState: ObservableObject {
         checkAchievements()
     }
     
-    private func showVideoAd(completion: @escaping (Bool) -> Void) {
-        guard let rootViewController = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first?.windows
-            .first?.rootViewController else {
-            completion(false)
-            return
-        }
-        
-        // Load the rewarded interstitial ad if not already loaded
-        if !adManager.isRewardedAdReady {
-            adManager.loadRewardedInterstitial()
-        }
-        
+    private func showVideoAd(completion: @escaping (Bool) -> Void) async {
         // Show the rewarded interstitial ad
-        adManager.showRewardedInterstitial(from: rootViewController) {
+        await adManager.showRewardedInterstitial(onReward: {
             completion(true)
-        }
+        })
     }
 
     // In tryPlaceBlockFromTray, save state before placement and reset undo after
@@ -913,17 +908,12 @@ final class GameState: ObservableObject {
         if levelsCompletedSinceLastAd >= 7 {
             if adsWatchedThisGame < 3 {
                 // Show ad with skip option
-                if let rootViewController = UIApplication.shared.connectedScenes
-                    .compactMap({ $0 as? UIWindowScene })
-                    .first?.windows
-                    .first?.rootViewController {
-                    AdManager.shared.showRewardedInterstitial(from: rootViewController) {
+                Task {
+                    await AdManager.shared.showRewardedInterstitial(onReward: {
                         self.adsWatchedThisGame += 1
                         self.levelsCompletedSinceLastAd = 0
                         self.continueLevelUp()
-                    }
-                } else {
-                    continueLevelUp()
+                    })
                 }
             } else {
                 // Skip ad after 3 ads watched
@@ -1020,12 +1010,10 @@ final class GameState: ObservableObject {
             delegate?.gameStateDidUpdate()
         } else {
             // In production, show ad automatically
-            if let rootViewController = UIApplication.shared.windows.first?.rootViewController {
-                AdManager.shared.showRewardedInterstitial(from: rootViewController) {
+            Task {
+                await AdManager.shared.showRewardedInterstitial(onReward: {
                     self.continueGame()
-                }
-            } else {
-                delegate?.gameStateDidUpdate()
+                })
             }
         }
         #endif
@@ -1460,17 +1448,6 @@ final class GameState: ObservableObject {
         levelComplete = false
     }
     
-    func undo() {
-        guard let previousGrid = previousGrid,
-              let previousTray = previousTray else {
-            return
-        }
-        
-        self.grid = previousGrid
-        self.tray = previousTray
-        self.lastMove = nil
-    }
-    
     func reset() {
         grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
         tray = []
@@ -1509,52 +1486,24 @@ final class GameState: ObservableObject {
     }
     
     // Add this method to handle hints
-    func showHint() -> Bool {
-        print("[Hint] Attempting to show hint. Current hints used: \(hintsUsedThisGame)")
-        
-        #if DEBUG
-        // In debug/simulator, show hint immediately without ad
-        print("[Hint] Debug mode - showing hint without ad")
-        if let (block, position) = findValidMove() {
-            delegate?.highlightHint(block: block, at: position)
-            return true
-        }
-        print("[Hint] No valid moves found")
-        return false
-        #else
-        // In production, check if we're in TestFlight
-        if Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt" {
-            print("[Hint] TestFlight mode - showing hint without ad")
+    func showHint() {
+        Task { @MainActor in
+            let hasUnlimitedHints = await subscriptionManager.hasFeature(.hints)
+            if hintsUsedThisGame >= 3 && !hasUnlimitedHints {
+                return
+            }
+            
+            print("[Hint] Attempting to show hint. Current hints used: \(hintsUsedThisGame)")
+            
             if let (block, position) = findValidMove() {
                 delegate?.highlightHint(block: block, at: position)
-                return true
-            }
-            print("[Hint] No valid moves found")
-            return false
-        }
-        
-        // In production, require ad and limit hints
-        guard hintsUsedThisGame < 3 else {
-            print("[Hint] Maximum hints (3) already used")
-            return false
-        }
-
-        if let rootViewController = UIApplication.shared.windows.first?.rootViewController {
-            print("[Hint] Showing rewarded ad for hint")
-            AdManager.shared.showRewardedInterstitial(from: rootViewController) {
-                print("[Hint] Ad completed, showing hint")
-                self.hintsUsedThisGame += 1
-                if let (block, position) = self.findValidMove() {
-                    self.delegate?.highlightHint(block: block, at: position)
-                } else {
-                    print("[Hint] No valid moves found after ad")
+                if !hasUnlimitedHints {
+                    hintsUsedThisGame += 1
                 }
+            } else {
+                print("[Hint] No valid moves found")
             }
-            return true
         }
-        print("[Hint] Failed to get root view controller")
-        return false
-        #endif
     }
     
     private func findValidMove() -> (block: Block, position: (row: Int, col: Int))? {
@@ -1726,6 +1675,22 @@ final class GameState: ObservableObject {
     func updateTargetFPS(_ newFPS: Int) {
         targetFPS = newFPS
         delegate?.updateFPS(newFPS)
+    }
+    
+    func showContinueAd(completion: @escaping (Bool) -> Void) {
+        Task {
+            await adManager.showRewardedInterstitial(onReward: {
+                completion(true)
+            })
+        }
+    }
+    
+    func showUndoAd(completion: @escaping (Bool) -> Void) {
+        Task {
+            await adManager.showRewardedInterstitial(onReward: {
+                completion(true)
+            })
+        }
     }
 }
 
