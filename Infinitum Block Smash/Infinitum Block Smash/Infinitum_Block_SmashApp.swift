@@ -29,10 +29,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             }
         }
         
-        // Check for updates
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            VersionCheckService.shared.checkForUpdates()
-        }
+        // Check for updates immediately
+        VersionCheckService.shared.checkForUpdates()
         
         return true
     }
@@ -57,32 +55,29 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 @main
 struct Infinitum_Block_SmashApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @State private var showGame = false
-    @AppStorage("userID") private var userID: String = ""
-    @AppStorage("username") private var username: String = ""
-    @AppStorage("isGuest") private var isGuest: Bool = false
-    @Environment(\.scenePhase) private var scenePhase
-
-    // MARK: - Scene Definition
+    @StateObject private var gameState = GameState()
+    
     var body: some Scene {
         WindowGroup {
-            if userID.isEmpty {
-                AuthView()
+            if VersionCheckService.shared.isUpdateRequired {
+                // Show a loading view while checking for updates
+                LoadingView()
             } else {
                 ContentView()
+                    .environmentObject(gameState)
             }
         }
-        .onChange(of: scenePhase) { newPhase in
-            if newPhase == .background {
-                // Save game state when app moves to background
-                if let gameState = (UIApplication.shared.connectedScenes.first?.delegate as? SceneDelegate)?.gameState {
-                    do {
-                        try gameState.saveProgress()
-                    } catch {
-                        print("[App] Error saving game progress: \(error.localizedDescription)")
-                    }
-                }
-            }
+    }
+}
+
+// MARK: - Loading View
+struct LoadingView: View {
+    var body: some View {
+        VStack {
+            ProgressView()
+                .scaleEffect(1.5)
+            Text("Checking for updates...")
+                .padding()
         }
     }
 }

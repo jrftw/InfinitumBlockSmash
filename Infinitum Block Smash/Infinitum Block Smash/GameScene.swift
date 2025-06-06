@@ -16,6 +16,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // Visual effects
     private var particleEmitter: SKEmitterNode?
     private var glowNode: SKNode?
+    private var activeParticleEmitters: [SKEmitterNode] = [] // Track active particle emitters
     
     // MARK: - Properties
     private var blockNodes: [SKNode] = []
@@ -101,6 +102,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         trayNode?.removeFromParent()
         particleEmitter?.removeFromParent()
         glowNode?.removeFromParent()
+        
+        // Cleanup all particle emitters
+        activeParticleEmitters.forEach { $0.removeFromParent() }
+        activeParticleEmitters.removeAll()
+        
         // Clear any cached images
         autoreleasepool {
             gridNode = nil
@@ -678,8 +684,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                     y: CGFloat(pos.y) * GameConstants.blockSize - CGFloat(GameConstants.gridSize) * GameConstants.blockSize/2
                 )
                 gridNode.addChild(particles)
+                activeParticleEmitters.append(particles)
+                
                 let wait = SKAction.wait(forDuration: 0.7)
-                let remove = SKAction.removeFromParent()
+                let remove = SKAction.run { [weak self] in
+                    particles.removeFromParent()
+                    self?.activeParticleEmitters.removeAll { $0 === particles }
+                }
                 particles.run(SKAction.sequence([wait, remove]))
             }
         }
@@ -811,6 +822,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Remove unused nodes
         blockNodes.removeAll(where: { $0.parent == nil })
         
+        // Cleanup particle emitters
+        activeParticleEmitters.forEach { $0.removeFromParent() }
+        activeParticleEmitters.removeAll()
+        
         // Clear any cached textures
         SKTexture.preload([]) { [weak self] in
             self?.removeAllActions()
@@ -818,6 +833,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Clear any cached images
         UIGraphicsEndImageContext()
+        
+        // Force garbage collection
+        autoreleasepool {
+            // Additional cleanup if needed
+        }
         
         // Log memory usage
         MemoryMonitor.shared.logMemoryUsage()

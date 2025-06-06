@@ -6,9 +6,10 @@ struct BlockShapeView: View {
     let isPreview: Bool
     let isValid: Bool
     
-    // Cache for gradient images
+    // Cache for gradient images with size limit
     private static var gradientCache: [String: UIImage] = [:]
     private static let cacheQueue = DispatchQueue(label: "com.infinitum.blocksmash.gradientcache")
+    private static let maxCacheSize = 50 // Maximum number of cached gradients
     
     var body: some View {
         ZStack {
@@ -46,8 +47,11 @@ struct BlockShapeView: View {
     private func cleanupMemory() {
         // Clear gradient cache if it gets too large
         BlockShapeView.cacheQueue.async {
-            if BlockShapeView.gradientCache.count > 100 {
-                BlockShapeView.gradientCache.removeAll()
+            if BlockShapeView.gradientCache.count > BlockShapeView.maxCacheSize {
+                // Remove oldest entries when cache is full
+                let sortedKeys = BlockShapeView.gradientCache.keys.sorted()
+                let keysToRemove = sortedKeys.prefix(BlockShapeView.gradientCache.count - BlockShapeView.maxCacheSize)
+                keysToRemove.forEach { BlockShapeView.gradientCache.removeValue(forKey: $0) }
             }
         }
     }
@@ -63,6 +67,13 @@ struct BlockShapeView: View {
     private static func cacheGradient(_ image: UIImage, for color: BlockColor, size: CGSize) {
         let key = "\(color.rawValue)_\(size.width)_\(size.height)"
         cacheQueue.async {
+            // Check cache size before adding new entry
+            if gradientCache.count >= maxCacheSize {
+                // Remove oldest entry
+                if let oldestKey = gradientCache.keys.first {
+                    gradientCache.removeValue(forKey: oldestKey)
+                }
+            }
             gradientCache[key] = image
         }
     }
@@ -73,6 +84,16 @@ extension BlockShapeView {
     static func clearCache() {
         cacheQueue.async {
             gradientCache.removeAll()
+        }
+    }
+    
+    static func trimCache() {
+        cacheQueue.async {
+            if gradientCache.count > maxCacheSize {
+                let sortedKeys = gradientCache.keys.sorted()
+                let keysToRemove = sortedKeys.prefix(gradientCache.count - maxCacheSize)
+                keysToRemove.forEach { gradientCache.removeValue(forKey: $0) }
+            }
         }
     }
 } 

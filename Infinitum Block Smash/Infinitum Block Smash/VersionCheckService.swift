@@ -1,10 +1,14 @@
 import Foundation
 import StoreKit
+import SwiftUI
 
 class VersionCheckService {
     static let shared = VersionCheckService()
     
     private init() {}
+    
+    // Add a property to track if update is required
+    private(set) var isUpdateRequired = false
     
     func checkForUpdates() {
         #if DEBUG
@@ -49,7 +53,8 @@ class VersionCheckService {
             if self.compareVersions(currentVersion, testFlightVersion) == .orderedAscending ||
                (currentVersion == testFlightVersion && self.compareVersions(currentBuild, testFlightBuild) == .orderedAscending) {
                 DispatchQueue.main.async {
-                    self.showUpdatePrompt(isTestFlight: true)
+                    self.isUpdateRequired = true
+                    self.showForcedUpdatePrompt(isTestFlight: true)
                 }
             }
         }.resume()
@@ -75,41 +80,86 @@ class VersionCheckService {
             // Compare versions
             if self.compareVersions(currentVersion, appStoreVersion) == .orderedAscending {
                 DispatchQueue.main.async {
-                    self.showUpdatePrompt(isTestFlight: false)
+                    self.isUpdateRequired = true
+                    self.showForcedUpdatePrompt(isTestFlight: false)
                 }
             }
         }.resume()
     }
     
-    private func showUpdatePrompt(isTestFlight: Bool) {
-        let alert = UIAlertController(
-            title: isTestFlight ? "New Beta Available" : "Update Available",
-            message: isTestFlight ? "A new beta version is available. Please update to continue testing." : "A new version is available. Please update to continue playing.",
-            preferredStyle: .alert
-        )
+    private func showForcedUpdatePrompt(isTestFlight: Bool) {
+        // Create a blocking window for the update prompt
+        let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene
+        let updateWindow = UIWindow(windowScene: windowScene!)
+        updateWindow.windowLevel = .alert + 1
         
-        alert.addAction(UIAlertAction(title: "Update", style: .default) { _ in
-            if isTestFlight {
-                // Open TestFlight
-                if let url = URL(string: "itms-beta://") {
-                    UIApplication.shared.open(url)
-                }
-            } else {
-                // Open App Store
-                if let url = URL(string: "itms-apps://itunes.apple.com/app/id6746708231") {
-                    UIApplication.shared.open(url)
-                }
-            }
-        })
+        // Create the update view
+        let updateView = ForcedUpdateView(isTestFlight: isTestFlight)
+        let hostingController = UIHostingController(rootView: updateView)
+        hostingController.view.backgroundColor = .clear
         
-        // Present the alert
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let viewController = windowScene.windows.first?.rootViewController {
-            viewController.present(alert, animated: true)
-        }
+        updateWindow.rootViewController = hostingController
+        updateWindow.makeKeyAndVisible()
+        
+        // Store the window to prevent it from being deallocated
+        objc_setAssociatedObject(UIApplication.shared, "updateWindow", updateWindow, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
     }
     
     private func compareVersions(_ version1: String, _ version2: String) -> ComparisonResult {
         return version1.compare(version2, options: .numeric)
+    }
+}
+
+// Add a new SwiftUI view for the forced update screen
+struct ForcedUpdateView: View {
+    let isTestFlight: Bool
+    
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.5)
+                .edgesIgnoringSafeArea(.all)
+            
+            VStack(spacing: 20) {
+                Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
+                    .font(.system(size: 60))
+                    .foregroundColor(.blue)
+                
+                Text(isTestFlight ? "New Beta Available" : "Update Required")
+                    .font(.title)
+                    .fontWeight(.bold)
+                
+                Text(isTestFlight ? 
+                    "A new beta version is available. You must update to continue testing." :
+                    "A new version is available. You must update to continue playing.")
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+                
+                Button(action: {
+                    if isTestFlight {
+                        if let url = URL(string: "itms-beta://") {
+                            UIApplication.shared.open(url)
+                        }
+                    } else {
+                        if let url = URL(string: "itms-apps://itunes.apple.com/app/id6746708231") {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                }) {
+                    Text("Update Now")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.blue)
+                        .cornerRadius(10)
+                }
+                .padding(.horizontal)
+            }
+            .padding()
+            .background(Color(UIColor.systemBackground))
+            .cornerRadius(20)
+            .shadow(radius: 10)
+            .padding()
+        }
     }
 } 
