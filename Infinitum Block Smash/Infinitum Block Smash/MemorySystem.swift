@@ -33,9 +33,17 @@ final class MemorySystem {
     
     // MARK: — Initialization
     private init() {
-        // Configure cache limits
-        memoryCache.countLimit = 200
-        memoryCache.totalCostLimit = 75 * 1024 * 1024 // 75 MB
+        // Static limits: 100 objects / 50 MB
+        memoryCache.countLimit     = 100
+        memoryCache.totalCostLimit = 50 * 1024 * 1024
+        
+        // — OR, dynamic sizing based on device RAM (eg. 1% of RAM):
+        /*
+        let totalMB = Double(ProcessInfo.processInfo.physicalMemory) / 1024 / 1024
+        let targetMB = max(25.0, totalMB * 0.01)  // at least 25 MB, or 1% of RAM
+        memoryCache.totalCostLimit = Int(targetMB * 1024 * 1024)
+        memoryCache.countLimit     = 100
+        */
         
         // Set up system memory pressure monitoring
         pressureSource = DispatchSource.makeMemoryPressureSource(

@@ -18,6 +18,9 @@ struct GameView: View {
     @State private var scoreAnimator = ScoreAnimationContainer()
     @Environment(\.colorScheme) private var colorScheme
     @State private var showingStats = false
+    @AppStorage("showStatsOverlay") private var showStatsOverlay = false
+    @AppStorage("showFPS") private var showFPS = false
+    @AppStorage("showMemory") private var showMemory = false
     
     private enum SettingsAction {
         case resume
@@ -106,6 +109,10 @@ struct GameView: View {
                 .frame(height: 88)
                 .padding(.horizontal, 8)
                 .padding(.top, 8)
+                
+                if showStatsOverlay && (showFPS || showMemory) {
+                    StatsOverlayView(gameState: gameState)
+                }
                 
                 Spacer()
             }
@@ -334,5 +341,51 @@ struct TutorialModal: View {
         .background(BlurView(style: .systemUltraThinMaterialDark))
         .cornerRadius(24)
         .padding(32)
+    }
+}
+
+private struct StatsOverlayView: View {
+    @ObservedObject var gameState: GameState
+    @StateObject private var fpsManager = FPSManager.shared
+    @AppStorage("showFPS") private var showFPS = false
+    @AppStorage("showMemory") private var showMemory = false
+    @State private var currentFPS: Int = 0
+    @State private var memoryUsage: Double = 0
+    
+    let timer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                if showFPS {
+                    Text("FPS: \(currentFPS)")
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.black.opacity(0.5))
+                        .cornerRadius(4)
+                }
+                
+                if showMemory {
+                    Text("Memory: \(Int(memoryUsage * 100))%")
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.black.opacity(0.5))
+                        .cornerRadius(4)
+                }
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 4)
+        .allowsHitTesting(false) // Prevent the overlay from interfering with game interactions
+        .onReceive(timer) { _ in
+            currentFPS = fpsManager.getDisplayFPS(for: fpsManager.targetFPS)
+            let memory = MemorySystem.shared.getMemoryUsage()
+            memoryUsage = memory.used / memory.total
+        }
     }
 }

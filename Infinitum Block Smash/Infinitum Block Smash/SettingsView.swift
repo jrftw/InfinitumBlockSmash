@@ -258,6 +258,41 @@ private struct VolumeControlView: View {
     }
 }
 
+private struct StatsForNerdsSection: View {
+    @ObservedObject var gameState: GameState
+    @StateObject private var fpsManager = FPSManager.shared
+    @AppStorage("showStatsOverlay") private var showStatsOverlay = false
+    @AppStorage("showFPS") private var showFPS = false
+    @AppStorage("showMemory") private var showMemory = false
+    
+    var body: some View {
+        Section(header: Text("Stats for Nerds")) {
+            Toggle("Show Stats Overlay", isOn: $showStatsOverlay)
+            
+            if showStatsOverlay {
+                Toggle("Show FPS", isOn: $showFPS)
+                Toggle("Show Memory Usage", isOn: $showMemory)
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Current FPS: \(fpsManager.getDisplayFPS(for: fpsManager.targetFPS))")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Text("Target FPS: \(fpsManager.getFPSDisplayName(for: fpsManager.targetFPS))")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    let (hits, misses) = MemorySystem.shared.getCacheStats()
+                    Text("Cache Stats: \(hits) hits, \(misses) misses")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.vertical, 8)
+            }
+        }
+    }
+}
+
 // MARK: - Main View
 struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
@@ -389,6 +424,8 @@ struct SettingsView: View {
                     }
                 }
                 
+                StatsForNerdsSection(gameState: gameState)
+                
                 Section(header: Text("Data Management")) {
                     Button("Reset Game Data") {
                         showingResetConfirmation = true
@@ -428,6 +465,25 @@ struct SettingsView: View {
                 Section(header: Text("Privacy")) {
                     Toggle("Allow anonymous usage analytics", isOn: $allowAnalytics)
                     Toggle("Allow data sharing for app features", isOn: $allowDataSharing)
+                }
+                
+                Section {
+                    VStack(spacing: 8) {
+                        Text(AppVersion.formattedVersion)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text(AppVersion.copyright)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text(AppVersion.credits)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text(AppVersion.location)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
                 }
             }
             .navigationTitle("Settings")
