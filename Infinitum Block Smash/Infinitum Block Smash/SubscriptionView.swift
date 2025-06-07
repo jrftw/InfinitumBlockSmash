@@ -52,7 +52,7 @@ struct SubscriptionView: View {
         SubscriptionPlan(
             name: "Smash Elite",
             color: .red,
-            features: ["Remove Ads", "Unlimited Hints", "Unlimited Undos"],
+            features: ["Remove Ads", "Unlimited Hints", "Unlimited Undos", "All Themes Unlocked"],
             weeklyPrice: 5.99,
             monthlyPrice: 9.99,
             yearlyPrice: 69.99,

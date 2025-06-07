@@ -128,10 +128,25 @@ class SubscriptionManager: ObservableObject {
                 "com.infinitum.blocksmash.elite.monthly",
                 "com.infinitum.blocksmash.elite.yearly",
                 
-                // One-time purchases (3 total)
+                // One-time purchases
                 "com.infinitum.blocksmash.hints10",
                 "com.infinitum.blocksmash.undos10",
-                "com.infinitum.blocksmash.removeads"
+                "com.infinitum.blocksmash.removeads",
+                "com.infinitum.blocksmash.theme.neon",
+                "com.infinitum.blocksmash.theme.retro",
+                "com.infinitum.blocksmash.theme.nature",
+                "com.infinitum.blocksmash.theme.execution",
+                "com.infinitum.blocksmash.theme.rainbow",
+                "com.infinitum.blocksmash.theme.adventure",
+                "com.infinitum.blocksmash.theme.cyberpunk",
+                "com.infinitum.blocksmash.theme.sunset",
+                "com.infinitum.blocksmash.theme.ocean",
+                "com.infinitum.blocksmash.theme.forest",
+                "com.infinitum.blocksmash.theme.nordic",
+                "com.infinitum.blocksmash.theme.midnight",
+                "com.infinitum.blocksmash.theme.desert",
+                "com.infinitum.blocksmash.theme.aurora",
+                "com.infinitum.blocksmash.theme.cherry"
             ]
             
             print("[SubscriptionManager] Loading products with IDs: \(productIds)")
@@ -244,26 +259,38 @@ class SubscriptionManager: ObservableObject {
         // Update purchased products first
         await updatePurchasedProducts()
         
-        // If in trial period, grant access to all features
+        // If in trial period, grant all features
         if isInTrialPeriod {
             return true
         }
         
-        // Check if user has purchased the feature
-        return purchasedProducts.contains { product in
-            switch feature {
-            case .unlimitedUndos:
-                return product.starts(with: "com.infinitum.blocksmash.elite")
-            case .hints:
-                return product.starts(with: "com.infinitum.blocksmash.plus") || 
-                       product.starts(with: "com.infinitum.blocksmash.elite")
-            case .noAds:
-                return product.starts(with: "com.infinitum.blocksmash.pass") || 
-                       product.starts(with: "com.infinitum.blocksmash.plus") || 
-                       product.starts(with: "com.infinitum.blocksmash.elite") ||
-                       product == "com.infinitum.blocksmash.removeads"
-            }
+        switch feature {
+        case .unlimitedUndos:
+            return purchasedProducts.contains("com.infinitum.blocksmash.elite") ||
+                   purchasedProducts.contains("com.infinitum.blocksmash.unlimitedundos")
+        case .hints:
+            return purchasedProducts.contains("com.infinitum.blocksmash.elite") ||
+                   purchasedProducts.contains("com.infinitum.blocksmash.hints")
+        case .noAds:
+            return purchasedProducts.contains("com.infinitum.blocksmash.elite") ||
+                   purchasedProducts.contains("com.infinitum.blocksmash.removeads")
+        case .customTheme:
+            return purchasedProducts.contains("com.infinitum.blocksmash.theme.neon") ||
+                   purchasedProducts.contains("com.infinitum.blocksmash.theme.retro") ||
+                   purchasedProducts.contains("com.infinitum.blocksmash.theme.nature")
+        case .allThemes:
+            return purchasedProducts.contains("com.infinitum.blocksmash.elite")
         }
+    }
+    
+    func isThemeUnlocked(_ themeId: String) async -> Bool {
+        // If user has Elite subscription, all themes are unlocked
+        if await hasFeature(.allThemes) {
+            return true
+        }
+        
+        // Otherwise, check if the specific theme was purchased
+        return purchasedProducts.contains(themeId)
     }
     
     func checkSubscriptionStatus() async {
@@ -509,6 +536,8 @@ enum SubscriptionFeature {
     case unlimitedUndos
     case hints
     case noAds
+    case customTheme
+    case allThemes
 }
 
 enum SubscriptionError: LocalizedError {

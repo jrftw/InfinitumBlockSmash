@@ -11,10 +11,13 @@ private func updateTheme(_ theme: String) {
     switch theme {
     case "light":
         window.overrideUserInterfaceStyle = .light
+        UserDefaults.standard.set("light", forKey: "selectedTheme")
     case "dark":
         window.overrideUserInterfaceStyle = .dark
+        UserDefaults.standard.set("dark", forKey: "selectedTheme")
     case "auto":
         window.overrideUserInterfaceStyle = .unspecified
+        UserDefaults.standard.set("auto", forKey: "selectedTheme")
     default:
         break
     }
@@ -27,7 +30,11 @@ private struct GameSettingsSection: View {
     @Binding var autoSave: Bool
     @ObservedObject var fpsManager: FPSManager
     @ObservedObject var gameState: GameState
+    @Binding var showingStore: Bool
     let themes: [String]
+    @StateObject private var themeManager = ThemeManager.shared
+    @StateObject private var subscriptionManager = SubscriptionManager.shared
+    @State private var hasEliteAccess = false
     
     private var fpsBinding: Binding<Int> {
         Binding(
@@ -39,16 +46,59 @@ private struct GameSettingsSection: View {
         )
     }
     
+    private func isThemeUnlocked(_ themeKey: String) -> Bool {
+        if themeKey == "system" || ["light", "dark", "auto"].contains(themeKey) {
+            return true
+        }
+        return subscriptionManager.purchasedProducts.contains("com.infinitum.blocksmash.theme.\(themeKey)") || hasEliteAccess
+    }
+    
     var body: some View {
         Section(header: Text("Game Settings")) {
-            Picker("Theme", selection: $theme) {
-                ForEach(themes, id: \.self) { theme in
-                    Text(theme.capitalized)
-                        .tag(theme)
+            // System Theme Picker
+            Picker("System Theme", selection: $theme) {
+                Text("Light").tag("light")
+                Text("Dark").tag("dark")
+                Text("Auto").tag("auto")
+            }
+            .onChange(of: theme) { newValue in
+                if ["light", "dark", "auto"].contains(newValue) {
+                    themeManager.setTheme(newValue)
+                    updateTheme(newValue)
+                }
+            }
+            
+            // Custom Theme Picker
+            Picker("Custom Theme", selection: $theme) {
+                ForEach(Array(themeManager.getAvailableThemes().keys.sorted().filter { !["system", "light", "dark", "auto"].contains($0) }), id: \.self) { themeKey in
+                    if let theme = themeManager.getAvailableThemes()[themeKey] {
+                        HStack {
+                            Text(theme.name)
+                            if !isThemeUnlocked(themeKey) {
+                                Text("Locked")
+                                    .font(.caption)
+                                    .foregroundColor(.red)
+                            }
+                        }
+                        .foregroundColor(isThemeUnlocked(themeKey) ? .primary : .secondary)
+                        .tag(themeKey)
+                    }
                 }
             }
             .onChange(of: theme) { newValue in
-                updateTheme(newValue)
+                if !["light", "dark", "auto"].contains(newValue) {
+                    if isThemeUnlocked(newValue) {
+                        themeManager.setTheme(newValue)
+                    } else {
+                        // Reset to previous theme
+                        theme = themeManager.currentTheme
+                        // Show store
+                        showingStore = true
+                    }
+                }
+            }
+            .task {
+                hasEliteAccess = await subscriptionManager.hasFeature(.allThemes)
             }
             
             Picker("Target FPS", selection: fpsBinding) {
@@ -266,6 +316,7 @@ struct SettingsView: View {
                     autoSave: $autoSave,
                     fpsManager: fpsManager,
                     gameState: gameState,
+                    showingStore: $showingStore,
                     themes: themes
                 )
                 

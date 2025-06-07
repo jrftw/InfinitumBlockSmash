@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		7944003F2DF3E0BB0025E1D9 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7944003E2DF3E0BB0025E1D9 /* StoreKit.framework */; };
 		79C391702DED4BA700016986 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = 79C3916F2DED4BA700016986 /* GoogleMobileAds */; };
 		79C3917B2DED53BB00016986 /* FirebaseAI in Frameworks */ = {isa = PBXBuildFile; productRef = 79C3917A2DED53BB00016986 /* FirebaseAI */; };
 		79C3917D2DED53BB00016986 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 79C3917C2DED53BB00016986 /* FirebaseAnalytics */; };
@@ -36,6 +37,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		7944003E2DF3E0BB0025E1D9 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 		79C3911C2DECF0A000016986 /* Infinitum Block Smash.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Infinitum Block Smash.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -83,6 +85,7 @@
 				79C3917D2DED53BB00016986 /* FirebaseAnalytics in Frameworks */,
 				79C3918B2DED53BB00016986 /* FirebaseCore in Frameworks */,
 				79C3919B2DED53BB00016986 /* FirebaseInAppMessaging-Beta in Frameworks */,
+				7944003F2DF3E0BB0025E1D9 /* StoreKit.framework in Frameworks */,
 				79C391832DED53BB00016986 /* FirebaseAppCheck in Frameworks */,
 				79C391972DED53BB00016986 /* FirebaseFunctions in Frameworks */,
 				79C391A52DED53BB00016986 /* FirebaseRemoteConfig in Frameworks */,
@@ -97,10 +100,19 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		7944003D2DF3E0BB0025E1D9 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				7944003E2DF3E0BB0025E1D9 /* StoreKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		79C391132DECF0A000016986 = {
 			isa = PBXGroup;
 			children = (
 				79C3911E2DECF0A000016986 /* Infinitum Block Smash */,
+				7944003D2DF3E0BB0025E1D9 /* Frameworks */,
 				79C3911D2DECF0A000016986 /* Products */,
 			);
 			sourceTree = "<group>";
