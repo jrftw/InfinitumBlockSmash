@@ -18,16 +18,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         FirebaseApp.configure()
         
         // Configure AppCheck with proper provider
-        #if DEBUG
-        let providerFactory = AppCheckDebugProviderFactory()
-        #else
-        if #available(iOS 14.0, *) {
-            let providerFactory = AppAttestProviderFactory()
-        } else {
-            let providerFactory = DeviceCheckProviderFactory()
-        }
-        #endif
-        AppCheck.setAppCheckProviderFactory(providerFactory)
+        configureAppCheck()
         
         // Configure Google Mobile Ads
         MobileAds.shared.start { status in
