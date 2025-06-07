@@ -226,7 +226,7 @@ struct SettingsView: View {
     @State private var showingBlockDragInfo = false
     @State private var showingTestFlightAlert = false
     @State private var showingTestFlightWebView = false
-    @State private var showingSubscriptions = false
+    @State private var showingStore = false
     
     private let difficulties = ["easy", "normal", "hard", "expert"]
     private let themes = ["light", "dark", "auto"]
@@ -235,11 +235,11 @@ struct SettingsView: View {
         NavigationView {
             List {
                 Section {
-                    Button(action: { showingSubscriptions = true }) {
+                    Button(action: { showingStore = true }) {
                         HStack {
-                            Image(systemName: "star.circle.fill")
-                                .foregroundColor(.yellow)
-                            Text("Subscriptions")
+                            Image(systemName: "cart.fill")
+                                .foregroundColor(.blue)
+                            Text("Store")
                             Spacer()
                             Image(systemName: "chevron.right")
                                 .foregroundColor(.gray)
@@ -395,8 +395,8 @@ struct SettingsView: View {
             .sheet(isPresented: $showingTestFlightWebView) {
                 SafariView(url: URL(string: "https://testflight.apple.com/join/nd4DWxbT")!)
             }
-            .sheet(isPresented: $showingSubscriptions) {
-                SubscriptionView()
+            .sheet(isPresented: $showingStore) {
+                StoreView()
             }
         }
     }

@@ -11,12 +11,20 @@ class SubscriptionManager: ObservableObject {
     @Published private(set) var error: String?
     @Published private(set) var purchasedProducts: Set<String> = []
     @Published private(set) var trialEndDate: Date = Date.distantPast
+    @Published private(set) var purchasedHints: Int = 0
+    @Published private(set) var purchasedUndos: Int = 0
     
     private var updateListenerTask: Task<Void, Error>?
     private let trialUsageKey = "hasUsedTrial"
+    private let purchasedHintsKey = "purchasedHints"
+    private let purchasedUndosKey = "purchasedUndos"
     
     init() {
         updateListenerTask = listenForTransactions()
+        
+        // Load purchased hints and undos
+        purchasedHints = UserDefaults.standard.integer(forKey: purchasedHintsKey)
+        purchasedUndos = UserDefaults.standard.integer(forKey: purchasedUndosKey)
         
         Task {
             await loadProducts()
@@ -50,8 +58,20 @@ class SubscriptionManager: ObservableObject {
             // Add to purchased products
             purchasedProducts.insert(transaction.productID)
             
-            // Update trial end date if this is a new purchase
-            if !hasUsedTrial {
+            // Handle one-time purchases
+            switch transaction.productID {
+            case "com.infinitum.blocksmash.hints10":
+                purchasedHints += 10
+                UserDefaults.standard.set(purchasedHints, forKey: purchasedHintsKey)
+            case "com.infinitum.blocksmash.undos10":
+                purchasedUndos += 10
+                UserDefaults.standard.set(purchasedUndos, forKey: purchasedUndosKey)
+            default:
+                break
+            }
+            
+            // Update trial end date if this is a new subscription
+            if !hasUsedTrial && transaction.productType == .autoRenewable {
                 trialEndDate = Calendar.current.date(byAdding: .day, value: 3, to: Date()) ?? Date()
                 markTrialAsUsed()
             }
@@ -73,7 +93,10 @@ class SubscriptionManager: ObservableObject {
             let products = try await Product.products(for: [
                 "com.infinitum.blocksmash.unlimitedundos",
                 "com.infinitum.blocksmash.hints",
-                "com.infinitum.blocksmash.noads"
+                "com.infinitum.blocksmash.noads",
+                "com.infinitum.blocksmash.hints10",
+                "com.infinitum.blocksmash.undos10",
+                "com.infinitum.blocksmash.removeads"
             ])
             
             // Store products for later use
@@ -87,8 +110,8 @@ class SubscriptionManager: ObservableObject {
     }
     
     func purchase(_ product: Product) async throws {
-        // Check if user has already used their trial
-        if hasUsedTrial {
+        // Only check trial for subscription products
+        if product.type == .autoRenewable && hasUsedTrial {
             throw SubscriptionError.trialAlreadyUsed
         }
         
@@ -156,7 +179,7 @@ class SubscriptionManager: ObservableObject {
             case .hints:
                 return product == "com.infinitum.blocksmash.hints"
             case .noAds:
-                return product == "com.infinitum.blocksmash.noads"
+                return product == "com.infinitum.blocksmash.noads" || product == "com.infinitum.blocksmash.removeads"
             }
         }
     }
@@ -182,6 +205,29 @@ class SubscriptionManager: ObservableObject {
         } else {
             return .none
         }
+    }
+    
+    // Add methods to use hints and undos
+    func useHint() -> Bool {
+        guard purchasedHints > 0 else { return false }
+        purchasedHints -= 1
+        UserDefaults.standard.set(purchasedHints, forKey: purchasedHintsKey)
+        return true
+    }
+    
+    func useUndo() -> Bool {
+        guard purchasedUndos > 0 else { return false }
+        purchasedUndos -= 1
+        UserDefaults.standard.set(purchasedUndos, forKey: purchasedUndosKey)
+        return true
+    }
+    
+    func getRemainingHints() -> Int {
+        return purchasedHints
+    }
+    
+    func getRemainingUndos() -> Int {
+        return purchasedUndos
     }
 }
 

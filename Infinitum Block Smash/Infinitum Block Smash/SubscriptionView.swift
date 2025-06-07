@@ -130,7 +130,12 @@ struct SubscriptionView: View {
                                 await handlePurchase()
                             }
                         } else {
-                            showTrialInfo = true
+                            if selectedPlan == nil {
+                                errorMessage = "Please select a subscription plan to start your free trial."
+                                showError = true
+                            } else {
+                                showTrialInfo = true
+                            }
                         }
                     }) {
                         if isPurchasing {
@@ -197,7 +202,14 @@ struct SubscriptionView: View {
                 }
             }
         } message: {
-            Text("Your 3-day free trial will start now. After the trial period, you'll be charged \(getPriceText()) automatically. You can cancel anytime during the trial to avoid charges. By starting the trial, you agree to our Terms of Service and Privacy Policy.")
+            if let plan = selectedPlan {
+                VStack {
+                    Text("You're about to start a 3-day free trial of \(plan.name).")
+                    Text("After the trial period, you'll be charged \(getPriceText()) automatically.")
+                    Text("You can cancel anytime during the trial to avoid charges.")
+                    Text("By starting the trial, you agree to our Terms of Service and Privacy Policy.")
+                }
+            }
         }
         .sheet(isPresented: $showTerms) {
             NavigationView {
@@ -334,7 +346,7 @@ struct SubscriptionPlanCard: View {
                 Text(plan.name)
                     .font(.title2)
                     .fontWeight(.bold)
-                    .foregroundColor(plan.color)
+                    .foregroundColor(isSelected ? .white : plan.color)
                 Spacer()
             }
             
@@ -342,8 +354,9 @@ struct SubscriptionPlanCard: View {
                 ForEach(plan.features, id: \.self) { feature in
                     HStack {
                         Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(plan.color)
+                            .foregroundColor(isSelected ? .white : plan.color)
                         Text(feature)
+                            .foregroundColor(isSelected ? .white : .primary)
                     }
                 }
             }
@@ -354,30 +367,32 @@ struct SubscriptionPlanCard: View {
                 Text("Yearly").tag("yearly")
             }
             .pickerStyle(.segmented)
+            .tint(isSelected ? .white : .blue)
             
             HStack {
                 Text(getPrice(for: selectedDuration))
                     .font(.title3)
                     .fontWeight(.bold)
+                    .foregroundColor(isSelected ? .white : .primary)
                 
                 if selectedDuration == "yearly" {
                     Text("(Best Value — Save \(getSavings())%)")
                         .font(.caption)
-                        .foregroundColor(.green)
+                        .foregroundColor(isSelected ? .white.opacity(0.8) : .green)
                 }
             }
             
             Text(plan.description)
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
         }
         .padding()
-        .background(Color(.systemBackground))
+        .background(isSelected ? plan.color : Color(.systemBackground))
         .cornerRadius(12)
         .shadow(radius: 2)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(isSelected ? plan.color : Color.clear, lineWidth: 2)
+                .stroke(isSelected ? Color.clear : plan.color, lineWidth: 2)
         )
         .onTapGesture(perform: onSelect)
     }
