@@ -17,6 +17,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var particleEmitter: SKEmitterNode?
     private var glowNode: SKNode?
     private var activeParticleEmitters: [SKEmitterNode] = [] // Track active particle emitters
+    private let maxParticleEmitters = 5 // Limit number of active particle emitters
     
     // MARK: - Properties
     private var blockNodes: [SKNode] = []
@@ -29,6 +30,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // Add this property to track hint highlight
     private var hintHighlight: SKNode?
     
+    // Add memory management properties
+    private var lastMemoryCleanup: TimeInterval = 0
+    private let memoryCleanupInterval: TimeInterval = 30.0 // Cleanup every 30 seconds
+    private var cachedNodes: [String: SKNode] = [:]
+    
     // MARK: - Initialization
     init(size: CGSize, gameState: GameState) {
         self.gameState = gameState
@@ -39,7 +45,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Set up memory critical notification handler
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(handleMemoryWarning),
+            selector: #selector(handleMemoryWarningNotification),
+            name: .memoryWarning,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleMemoryCriticalNotification),
             name: .memoryCritical,
             object: nil
         )
@@ -94,14 +107,19 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Add notification observers
         NotificationCenter.default.addObserver(self,
-                                             selector: #selector(pauseBackgroundAnimations),
-                                             name: NSNotification.Name("PauseBackgroundAnimations"),
+                                             selector: #selector(handleMemoryWarningNotification),
+                                             name: .memoryWarning,
                                              object: nil)
         
         NotificationCenter.default.addObserver(self,
-                                             selector: #selector(handleFPSChange),
-                                             name: .fpsDidChange,
+                                             selector: #selector(handleMemoryCriticalNotification),
+                                             name: .memoryCritical,
                                              object: nil)
+        
+        // Start periodic memory cleanup
+        Task {
+            await setupMemoryManagement()
+        }
         
         print("[DEBUG] Scene setup complete. trayNode in parent: \(trayNode.parent != nil)")
         
@@ -111,7 +129,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     override func willMove(from view: SKView) {
         super.willMove(from: view)
-        cleanupMemory()
+        Task {
+            await cleanupMemory()
+        }
         NotificationCenter.default.removeObserver(self)
     }
     
@@ -166,9 +186,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             label.isHidden = true
             addChild(label)
         }
-        
-        // Start memory monitoring
-        startMemoryMonitoring()
     }
     
     // Add method to manage background animations
@@ -809,95 +826,81 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     // MARK: - Memory Management
-    private func startMemoryMonitoring() {
-        // Check memory usage periodically
-        let checkMemory = SKAction.run { [weak self] in
-            self?.checkMemoryUsage()
+    private func setupMemoryManagement() async {
+        // Start periodic memory cleanup
+        await MemorySystem.shared.startPeriodicCleanup()
+        
+        // Setup notification observers
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleMemoryWarningNotification),
+            name: .memoryWarning,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleMemoryCriticalNotification),
+            name: .memoryCritical,
+            object: nil
+        )
+    }
+    
+    private func cleanupMemory() async {
+        await MemorySystem.shared.cleanupMemory()
+    }
+    
+    @objc private func handleMemoryWarningNotification() {
+        Task { @MainActor in
+            await cleanupMemory()
+            memoryWarningLabel?.text = "Memory Warning: Cleaning up..."
+            memoryWarningLabel?.isHidden = false
+            
+            // Hide warning after 3 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                self?.memoryWarningLabel?.isHidden = true
+            }
         }
-        let wait = SKAction.wait(forDuration: memoryCheckInterval)
-        let sequence = SKAction.sequence([checkMemory, wait])
-        run(SKAction.repeatForever(sequence), withKey: "memoryMonitoring")
     }
     
-    private func checkMemoryUsage() {
-        let status = MemoryMonitor.shared.checkMemoryUsage()
-        switch status {
-        case .critical:
-            handleCriticalMemory()
-        case .warning:
-            handleMemoryWarning()
-        case .normal:
-            hideMemoryWarning()
-        }
-    }
-    
-    @objc private func handleMemoryWarning() {
-        // Show warning
-        memoryWarningLabel?.text = "⚠️ High Memory Usage"
-        memoryWarningLabel?.isHidden = false
-        
-        // Cleanup
-        MemoryManager.shared.cleanupMemory()
-        
-        // Log memory usage
-        MemoryMonitor.shared.logMemoryUsage()
-    }
-    
-    private func handleCriticalMemory() {
-        // Show warning
-        memoryWarningLabel?.text = "⚠️ Memory Critical"
-        memoryWarningLabel?.isHidden = false
-        
-        // Force cleanup
-        handleMemoryWarning()
-        
-        // Notify user
-        NotificationCenter.default.post(name: .memoryCritical, object: nil)
-    }
-    
-    private func hideMemoryWarning() {
-        memoryWarningLabel?.isHidden = true
-    }
-    
-    private func cleanupMemory() {
-        // Remove unused nodes
-        blockNodes.removeAll(where: { $0.parent == nil })
-        
-        // Enhanced particle effect cleanup
-        cleanupParticleEffects()
-        
-        // Enhanced texture cleanup
-        cleanupTextures()
-        
-        // Clear any cached images
-        UIGraphicsEndImageContext()
-        
-        // Force garbage collection
-        autoreleasepool {
-            // Additional cleanup if needed
-        }
-        
-        // Log memory usage
-        MemoryMonitor.shared.logMemoryUsage()
-    }
-
-    private func cleanupParticleEffects() {
-        activeParticleEmitters.forEach { emitter in
-            emitter.particleBirthRate = 0
-            emitter.removeFromParent()
-        }
-        activeParticleEmitters.removeAll()
-        
-        // Remove any lingering particle effects
-        enumerateChildNodes(withName: "particle") { node, _ in
-            node.removeFromParent()
+    @objc private func handleMemoryCriticalNotification() {
+        Task { @MainActor in
+            await cleanupMemory()
+            memoryWarningLabel?.text = "CRITICAL: Memory cleanup in progress..."
+            memoryWarningLabel?.isHidden = false
+            
+            // Hide warning after 3 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                self?.memoryWarningLabel?.isHidden = true
+            }
         }
     }
 
-    private func cleanupTextures() {
-        SKTexture.preload([]) { [weak self] in
-            self?.removeAllActions()
-            self?.removeAllChildren()
+    override func update(_ currentTime: TimeInterval) {
+        super.update(currentTime)
+        
+        // Perform periodic memory cleanup
+        if currentTime - lastMemoryCleanup > memoryCleanupInterval {
+            Task { @MainActor in
+                await cleanupMemory()
+                lastMemoryCleanup = currentTime
+            }
+        }
+        
+        // Check memory status periodically
+        if currentTime - lastMemoryCheck > 5.0 {
+            Task { @MainActor in
+                let status = await MemorySystem.shared.checkMemoryStatus()
+                switch status {
+                case .critical:
+                    NotificationCenter.default.post(name: .memoryCritical, object: nil)
+                case .warning:
+                    NotificationCenter.default.post(name: .memoryWarning, object: nil)
+                case .normal:
+                    break
+                }
+                lastMemoryCheck = currentTime
+            }
         }
     }
 
@@ -1024,20 +1027,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // This is kept for backward compatibility but should not be used
         print("[Hint] Warning: Using deprecated highlightHint method")
     }
-    
-    @objc private func pauseBackgroundAnimations() {
-        setBackgroundAnimationsActive(false)
-    }
-    
-    @objc private func resumeBackgroundAnimations() {
-        setBackgroundAnimationsActive(true)
-    }
-    
-    @objc private func handleFPSChange(_ notification: Notification) {
-        if let fps = notification.userInfo?["fps"] as? Int {
-            view?.preferredFramesPerSecond = fps
-        }
-    }
 }
 
 extension GameScene: GameStateDelegate {
@@ -1159,6 +1148,6 @@ extension GameScene: GameStateDelegate {
 
 // MARK: - Notifications
 extension Notification.Name {
+    static let memoryWarning = Notification.Name("memoryWarning")
     static let memoryCritical = Notification.Name("memoryCritical")
-    static let fpsDidChange = Notification.Name("fpsDidChange")
 } 

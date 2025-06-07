@@ -74,3 +74,8 @@ class FPSManager: ObservableObject {
         return "\(fps) FPS"
     }
 }
+
+// MARK: - Notification Names
+extension Notification.Name {
+    static let fpsDidChange = Notification.Name("fpsDidChange")
+}

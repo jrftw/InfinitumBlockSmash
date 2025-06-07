@@ -229,7 +229,9 @@ struct GameView: View {
             }
         }
         .onDisappear {
-            gameState.cleanup()
+            Task {
+                await gameState.cleanup()
+            }
         }
     }
     

@@ -120,6 +120,11 @@ final class GameState: ObservableObject {
     @Published var highScore: Int = 0
     @Published var highestLevel: Int = 1
     
+    // Add memory management properties
+    private var lastMemoryCleanup: Date = Date()
+    private let memoryCleanupInterval: TimeInterval = 60.0 // Cleanup every minute
+    private var cachedData: [String: Any] = [:]
+    
     // MARK: - Initialization
     init() {
         print("[GameState] Initializing GameState")
@@ -149,14 +154,19 @@ final class GameState: ObservableObject {
             name: UIApplication.willResignActiveNotification,
             object: nil
         )
+        
+        // Start periodic memory cleanup
+        Task {
+            await MemorySystem.shared.startPeriodicCleanup()
+        }
     }
     
     deinit {
         NotificationCenter.default.removeObserver(self)
         Task { [weak self] in
             guard let self = self else { return }
+            await cleanupMemory()
             await MainActor.run {
-                MemoryManager.shared.cleanupMemory()
                 self.cancellables.removeAll()
                 self.playTimeTimer?.invalidate()
             }
@@ -170,8 +180,11 @@ final class GameState: ObservableObject {
     
     @objc private func handleAppWillResignActive() {
         print("[GameState] App will resign active - saving statistics")
-        Task { [weak self] in
-            await self?.handleAppWillResignActive()
+        Task {
+            await cleanupMemory()
+            await MainActor.run {
+                self.saveStatistics()
+            }
         }
     }
     
@@ -1521,8 +1534,8 @@ final class GameState: ObservableObject {
         userDefaults.synchronize()
     }
     
-    func cleanup() {
-        MemoryManager.shared.cleanup()
+    func cleanup() async {
+        await MemorySystem.shared.cleanupMemory()
     }
     
     func resetLevelComplete() {
@@ -1717,6 +1730,52 @@ final class GameState: ObservableObject {
         refillTray()
         levelComplete = false
         isPerfectLevel = true
+    }
+    
+    private func cleanupMemory() async {
+        print("[GameState] Performing memory cleanup")
+        
+        // Clear cached data
+        cachedData.removeAll()
+        
+        // Clear undo history if it's too large
+        if let move = lastMove, move.timestamp.timeIntervalSinceNow < -300 { // Clear moves older than 5 minutes
+            previousGrid = nil
+            previousTray = nil
+            lastMove = nil
+            previousScore = 0
+            previousLevel = 1
+        }
+        
+        // Clear any temporary arrays
+        usedColors.removeAll(keepingCapacity: true)
+        usedShapes.removeAll(keepingCapacity: true)
+        
+        // Force garbage collection
+        autoreleasepool {
+            // Clear any temporary objects
+            grid = grid.map { row in
+                row.map { $0 }
+            }
+            tray = tray.map { $0 }
+        }
+        
+        // Call the shared memory system cleanup
+        await MemorySystem.shared.cleanupMemory()
+    }
+    
+    private func checkMemoryUsage() async {
+        let currentTime = Date()
+        if currentTime.timeIntervalSince(lastMemoryCleanup) > memoryCleanupInterval {
+            await cleanupMemory()
+            lastMemoryCleanup = currentTime
+        }
+    }
+    
+    // Add memory check to update method
+    func update() async {
+        await checkMemoryUsage()
+        // ... rest of update logic ...
     }
 }
 

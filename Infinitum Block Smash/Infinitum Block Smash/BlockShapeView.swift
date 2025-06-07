@@ -34,7 +34,9 @@ struct BlockShapeView: View {
         .frame(width: shapeWidth, height: shapeHeight)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: block.id)
         .onDisappear {
-            cleanupMemory()
+            Task {
+                await cleanupMemory()
+            }
         }
     }
     
@@ -48,32 +50,37 @@ struct BlockShapeView: View {
         return CGFloat(maxY + 1) * cellSize
     }
     
-    private func cleanupMemory() {
+    private func cleanupMemory() async {
         // Clear gradient cache if it gets too large
-        BlockShapeView.cacheQueue.async {
-            let now = Date()
-            
-            // Only cleanup if enough time has passed
-            guard now.timeIntervalSince(BlockShapeView.lastCleanupTime) >= BlockShapeView.cleanupInterval else {
-                return
+        await withCheckedContinuation { continuation in
+            BlockShapeView.cacheQueue.async {
+                let now = Date()
+                
+                // Only cleanup if enough time has passed
+                guard now.timeIntervalSince(BlockShapeView.lastCleanupTime) >= BlockShapeView.cleanupInterval else {
+                    continuation.resume()
+                    return
+                }
+                
+                BlockShapeView.lastCleanupTime = now
+                
+                if BlockShapeView.gradientCache.count > BlockShapeView.maxCacheSize {
+                    // Remove least recently used entries when cache is full
+                    let sortedKeys = BlockShapeView.gradientCache.keys.sorted()
+                    let keysToRemove = sortedKeys.prefix(BlockShapeView.gradientCache.count - BlockShapeView.maxCacheSize)
+                    keysToRemove.forEach { BlockShapeView.gradientCache.removeValue(forKey: $0) }
+                }
+                
+                // Log cache statistics
+                let hitRate = Double(BlockShapeView.cacheHits) / Double(BlockShapeView.cacheHits + BlockShapeView.cacheMisses)
+                print("[BlockShapeView] Cache hit rate: \(hitRate * 100)%")
+                
+                // Reset statistics
+                BlockShapeView.cacheHits = 0
+                BlockShapeView.cacheMisses = 0
+                
+                continuation.resume()
             }
-            
-            BlockShapeView.lastCleanupTime = now
-            
-            if BlockShapeView.gradientCache.count > BlockShapeView.maxCacheSize {
-                // Remove least recently used entries when cache is full
-                let sortedKeys = BlockShapeView.gradientCache.keys.sorted()
-                let keysToRemove = sortedKeys.prefix(BlockShapeView.gradientCache.count - BlockShapeView.maxCacheSize)
-                keysToRemove.forEach { BlockShapeView.gradientCache.removeValue(forKey: $0) }
-            }
-            
-            // Log cache statistics
-            let hitRate = Double(BlockShapeView.cacheHits) / Double(BlockShapeView.cacheHits + BlockShapeView.cacheMisses)
-            print("[BlockShapeView] Cache hit rate: \(hitRate * 100)%")
-            
-            // Reset statistics
-            BlockShapeView.cacheHits = 0
-            BlockShapeView.cacheMisses = 0
         }
     }
     
