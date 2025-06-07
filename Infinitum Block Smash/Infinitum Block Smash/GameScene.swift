@@ -735,16 +735,31 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func playComboAnimation(at positions: [CGPoint]) {
-        for pos in positions {
+        // Clean up any existing emitters that have finished
+        activeParticleEmitters.removeAll { emitter in
+            if emitter.particleBirthRate == 0 {
+                emitter.removeFromParent()
+                return true
+            }
+            return false
+        }
+        
+        // Limit the number of new emitters we can create
+        let remainingSlots = maxParticleEmitters - activeParticleEmitters.count
+        let positionsToAnimate = Array(positions.prefix(remainingSlots))
+        
+        for pos in positionsToAnimate {
             if let particles = SKEmitterNode(fileNamed: "ClearParticles") {
                 particles.position = CGPoint(
                     x: CGFloat(pos.x) * GameConstants.blockSize - CGFloat(GameConstants.gridSize) * GameConstants.blockSize/2,
                     y: CGFloat(pos.y) * GameConstants.blockSize - CGFloat(GameConstants.gridSize) * GameConstants.blockSize/2
                 )
+                particles.particleLifetime = 0.5 // Reduce particle lifetime
+                particles.particleBirthRate = 100 // Reduce birth rate
                 gridNode.addChild(particles)
                 activeParticleEmitters.append(particles)
                 
-                let wait = SKAction.wait(forDuration: 0.7)
+                let wait = SKAction.wait(forDuration: 0.5) // Reduced from 0.7
                 let remove = SKAction.run { [weak self] in
                     particles.removeFromParent()
                     self?.activeParticleEmitters.removeAll { $0 === particles }

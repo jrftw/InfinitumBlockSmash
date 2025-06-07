@@ -76,7 +76,7 @@ final class FirebaseManager {
     // Add caching
     private var lastSaveTime: Date?
     private var cachedProgress: GameProgress?
-    private let minimumSaveInterval: TimeInterval = 30 // Only save every 30 seconds
+    private let minimumSaveInterval: TimeInterval = 90 // Only save every 90 seconds
     private let userDefaults = UserDefaults.standard
     private let lastSaveTimeKey = "lastFirebaseSaveTime"
     private let lastBackgroundSyncKey = "lastBackgroundSyncTime"

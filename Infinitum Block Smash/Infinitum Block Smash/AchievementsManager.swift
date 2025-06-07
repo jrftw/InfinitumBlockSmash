@@ -550,6 +550,13 @@ class AchievementsManager: ObservableObject {
             return
         }
         
+        // Only update if there are new achievements unlocked
+        let hasNewAchievements = achievements.values.contains { $0.unlocked && !$0.wasNotified }
+        guard hasNewAchievements else {
+            print("[Achievement Leaderboard] No new achievements to update")
+            return
+        }
+        
         Task {
             do {
                 guard let userID = UserDefaults.standard.string(forKey: "userID"),

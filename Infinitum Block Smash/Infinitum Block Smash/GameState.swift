@@ -879,31 +879,12 @@ final class GameState: ObservableObject {
         
         achievementsManager.updateAchievement(id: "score_1000", value: score)
         
-        // Update high scores
+        // Update high scores locally only
         if score > highScore {
             highScore = score
             userDefaults.set(highScore, forKey: scoreKey)
             achievementsManager.updateAchievement(id: "high_score", value: score)
             print("[HighScore] New all-time high score: \(score)")
-            
-            // Update leaderboard with new high score
-            Task {
-                if !UserDefaults.standard.bool(forKey: "isGuest"),
-                   let username = UserDefaults.standard.string(forKey: "username"),
-                   let userID = UserDefaults.standard.string(forKey: "userID") {
-                    do {
-                        try await LeaderboardService.shared.updateLeaderboard(
-                            type: .score,
-                            score: highScore,
-                            username: username,
-                            userID: userID
-                        )
-                        print("[Leaderboard] Successfully updated leaderboard with new high score: \(highScore)")
-                    } catch {
-                        print("[Leaderboard] Error updating leaderboard: \(error.localizedDescription)")
-                    }
-                }
-            }
         }
         
         // Update level high score
@@ -1402,6 +1383,25 @@ final class GameState: ObservableObject {
             highScore = score
             userDefaults.set(highScore, forKey: scoreKey)
             print("[HighScore] Updated all-time high score: \(highScore)")
+            
+            // Update leaderboard with final score when game ends
+            Task {
+                if !UserDefaults.standard.bool(forKey: "isGuest"),
+                   let username = UserDefaults.standard.string(forKey: "username"),
+                   let userID = UserDefaults.standard.string(forKey: "userID") {
+                    do {
+                        try await LeaderboardService.shared.updateLeaderboard(
+                            type: .score,
+                            score: highScore,
+                            username: username,
+                            userID: userID
+                        )
+                        print("[Leaderboard] Successfully updated leaderboard with final score: \(highScore)")
+                    } catch {
+                        print("[Leaderboard] Error updating leaderboard: \(error.localizedDescription)")
+                    }
+                }
+            }
         }
         if level > highestLevel {
             highestLevel = level
@@ -1726,6 +1726,12 @@ final class GameState: ObservableObject {
     func startNewLevel() {
         level += 1
         updateLevelRequirements()
+        
+        // Cleanup before spawning new shapes
+        Task {
+            await cleanupMemory()
+        }
+        
         spawnRandomShapesOnBoard()
         refillTray()
         levelComplete = false
@@ -1735,8 +1741,8 @@ final class GameState: ObservableObject {
     private func cleanupMemory() async {
         print("[GameState] Performing memory cleanup")
         
-        // Clear undo history if it's too large
-        if let move = lastMove, move.timestamp.timeIntervalSinceNow < -300 { // Clear moves older than 5 minutes
+        // Clear undo history if it's too large or old
+        if let move = lastMove, move.timestamp.timeIntervalSinceNow < -180 { // Reduced from 300 to 180 seconds
             previousGrid = nil
             previousTray = nil
             lastMove = nil
@@ -1745,8 +1751,8 @@ final class GameState: ObservableObject {
         }
         
         // Clear any temporary arrays
-        usedColors.removeAll(keepingCapacity: true)
-        usedShapes.removeAll(keepingCapacity: true)
+        usedColors.removeAll(keepingCapacity: false) // Changed to false to release memory
+        usedShapes.removeAll(keepingCapacity: false) // Changed to false to release memory
         
         // Force garbage collection
         autoreleasepool {
@@ -1755,6 +1761,9 @@ final class GameState: ObservableObject {
                 row.map { $0 }
             }
             tray = tray.map { $0 }
+            
+            // Clear any cached data
+            cachedData.removeAll()
         }
         
         // Call the shared memory system cleanup

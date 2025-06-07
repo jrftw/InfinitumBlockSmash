@@ -16,12 +16,12 @@ final class MemorySystem {
     static let shared = MemorySystem()
     
     // MARK: — Thresholds
-    private let warningThreshold: Double = 0.70   // 70%
-    private let criticalThreshold: Double = 0.85  // 85%
+    private let warningThreshold: Double = 0.40   // 40%
+    private let criticalThreshold: Double = 0.60  // 60%
     
     // MARK: — Timing
     private var lastCleanupDate = Date.distantPast
-    private let minimumInterval: TimeInterval = 30.0 // seconds
+    private let minimumInterval: TimeInterval = 2.0 // seconds, reduced from 5.0
     
     // MARK: — Memory Pressure Source
     private let pressureSource: DispatchSourceMemoryPressure
@@ -33,9 +33,9 @@ final class MemorySystem {
     
     // MARK: — Initialization
     private init() {
-        // Static limits: 100 objects / 50 MB
-        memoryCache.countLimit     = 100
-        memoryCache.totalCostLimit = 50 * 1024 * 1024
+        // Static limits: 50 objects / 25 MB
+        memoryCache.countLimit     = 50  // Reduced from 100
+        memoryCache.totalCostLimit = 25 * 1024 * 1024  // Reduced from 50MB
         
         // — OR, dynamic sizing based on device RAM (eg. 1% of RAM):
         /*
