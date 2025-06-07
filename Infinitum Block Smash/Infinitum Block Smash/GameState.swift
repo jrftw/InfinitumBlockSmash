@@ -134,7 +134,6 @@ final class GameState: ObservableObject {
         gameStartTime = Date()
         loadLastPlayDate()
         startPlayTimeTimer()
-        startPeriodicSave() // Add periodic save
         
         // Register for app lifecycle notifications
         NotificationCenter.default.addObserver(
@@ -287,6 +286,11 @@ final class GameState: ObservableObject {
                 
                 // Reset ad-related state
                 self.resetAdState()
+                
+                // Reset saved score and level in UserDefaults
+                self.userDefaults.set(0, forKey: self.scoreKey)
+                self.userDefaults.set(1, forKey: self.levelKey)
+                self.userDefaults.synchronize()
                 
                 // Notify delegate of state change
                 self.delegate?.gameStateDidUpdate()
@@ -861,19 +865,44 @@ final class GameState: ObservableObject {
         }
         
         achievementsManager.updateAchievement(id: "score_1000", value: score)
-        // Global high score
-        if score > userDefaults.integer(forKey: scoreKey) {
+        
+        // Update high scores
+        if score > highScore {
+            highScore = score
+            userDefaults.set(highScore, forKey: scoreKey)
             achievementsManager.updateAchievement(id: "high_score", value: score)
-            // Remove leaderboard update from here
+            print("[HighScore] New all-time high score: \(score)")
+            
+            // Update leaderboard with new high score
+            Task {
+                if !UserDefaults.standard.bool(forKey: "isGuest"),
+                   let username = UserDefaults.standard.string(forKey: "username"),
+                   let userID = UserDefaults.standard.string(forKey: "userID") {
+                    do {
+                        try await LeaderboardService.shared.updateLeaderboard(
+                            type: .score,
+                            score: highScore,
+                            username: username,
+                            userID: userID
+                        )
+                        print("[Leaderboard] Successfully updated leaderboard with new high score: \(highScore)")
+                    } catch {
+                        print("[Leaderboard] Error updating leaderboard: \(error.localizedDescription)")
+                    }
+                }
+            }
         }
-        // Per-level high score
+        
+        // Update level high score
         let levelHighScoreKey = "highScore_level_\(level)"
         let prevLevelHigh = userDefaults.integer(forKey: levelHighScoreKey)
         if score > prevLevelHigh {
             userDefaults.set(score, forKey: levelHighScoreKey)
             print("[HighScore] New high score for level \(level): \(score)")
         }
+        
         delegate?.gameStateDidUpdate()
+        
         // Check for level up after every score change
         let requiredScore = calculateRequiredScore()
         if score >= requiredScore && !levelComplete {
@@ -1254,7 +1283,9 @@ final class GameState: ObservableObject {
     }
     
     func hasSavedGame() -> Bool {
-        return userDefaults.bool(forKey: hasSavedGameKey)
+        let hasFlag = userDefaults.bool(forKey: hasSavedGameKey)
+        let hasData = userDefaults.data(forKey: progressKey) != nil
+        return hasFlag && hasData
     }
     
     func loadSavedGame() async throws {
@@ -1272,6 +1303,17 @@ final class GameState: ObservableObject {
                 self.totalPlayTime = progress.totalPlayTime
                 self.highScore = progress.highScore
                 self.highestLevel = progress.highestLevel
+                self.grid = progress.grid
+                self.tray = progress.tray
+                
+                // Load FPS from UserDefaults
+                if let data = self.userDefaults.data(forKey: self.progressKey),
+                   let progressData = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let savedFPS = progressData["targetFPS"] as? Int {
+                    self.targetFPS = savedFPS
+                    // Update the FPS in the game view
+                    self.delegate?.updateFPS(savedFPS)
+                }
             }
             
             // Notify success
@@ -1293,14 +1335,10 @@ final class GameState: ObservableObject {
         totalPlayTime = userDefaults.double(forKey: totalPlayTimeKey)
         
         // Load high score and highest level
-        if let savedScore = userDefaults.object(forKey: scoreKey) as? Int {
-            score = savedScore
-        }
-        if let savedLevel = userDefaults.object(forKey: levelKey) as? Int {
-            level = savedLevel
-        }
+        highScore = userDefaults.integer(forKey: scoreKey)
+        highestLevel = userDefaults.integer(forKey: levelKey)
         
-        print("[GameState] Loaded statistics - Blocks: \(blocksPlaced), Lines: \(linesCleared), Games: \(gamesCompleted), Perfect: \(perfectLevels)")
+        print("[GameState] Loaded statistics - Blocks: \(blocksPlaced), Lines: \(linesCleared), Games: \(gamesCompleted), Perfect: \(perfectLevels), High Score: \(highScore), Highest Level: \(highestLevel)")
 
         // Load from Firebase if user is logged in
         Task {
@@ -1336,15 +1374,6 @@ final class GameState: ObservableObject {
         }
     }
 
-    // Add this method to save statistics periodically
-    private func startPeriodicSave() {
-        Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.saveStatistics()
-            }
-        }
-    }
-
     @MainActor
     private func saveStatistics() {
         print("[GameState] Saving statistics to UserDefaults")
@@ -1356,36 +1385,47 @@ final class GameState: ObservableObject {
         userDefaults.set(totalPlayTime, forKey: totalPlayTimeKey)
         
         // Save high score and highest level
-        if score > userDefaults.integer(forKey: scoreKey) {
-            userDefaults.set(score, forKey: scoreKey)
+        if score > highScore {
+            highScore = score
+            userDefaults.set(highScore, forKey: scoreKey)
+            print("[HighScore] Updated all-time high score: \(highScore)")
         }
-        if level > userDefaults.integer(forKey: levelKey) {
-            userDefaults.set(level, forKey: levelKey)
+        if level > highestLevel {
+            highestLevel = level
+            userDefaults.set(highestLevel, forKey: levelKey)
+            print("[HighScore] Updated highest level: \(highestLevel)")
         }
         
         // Force immediate save and synchronize
         userDefaults.synchronize()
-        print("[GameState] Saved statistics - Blocks: \(blocksPlaced), Lines: \(linesCleared), Games: \(gamesCompleted), Perfect: \(perfectLevels)")
+        print("[GameState] Saved statistics - Blocks: \(blocksPlaced), Lines: \(linesCleared), Games: \(gamesCompleted), Perfect: \(perfectLevels), High Score: \(highScore), Highest Level: \(highestLevel)")
 
-        // Sync with Firebase if user is logged in
+        // Sync with Firebase if user is logged in, but only if enough time has passed
         Task {
             if !UserDefaults.standard.bool(forKey: "isGuest") {
-                do {
-                    let progress = GameProgress(
-                        score: score,
-                        level: level,
-                        blocksPlaced: blocksPlaced,
-                        linesCleared: linesCleared,
-                        gamesCompleted: gamesCompleted,
-                        perfectLevels: perfectLevels,
-                        totalPlayTime: totalPlayTime,
-                        highScore: highScore,
-                        highestLevel: highestLevel
-                    )
-                    try await FirebaseManager.shared.saveGameProgress(progress)
-                    print("[GameState] Successfully synced statistics with Firebase")
-                } catch {
-                    print("[GameState] Error syncing statistics with Firebase: \(error.localizedDescription)")
+                let now = Date()
+                let lastSaveTime = userDefaults.object(forKey: "lastFirebaseSaveTime") as? Date ?? Date.distantPast
+                
+                // Only sync if at least 30 seconds have passed since last sync
+                if now.timeIntervalSince(lastSaveTime) >= 30 {
+                    do {
+                        let progress = GameProgress(
+                            score: score,
+                            level: level,
+                            blocksPlaced: blocksPlaced,
+                            linesCleared: linesCleared,
+                            gamesCompleted: gamesCompleted,
+                            perfectLevels: perfectLevels,
+                            totalPlayTime: totalPlayTime,
+                            highScore: highScore,
+                            highestLevel: highestLevel
+                        )
+                        try await FirebaseManager.shared.saveGameProgress(progress)
+                        userDefaults.set(now, forKey: "lastFirebaseSaveTime")
+                        print("[GameState] Successfully synced statistics with Firebase")
+                    } catch {
+                        print("[GameState] Error syncing statistics with Firebase: \(error.localizedDescription)")
+                    }
                 }
             }
         }
@@ -1420,74 +1460,59 @@ final class GameState: ObservableObject {
     }
     
     func saveProgress() async throws {
-        // Use async/await compatible synchronization
-        let task = Task {
-            // Create a continuation for semaphore wait
-            let semaphoreResult = await withCheckedContinuation { continuation in
-                // Try to acquire semaphore with timeout
-                let result = saveSemaphore.wait(timeout: .now() + 5.0)
-                continuation.resume(returning: result)
-            }
+        do {
+            let progress = GameProgress(
+                score: score,
+                level: level,
+                blocksPlaced: blocksPlaced,
+                linesCleared: linesCleared,
+                gamesCompleted: gamesCompleted,
+                perfectLevels: perfectLevels,
+                totalPlayTime: totalPlayTime,
+                highScore: highScore,
+                highestLevel: highestLevel,
+                grid: grid,
+                tray: tray
+            )
             
-            // Check if we got the semaphore
-            guard semaphoreResult == .success else {
-                throw GameError.saveFailed(NSError(domain: "GameState", code: -1, userInfo: [NSLocalizedDescriptionKey: "Save operation timed out"]))
-            }
+            try await FirebaseManager.shared.saveGameProgress(progress)
             
-            defer {
-                saveSemaphore.signal()
-            }
-            
-            do {
-                let progress = GameProgress(
-                    score: score,
-                    level: level,
-                    blocksPlaced: blocksPlaced,
-                    linesCleared: linesCleared,
-                    gamesCompleted: gamesCompleted,
-                    perfectLevels: perfectLevels,
-                    totalPlayTime: totalPlayTime,
-                    highScore: highScore,
-                    highestLevel: highestLevel
-                )
-                
-                try await FirebaseManager.shared.saveGameProgress(progress)
-                
-                // Update local storage on main actor
-                await MainActor.run {
-                    do {
-                        let progressData: [String: Any] = [
-                            "score": progress.score,
-                            "level": progress.level,
-                            "blocksPlaced": progress.blocksPlaced,
-                            "linesCleared": progress.linesCleared,
-                            "gamesCompleted": progress.gamesCompleted,
-                            "perfectLevels": progress.perfectLevels,
-                            "totalPlayTime": progress.totalPlayTime,
-                            "highScore": progress.highScore,
-                            "highestLevel": progress.highestLevel
+            // Update local storage on main actor
+            try await MainActor.run {
+                let progressData: [String: Any] = [
+                    "score": progress.score,
+                    "level": progress.level,
+                    "blocksPlaced": progress.blocksPlaced,
+                    "linesCleared": progress.linesCleared,
+                    "gamesCompleted": progress.gamesCompleted,
+                    "perfectLevels": progress.perfectLevels,
+                    "totalPlayTime": progress.totalPlayTime,
+                    "highScore": progress.highScore,
+                    "highestLevel": progress.highestLevel,
+                    "targetFPS": targetFPS,
+                    "grid": grid.map { row in row.map { $0?.rawValue ?? "nil" } },
+                    "tray": tray.map { block in
+                        [
+                            "color": block.color.rawValue,
+                            "shape": block.shape.rawValue
                         ]
-                        let data = try JSONSerialization.data(withJSONObject: progressData)
-                        self.userDefaults.set(data, forKey: self.progressKey)
-                    } catch {
-                        print("[GameState] Error saving to UserDefaults: \(error.localizedDescription)")
                     }
-                }
+                ]
+                let data = try JSONSerialization.data(withJSONObject: progressData)
+                self.userDefaults.set(data, forKey: self.progressKey)
+                self.userDefaults.set(true, forKey: self.hasSavedGameKey)
+                self.userDefaults.synchronize()
                 
                 // Notify success
-                await MainActor.run {
-                    NotificationCenter.default.post(name: .gameStateSaved, object: nil)
-                }
-            } catch {
-                // Notify failure
-                await MainActor.run {
-                    NotificationCenter.default.post(name: .gameStateSaveFailed, object: error)
-                }
-                throw GameError.saveFailed(error)
+                NotificationCenter.default.post(name: .gameStateSaved, object: nil)
             }
+        } catch {
+            // Notify failure
+            await MainActor.run {
+                NotificationCenter.default.post(name: .gameStateSaveFailed, object: error)
+            }
+            throw GameError.saveFailed(error)
         }
-        
-        return try await task.value
     }
 
     func deleteSavedGame() {

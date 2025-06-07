@@ -140,6 +140,7 @@ class AchievementsManager: ObservableObject {
     @Published private var achievements: [String: Achievement] = [:]
     @Published var totalPoints: Int = 0
     private let userDefaults = UserDefaults.standard
+    private let db = Firestore.firestore()
     
     var allAchievements: [Achievement] {
         Array(achievements.values)
@@ -148,10 +149,17 @@ class AchievementsManager: ObservableObject {
     init() {
         loadAchievements()
         calculateTotalPoints()
+        Task {
+            await syncAchievementsWithFirebase()
+        }
     }
     
     private func calculateTotalPoints() {
-        totalPoints = achievements.values.filter { $0.unlocked }.reduce(0) { $0 + $1.points }
+        let newTotal = achievements.values.filter { $0.unlocked }.reduce(0) { $0 + $1.points }
+        if newTotal != totalPoints {
+            totalPoints = newTotal
+            updateLeaderboard()
+        }
     }
     
     private func loadAchievements() {
@@ -173,13 +181,105 @@ class AchievementsManager: ObservableObject {
         }
         calculateTotalPoints()
         objectWillChange.send()
+        
+        // Sync with Firebase
+        Task {
+            await syncAchievementToFirebase(achievement)
+        }
+    }
+    
+    private func syncAchievementToFirebase(_ achievement: Achievement) async {
+        guard let userId = Auth.auth().currentUser?.uid else { return }
+        
+        do {
+            let achievementData: [String: Any] = [
+                "id": achievement.id,
+                "name": achievement.name,
+                "description": achievement.description,
+                "unlocked": achievement.unlocked,
+                "progress": achievement.progress,
+                "goal": achievement.goal,
+                "wasNotified": achievement.wasNotified,
+                "points": achievement.points,
+                "lastUpdated": FieldValue.serverTimestamp()
+            ]
+            
+            try await db.collection("users").document(userId)
+                .collection("achievements")
+                .document(achievement.id)
+                .setData(achievementData, merge: true)
+            
+            print("[Achievements] Successfully synced achievement \(achievement.id) to Firebase")
+        } catch {
+            print("[Achievements] Error syncing achievement to Firebase: \(error.localizedDescription)")
+        }
+    }
+    
+    private func syncAchievementsWithFirebase() async {
+        guard let userId = Auth.auth().currentUser?.uid else { return }
+        
+        do {
+            let snapshot = try await db.collection("users").document(userId)
+                .collection("achievements")
+                .getDocuments()
+            
+            var hasUpdates = false
+            
+            for document in snapshot.documents {
+                let data = document.data()
+                if let id = data["id"] as? String,
+                   let name = data["name"] as? String,
+                   let description = data["description"] as? String,
+                   let unlocked = data["unlocked"] as? Bool,
+                   let progress = data["progress"] as? Int,
+                   let goal = data["goal"] as? Int,
+                   let wasNotified = data["wasNotified"] as? Bool,
+                   let points = data["points"] as? Int {
+                    
+                    let firebaseAchievement = Achievement(
+                        id: id,
+                        name: name,
+                        description: description,
+                        unlocked: unlocked,
+                        progress: progress,
+                        goal: goal,
+                        wasNotified: wasNotified,
+                        points: points
+                    )
+                    
+                    // Only update if Firebase data is more recent or has higher progress
+                    if let localAchievement = achievements[id] {
+                        if firebaseAchievement.progress > localAchievement.progress ||
+                           (firebaseAchievement.unlocked && !localAchievement.unlocked) {
+                            achievements[id] = firebaseAchievement
+                            hasUpdates = true
+                        }
+                    } else {
+                        achievements[id] = firebaseAchievement
+                        hasUpdates = true
+                    }
+                }
+            }
+            
+            if hasUpdates {
+                // Save updated achievements to UserDefaults
+                saveAchievements()
+                calculateTotalPoints()
+                objectWillChange.send()
+            }
+            
+            print("[Achievements] Successfully synced achievements with Firebase")
+        } catch {
+            print("[Achievements] Error syncing achievements with Firebase: \(error.localizedDescription)")
+        }
     }
     
     func updateAchievement(id: String, value: Int) {
         guard var achievement = achievements[id] else { return }
         
-        // Update progress
-        achievement.progress = min(achievement.progress + value, achievement.goal)
+        // Update progress with maximum value check
+        let maxProgress = min(Int.max - achievement.progress, value)
+        achievement.progress = min(achievement.progress + maxProgress, achievement.goal)
         
         // Check if achievement is completed
         if !achievement.unlocked && achievement.progress >= achievement.goal {
@@ -419,6 +519,7 @@ class AchievementsManager: ObservableObject {
     private func saveAchievements() {
         if let encoded = try? JSONEncoder().encode(Array(achievements.values)) {
             userDefaults.set(encoded, forKey: "achievements")
+            userDefaults.synchronize()
         }
     }
 }

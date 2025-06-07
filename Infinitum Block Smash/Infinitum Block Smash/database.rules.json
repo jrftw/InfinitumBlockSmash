@@ -10,6 +10,37 @@
         "settings": {
           ".read": "auth != null && auth.uid === $uid",
           ".write": "auth != null && auth.uid === $uid"
+        },
+        "progress": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": "auth != null && auth.uid === $uid",
+          "score": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "level": {
+            ".validate": "newData.isNumber() && newData.val() >= 1"
+          },
+          "blocksPlaced": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "linesCleared": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "gamesCompleted": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "perfectLevels": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "totalPlayTime": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "highScore": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "highestLevel": {
+            ".validate": "newData.isNumber() && newData.val() >= 1"
+          }
         }
       }
     },

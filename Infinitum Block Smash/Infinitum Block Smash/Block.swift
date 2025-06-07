@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-struct Block: Identifiable {
+struct Block: Identifiable, Codable {
     var id: UUID
     let color: BlockColor
     let shape: BlockShape
@@ -22,7 +22,7 @@ struct Block: Identifiable {
     }
 }
 
-enum BlockColor: String, CaseIterable {
+enum BlockColor: String, CaseIterable, Codable {
     case red = "red"
     case blue = "blue"
     case green = "green"
@@ -100,7 +100,7 @@ enum BlockColor: String, CaseIterable {
 }
 
 // BlockShape: defines the arrangement of cells for a block
-enum BlockShape: String, CaseIterable {
+enum BlockShape: String, CaseIterable, Codable {
     // Single block
     case single
     // Tiny L shapes (3 blocks)

@@ -1,11 +1,11 @@
 import Foundation
 
 struct AppVersion {
-    static let current = "1.0.3"
-    static let build = "1"
+    static let current = "1.0.2"
+    static let build = "2"
     
     static let changelog: [String: [String]] = [
-        "1.0.3 (Build 1)": [
+        "1.0.2 (Build 2)": [
             "Enhanced subscription and in-app purchase system",
             "Added comprehensive purchase verification",
             "Improved subscription status tracking",

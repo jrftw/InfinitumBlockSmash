@@ -129,21 +129,25 @@ final class LeaderboardService {
             // Get current time in EST
             let now = Date()
             let calendar = Calendar.current
+            let estNow = now.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
             
             // Get start of current period in EST
             let startOfPeriod: Date
             switch period {
             case "daily":
-                startOfPeriod = calendar.startOfDay(for: now.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT())))
+                startOfPeriod = calendar.startOfDay(for: estNow)
             case "weekly":
                 // Get start of week (Sunday) in EST
-                var components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT())))
+                var components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: estNow)
                 components.weekday = 1 // Sunday
                 startOfPeriod = calendar.date(from: components) ?? now
             case "monthly":
-                // Get start of month in EST
-                var components = calendar.dateComponents([.year, .month], from: now.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT())))
+                // Get start of month in EST with proper month boundary handling
+                var components = calendar.dateComponents([.year, .month], from: estNow)
                 components.day = 1
+                components.hour = 0
+                components.minute = 0
+                components.second = 0
                 startOfPeriod = calendar.date(from: components) ?? now
             default:
                 startOfPeriod = now
@@ -156,15 +160,21 @@ final class LeaderboardService {
                 if let timestamp = (document.data()["timestamp"] as? Timestamp)?.dateValue() {
                     let estTimestamp = timestamp.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
                     
-                    let shouldReset = switch period {
+                    let shouldReset: Bool
+                    switch period {
                     case "daily":
-                        estTimestamp < startOfPeriod
+                        shouldReset = estTimestamp < startOfPeriod
                     case "weekly":
-                        estTimestamp < startOfPeriod
+                        shouldReset = estTimestamp < startOfPeriod
                     case "monthly":
-                        estTimestamp < startOfPeriod
+                        // For monthly, also check if we're in a new month
+                        let estComponents = calendar.dateComponents([.year, .month], from: estTimestamp)
+                        let currentComponents = calendar.dateComponents([.year, .month], from: estNow)
+                        shouldReset = estTimestamp < startOfPeriod || 
+                            estComponents.year != currentComponents.year || 
+                            estComponents.month != currentComponents.month
                     default:
-                        false
+                        shouldReset = false
                     }
                     
                     if shouldReset {

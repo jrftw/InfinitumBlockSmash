@@ -52,6 +52,10 @@ class FPSManager: ObservableObject {
         if availableFPSOptions.contains(fps) {
             targetFPS = fps
             userDefaults.set(fps, forKey: targetFPSKey)
+            userDefaults.synchronize()
+            
+            // Notify any observers that FPS has changed
+            NotificationCenter.default.post(name: .fpsDidChange, object: nil, userInfo: ["fps": fps])
         }
     }
     
@@ -69,4 +73,4 @@ class FPSManager: ObservableObject {
         }
         return "\(fps) FPS"
     }
-} 
+}

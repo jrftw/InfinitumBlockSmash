@@ -366,14 +366,14 @@ struct SettingsView: View {
                     HStack {
                         Text("High Score")
                         Spacer()
-                        Text("\(UserDefaults.standard.integer(forKey: "highScore"))")
+                        Text("\(gameState.highScore)")
                             .foregroundColor(.blue)
                     }
                     
                     HStack {
                         Text("Highest Level")
                         Spacer()
-                        Text("\(UserDefaults.standard.integer(forKey: "highestLevel"))")
+                        Text("\(gameState.highestLevel)")
                             .foregroundColor(.blue)
                     }
                 }

@@ -93,14 +93,14 @@ struct GameView: View {
                                 .foregroundColor(Color.blue.opacity(0.9))
                                 .padding(.leading, 12)
                             Spacer()
-                            Text("All-Time High: \(UserDefaults.standard.integer(forKey: "highScore"))")
+                            Text("All-Time High: \(gameState.highScore)")
                                 .font(.caption2)
                                 .foregroundColor(Color.orange.opacity(0.9))
                                 .padding(.trailing, 12)
                         }
                         .padding(.bottom, 6)
                         .accessibilityElement(children: .combine)
-                        .accessibilityLabel("Level High Score: \(UserDefaults.standard.integer(forKey: "highScore_level_\(gameState.level)")) and All-Time High Score: \(UserDefaults.standard.integer(forKey: "highScore"))")
+                        .accessibilityLabel("Level High Score: \(UserDefaults.standard.integer(forKey: "highScore_level_\(gameState.level)")) and All-Time High Score: \(gameState.highScore)")
                     }
                 }
                 .frame(height: 88)

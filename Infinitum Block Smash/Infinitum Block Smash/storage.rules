@@ -13,7 +13,7 @@ service firebase.storage {
     
     function isValidImage() {
       return request.resource.contentType.matches('image/.*')
-        && request.resource.size < 5 * 1024 * 1024; // 5MB max
+        && request.resource.size < 1 * 1024 * 1024; // 1MB max for free tier
     }
 
     // User profile images

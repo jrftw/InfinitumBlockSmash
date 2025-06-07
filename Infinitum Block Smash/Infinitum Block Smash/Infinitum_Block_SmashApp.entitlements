@@ -14,10 +14,34 @@
     <array>
         <string>fetch</string>
         <string>processing</string>
+        <string>remote-notification</string>
     </array>
     <key>com.apple.developer.applesignin</key>
     <array>
         <string>Default</string>
+    </array>
+    <key>com.apple.developer.devicecheck.appattest-environment</key>
+    <string>production</string>
+    <key>com.apple.developer.icloud-container-identifiers</key>
+    <array>
+        <string>iCloud.com.infinitum.blocksmash</string>
+    </array>
+    <key>com.apple.developer.icloud-services</key>
+    <array>
+        <string>CloudKit</string>
+    </array>
+    <key>com.apple.developer.associated-domains</key>
+    <array>
+        <string>applinks:infinitumlive.com</string>
+    </array>
+    <key>com.apple.developer.networking.wifi-info</key>
+    <true/>
+    <key>com.apple.developer.networking.HotspotConfiguration</key>
+    <true/>
+    <key>com.apple.developer.networking.NetworkExtension</key>
+    <array>
+        <string>app-proxy-provider</string>
+        <string>content-filter-provider</string>
     </array>
 </dict>
 </plist> 

@@ -92,20 +92,21 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             gameState.delegate = self
         }
         
-        print("[DEBUG] Scene setup complete. trayNode in parent: \(trayNode.parent != nil)")
-        
-        super.didMove(to: view)
-        setBackgroundAnimationsActive(true)
-        
         // Add notification observers
         NotificationCenter.default.addObserver(self,
                                              selector: #selector(pauseBackgroundAnimations),
                                              name: NSNotification.Name("PauseBackgroundAnimations"),
                                              object: nil)
+        
         NotificationCenter.default.addObserver(self,
-                                             selector: #selector(resumeBackgroundAnimations),
-                                             name: NSNotification.Name("ResumeBackgroundAnimations"),
+                                             selector: #selector(handleFPSChange),
+                                             name: .fpsDidChange,
                                              object: nil)
+        
+        print("[DEBUG] Scene setup complete. trayNode in parent: \(trayNode.parent != nil)")
+        
+        super.didMove(to: view)
+        setBackgroundAnimationsActive(true)
     }
     
     override func willMove(from view: SKView) {
@@ -1031,6 +1032,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     @objc private func resumeBackgroundAnimations() {
         setBackgroundAnimationsActive(true)
     }
+    
+    @objc private func handleFPSChange(_ notification: Notification) {
+        if let fps = notification.userInfo?["fps"] as? Int {
+            view?.preferredFramesPerSecond = fps
+        }
+    }
 }
 
 extension GameScene: GameStateDelegate {
@@ -1153,4 +1160,5 @@ extension GameScene: GameStateDelegate {
 // MARK: - Notifications
 extension Notification.Name {
     static let memoryCritical = Notification.Name("memoryCritical")
+    static let fpsDidChange = Notification.Name("fpsDidChange")
 } 

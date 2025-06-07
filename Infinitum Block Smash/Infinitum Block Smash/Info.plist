@@ -15,11 +15,22 @@
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.3</string>
+	<string>1.0.2</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>2</string>
 	<key>CFBundleDisplayName</key>
 	<string>Infinitum Block Smash</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>infinitumblocksmash</string>
+			</array>
+			<key>CFBundleURLName</key>
+			<string>com.infinitum.blocksmash</string>
+		</dict>
+	</array>
 	<key>GADApplicationIdentifier</key>
 	<string>ca-app-pub-6815311336585204~8428648149</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
@@ -27,6 +38,7 @@
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>https</string>
+		<string>mailto</string>
 	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
@@ -37,7 +49,19 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<false/>
 		<key>NSExceptionDomains</key>
-		<dict/>
+		<dict>
+			<key>infinitumlive.com</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSTemporaryExceptionAllowsInsecureHTTPLoads</key>
+				<false/>
+				<key>NSTemporaryExceptionMinimumTLSVersion</key>
+				<string>TLSv1.2</string>
+				<key>NSTemporaryExceptionRequiresForwardSecrecy</key>
+				<true/>
+			</dict>
+		</dict>
 	</dict>
 	<key>NSUserNotificationUsageDescription</key>
 	<string>We use notifications to send you daily reminders to play and keep you updated about your achievements and game events.</string>
@@ -45,6 +69,8 @@
 	<string>We use this identifier to provide you with personalized ads and improve your gaming experience. This helps us show you relevant content and track your achievements. Your data is used to enhance gameplay features, analyze app performance, and provide better support. You can change this setting anytime in your device settings.</string>
 	<key>PrivacyPolicyURL</key>
 	<string>https://infinitumlive.com/privacy-policy/</string>
+	<key>SupportURL</key>
+	<string>https://infinitumlive.com/support</string>
 	<key>SKAdNetworkItems</key>
 	<array>
 		<dict>
@@ -396,8 +422,19 @@
 			<string>zq492l623r.skadnetwork</string>
 		</dict>
 	</array>
-	<key>SupportURL</key>
-	<string>https://infinitumlive.com/support</string>
+	<key>StoreKit</key>
+	<dict>
+		<key>InAppPurchase</key>
+		<true/>
+	</dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.infinitum.blocksmash.refresh</string>
+	</array>
+	<key>FirebaseAppCheckDebugEnabled</key>
+	<true/>
+	<key>FirebaseAppCheckDebugToken</key>
+	<string>D605B88E-43B0-42C8-BBDE-718858DF4ED3</string>
 	<key>UIAppFonts</key>
 	<array/>
 	<key>UIApplicationSceneManifest</key>
@@ -428,6 +465,7 @@
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
 		<string>armv7</string>
+		<string>metal</string>
 	</array>
 	<key>UIRequiresFullScreen</key>
 	<true/>
@@ -440,28 +478,15 @@
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
 	<key>com.apple.developer.devicecheck.appattest-environment</key>
 	<string>development</string>
-	<key>StoreKit</key>
-	<dict>
-		<key>InAppPurchase</key>
-		<true/>
-	</dict>
-	<key>BGTaskSchedulerPermittedIdentifiers</key>
-	<array>
-		<string>com.infinitum.blocksmash.refresh</string>
-	</array>
 </dict>
 </plist>

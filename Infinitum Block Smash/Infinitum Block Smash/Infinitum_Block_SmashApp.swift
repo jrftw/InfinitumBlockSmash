@@ -23,6 +23,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Configure AppCheck with proper provider
         configureAppCheck()
         
+        // Initialize FirebaseManager to set up Firestore settings
+        _ = FirebaseManager.shared
+        
         // Configure Google Mobile Ads
         MobileAds.shared.start { status in
             print("Google Mobile Ads SDK initialization status: \(status)")
@@ -294,7 +297,8 @@ class SceneDelegate: NSObject, UIWindowSceneDelegate {
 // MARK: - HomeView
 struct HomeView: View {
     @Binding var showGame: Bool
-
+    @State private var onlineUsersCount = 0
+    
     var body: some View {
         ZStack {
             Color(.systemIndigo).ignoresSafeArea()
@@ -302,10 +306,17 @@ struct HomeView: View {
             VStack(spacing: 40) {
                 Spacer()
 
-                Text("Infinitum Block Smash")
-                    .font(.largeTitle.bold())
-                    .foregroundColor(.white)
-                    .shadow(radius: 8)
+                VStack(spacing: 8) {
+                    Text("Infinitum Block Smash")
+                        .font(.largeTitle.bold())
+                        .foregroundColor(.white)
+                        .shadow(radius: 8)
+                    
+                    Text(onlineUsersCountText)
+                        .font(.subheadline)
+                        .foregroundColor(.white.opacity(0.8))
+                        .shadow(radius: 4)
+                }
 
                 Spacer()
 
@@ -325,5 +336,23 @@ struct HomeView: View {
                 Spacer()
             }
         }
+        .onAppear {
+            Task { @MainActor in
+                onlineUsersCount = FirebaseManager.shared.getOnlineUsersCount()
+            }
+            NotificationCenter.default.addObserver(
+                forName: .onlineUsersCountDidChange,
+                object: nil,
+                queue: .main
+            ) { _ in
+                Task { @MainActor in
+                    onlineUsersCount = FirebaseManager.shared.getOnlineUsersCount()
+                }
+            }
+        }
+    }
+    
+    private var onlineUsersCountText: String {
+        "\(onlineUsersCount) players online"
     }
 }

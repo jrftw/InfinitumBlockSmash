@@ -22,12 +22,36 @@ service cloud.firestore {
         && request.resource.data.username.size() <= 20;
     }
 
+    function isValidGameProgress() {
+      return request.resource.data.score is number &&
+             request.resource.data.level is number &&
+             request.resource.data.blocksPlaced is number &&
+             request.resource.data.linesCleared is number &&
+             request.resource.data.gamesCompleted is number &&
+             request.resource.data.perfectLevels is number &&
+             request.resource.data.totalPlayTime is number &&
+             request.resource.data.highScore is number &&
+             request.resource.data.highestLevel is number;
+    }
+
     // Users collection
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isOwner(userId) && isValidUsername();
       allow update: if isAuthenticated() && isOwner(userId) && isValidUsername();
       allow delete: if isAuthenticated() && isOwner(userId);
+      
+      // User's game progress
+      match /progress/{document=**} {
+        allow read: if isAuthenticated() && isOwner(userId);
+        allow write: if isAuthenticated() && isOwner(userId) && isValidGameProgress();
+      }
+      
+      // User's achievements
+      match /achievements/{achievementId} {
+        allow read: if isAuthenticated() && isOwner(userId);
+        allow write: if isAuthenticated() && isOwner(userId);
+      }
     }
 
     // Classic leaderboard

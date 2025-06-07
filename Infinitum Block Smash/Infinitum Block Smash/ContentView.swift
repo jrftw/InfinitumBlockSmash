@@ -17,6 +17,9 @@ struct ContentView: View {
     @AppStorage("isGuest") private var isGuest: Bool = false
     @State private var showingNewGameConfirmation = false
     @State private var showingStore = false
+    @StateObject private var authViewModel = AuthViewModel()
+    @State private var onlineUsersCount = 0
+    @State private var dailyPlayersCount = 0
     
     var isLoggedIn: Bool {
         !userID.isEmpty && (!username.isEmpty || isGuest)
@@ -45,10 +48,28 @@ struct ContentView: View {
                         .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 5)
                     
                     // App Title
-                    Text("Infinitum Block Smash")
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-                        .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 2)
+                    VStack(spacing: 4) {
+                        Text("Infinitum Block Smash")
+                            .font(.system(size: 32, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                            .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 2)
+                        
+                        HStack(spacing: 16) {
+                            Text("\(onlineUsersCount) online")
+                                .font(.system(size: 14, weight: .medium, design: .rounded))
+                                .foregroundColor(.white.opacity(0.8))
+                                .shadow(color: .black.opacity(0.2), radius: 1, x: 0, y: 1)
+                            
+                            Text("•")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.white.opacity(0.6))
+                            
+                            Text("\(dailyPlayersCount) today")
+                                .font(.system(size: 14, weight: .medium, design: .rounded))
+                                .foregroundColor(.white.opacity(0.8))
+                                .shadow(color: .black.opacity(0.2), radius: 1, x: 0, y: 1)
+                        }
+                    }
                     
                     // Menu Buttons
                     VStack(spacing: 15) {
@@ -127,6 +148,12 @@ struct ContentView: View {
                     }
                 }
             }
+            
+            setupOnlineUsersTracking()
+            setupDailyPlayersTracking()
+        }
+        .onDisappear {
+            cleanup()
         }
         .fullScreenCover(isPresented: $showingGameView) {
             GameView(gameState: gameState)
@@ -174,6 +201,46 @@ struct ContentView: View {
         } else {
             showingLeaderboard = true
         }
+    }
+    
+    private func setupOnlineUsersTracking() {
+        // Set initial count
+        Task { @MainActor in
+            onlineUsersCount = FirebaseManager.shared.getOnlineUsersCount()
+        }
+
+        // Observe changes
+        NotificationCenter.default.addObserver(
+            forName: .onlineUsersCountDidChange,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                onlineUsersCount = FirebaseManager.shared.getOnlineUsersCount()
+            }
+        }
+    }
+    
+    private func setupDailyPlayersTracking() {
+        // Set initial count
+        Task { @MainActor in
+            dailyPlayersCount = FirebaseManager.shared.getDailyPlayersCount()
+        }
+
+        // Observe changes
+        NotificationCenter.default.addObserver(
+            forName: .dailyPlayersCountDidChange,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                dailyPlayersCount = FirebaseManager.shared.getDailyPlayersCount()
+            }
+        }
+    }
+    
+    private func cleanup() {
+        NotificationCenter.default.removeObserver(self)
     }
 }
 
