@@ -44,6 +44,7 @@ final class FirebaseManager {
     private var cancellables = Set<AnyCancellable>()
     private let maxRetries = 3
     private let retryDelay: TimeInterval = 2.0
+    private var lastError: Error?
     
     // Cache keys
     private enum CacheKey {
@@ -151,42 +152,130 @@ final class FirebaseManager {
         }
     }
     
+    private func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async throws -> T) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask {
+                try await operation()
+            }
+            
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                throw FirebaseError.networkError
+            }
+            
+            let result = try await group.next()!
+            group.cancelAll()
+            return result
+        }
+    }
+    
+    func saveGameProgress(_ progress: GameProgress) async throws {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            throw FirebaseError.notAuthenticated
+        }
+        
+        guard NetworkMonitor.shared.isConnected else {
+            throw FirebaseError.offlineMode
+        }
+        
+        // Check if we should save based on minimum interval
+        let now = Date()
+        if let lastSave = self.lastSaveTime,
+           now.timeIntervalSince(lastSave) < self.minimumSaveInterval {
+            return
+        }
+        
+        var attempt = 0
+        while attempt < self.maxRetries {
+            do {
+                return try await withTimeout(seconds: 10) {
+                    let db = Firestore.firestore()
+                    let progressData: [String: Any] = [
+                        "score": progress.score,
+                        "level": progress.level,
+                        "blocksPlaced": progress.blocksPlaced,
+                        "linesCleared": progress.linesCleared,
+                        "gamesCompleted": progress.gamesCompleted,
+                        "perfectLevels": progress.perfectLevels,
+                        "totalPlayTime": progress.totalPlayTime,
+                        "highScore": progress.highScore,
+                        "highestLevel": progress.highestLevel,
+                        "lastUpdated": FieldValue.serverTimestamp()
+                    ]
+                    
+                    // Update Firestore
+                    try await db.collection("users").document(userId).setData(progressData, merge: true)
+                    
+                    // Update local cache
+                    self.cacheGameProgress(progress)
+                    self.cachedProgress = progress
+                    self.lastSaveTime = now
+                    self.userDefaults.set(now, forKey: self.lastSaveTimeKey)
+                }
+            } catch {
+                self.lastError = error
+                
+                if !(error is URLError) && !(error is FirebaseError) {
+                    throw error
+                }
+                
+                if attempt < self.maxRetries - 1 {
+                    try await Task.sleep(nanoseconds: UInt64(self.retryDelay * Double(attempt) * 1_000_000_000))
+                }
+                attempt += 1
+            }
+        }
+        
+        throw self.lastError ?? FirebaseError.retryLimitExceeded
+    }
+    
     func loadGameProgress() async throws -> GameProgress {
         guard let userId = Auth.auth().currentUser?.uid else {
             throw FirebaseError.notAuthenticated
         }
         
-        // Try to get from cache first
-        if let cached = getCachedGameProgress() {
-            return cached
+        guard NetworkMonitor.shared.isConnected else {
+            throw FirebaseError.offlineMode
         }
         
-        return try await retryOperation { [self] in
-            let document = try await self.db.collection("users").document(userId).getDocument()
-            guard let data = document.data() else {
-                throw FirebaseError.invalidData
+        var attempt = 0
+        while attempt < maxRetries {
+            do {
+                return try await withTimeout(seconds: 10) {
+                    let db = Firestore.firestore()
+                    let document = try await db.collection("users").document(userId).collection("progress").document("current").getDocument()
+                    
+                    guard let data = document.data() else {
+                        throw FirebaseError.invalidData
+                    }
+                    
+                    return GameProgress(
+                        score: data["score"] as? Int ?? 0,
+                        level: data["level"] as? Int ?? 1,
+                        blocksPlaced: data["blocksPlaced"] as? Int ?? 0,
+                        linesCleared: data["linesCleared"] as? Int ?? 0,
+                        gamesCompleted: data["gamesCompleted"] as? Int ?? 0,
+                        perfectLevels: data["perfectLevels"] as? Int ?? 0,
+                        totalPlayTime: data["totalPlayTime"] as? TimeInterval ?? 0,
+                        highScore: data["highScore"] as? Int ?? data["score"] as? Int ?? 0,
+                        highestLevel: data["highestLevel"] as? Int ?? data["level"] as? Int ?? 1
+                    )
+                }
+            } catch {
+                lastError = error
+                
+                if !(error is URLError) && !(error is FirebaseError) {
+                    throw error
+                }
+                
+                if attempt < maxRetries - 1 {
+                    try await Task.sleep(nanoseconds: UInt64(retryDelay * Double(attempt) * 1_000_000_000))
+                }
+                attempt += 1
             }
-            
-            let progress = GameProgress(
-                score: data["score"] as? Int ?? 0,
-                level: data["level"] as? Int ?? 1,
-                blocksPlaced: data["blocksPlaced"] as? Int ?? 0,
-                linesCleared: data["linesCleared"] as? Int ?? 0,
-                gamesCompleted: data["gamesCompleted"] as? Int ?? 0,
-                perfectLevels: data["perfectLevels"] as? Int ?? 0,
-                totalPlayTime: data["totalPlayTime"] as? TimeInterval ?? 0,
-                highScore: data["highScore"] as? Int ?? data["score"] as? Int ?? 0,
-                highestLevel: data["highestLevel"] as? Int ?? data["level"] as? Int ?? 1
-            )
-            
-            // Update all caches
-            cacheGameProgress(progress)
-            self.cachedProgress = progress
-            self.lastSaveTime = Date()
-            self.userDefaults.set(self.lastSaveTime, forKey: self.lastSaveTimeKey)
-            
-            return progress
         }
+        
+        throw lastError ?? FirebaseError.retryLimitExceeded
     }
     
     func getLeaderboard() async throws -> [LeaderboardEntry] {
@@ -255,42 +344,5 @@ final class FirebaseManager {
         }
         
         throw lastError ?? FirebaseError.retryLimitExceeded
-    }
-    
-    // MARK: - Game Progress Methods
-    
-    func saveGameProgress(_ progress: GameProgress) async throws {
-        guard let userId = Auth.auth().currentUser?.uid else {
-            throw FirebaseError.notAuthenticated
-        }
-        
-        // Check if we should save based on minimum interval
-        let now = Date()
-        if let lastSave = lastSaveTime,
-           now.timeIntervalSince(lastSave) < minimumSaveInterval {
-            return
-        }
-        
-        try await retryOperation { [self] in
-            // Update Firestore
-            try await self.db.collection("users").document(userId).setData([
-                "score": progress.score,
-                "level": progress.level,
-                "blocksPlaced": progress.blocksPlaced,
-                "linesCleared": progress.linesCleared,
-                "gamesCompleted": progress.gamesCompleted,
-                "perfectLevels": progress.perfectLevels,
-                "totalPlayTime": progress.totalPlayTime,
-                "highScore": progress.highScore,
-                "highestLevel": progress.highestLevel,
-                "lastUpdated": FieldValue.serverTimestamp()
-            ], merge: true)
-            
-            // Update local cache
-            cacheGameProgress(progress)
-            self.cachedProgress = progress
-            self.lastSaveTime = now
-            self.userDefaults.set(now, forKey: self.lastSaveTimeKey)
-        }
     }
 } 

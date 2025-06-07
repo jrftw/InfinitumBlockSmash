@@ -117,11 +117,13 @@ struct ContentView: View {
             
             // Load saved game if it exists
             if gameState.hasSavedGame() {
-                do {
-                    try gameState.loadSavedGame()
-                    print("[ContentView] Successfully loaded saved game")
-                } catch {
-                    print("[ContentView] Error loading saved game: \(error.localizedDescription)")
+                Task {
+                    do {
+                        try await gameState.loadSavedGame()
+                        print("[ContentView] Successfully loaded saved game")
+                    } catch {
+                        print("[ContentView] Error loading saved game: \(error.localizedDescription)")
+                    }
                 }
             }
         }

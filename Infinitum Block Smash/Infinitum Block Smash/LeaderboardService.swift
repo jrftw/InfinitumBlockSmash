@@ -203,7 +203,6 @@ final class LeaderboardService {
         }
         
         let now = Date()
-        let estNow = now.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
         let periods = ["daily", "weekly", "monthly", "alltime"]
         
         for period in periods {

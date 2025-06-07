@@ -17,8 +17,16 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Initialize Firebase on the main thread
         FirebaseApp.configure()
         
-        // Configure AppCheck
+        // Configure AppCheck with proper provider
+        #if DEBUG
         let providerFactory = AppCheckDebugProviderFactory()
+        #else
+        if #available(iOS 14.0, *) {
+            let providerFactory = AppAttestProviderFactory()
+        } else {
+            let providerFactory = DeviceCheckProviderFactory()
+        }
+        #endif
         AppCheck.setAppCheckProviderFactory(providerFactory)
         
         // Configure Google Mobile Ads
@@ -27,13 +35,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         }
         
         // Request App Tracking Transparency on first launch
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            if #available(iOS 14, *) {
-                ATTrackingManager.requestTrackingAuthorization { status in
-                    print("ATT status: \(status.rawValue)")
-                }
-            }
-        }
+        requestTrackingAuthorization()
         
         // Check notification permissions
         checkNotificationPermissions()
@@ -45,6 +47,48 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         configureBackgroundTasks()
         
         return true
+    }
+    
+    func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession, options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+        let sceneConfig = UISceneConfiguration(name: nil, sessionRole: connectingSceneSession.role)
+        sceneConfig.delegateClass = SceneDelegate.self
+        return sceneConfig
+    }
+    
+    func application(_ application: UIApplication, didDiscardSceneSessions sceneSessions: Set<UISceneSession>) {
+        // Handle discarded scenes if needed
+    }
+    
+    private func requestTrackingAuthorization() {
+        // Check if we've already requested tracking authorization
+        let hasRequestedTracking = UserDefaults.standard.bool(forKey: "hasRequestedTracking")
+        
+        if !hasRequestedTracking {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                if #available(iOS 14, *) {
+                    ATTrackingManager.requestTrackingAuthorization { status in
+                        DispatchQueue.main.async {
+                            // Save the tracking status
+                            UserDefaults.standard.set(true, forKey: "hasRequestedTracking")
+                            UserDefaults.standard.set(status == .authorized, forKey: "trackingAuthorized")
+                            
+                            // Update ad-related settings based on tracking status
+                            if status == .authorized {
+                                // Enable personalized ads
+                                UserDefaults.standard.set(true, forKey: "allowAnalytics")
+                                UserDefaults.standard.set(true, forKey: "allowDataSharing")
+                            } else {
+                                // Disable personalized ads
+                                UserDefaults.standard.set(false, forKey: "allowAnalytics")
+                                UserDefaults.standard.set(false, forKey: "allowDataSharing")
+                            }
+                            
+                            print("ATT status: \(status.rawValue)")
+                        }
+                    }
+                }
+            }
+        }
     }
     
     private func checkNotificationPermissions() {
@@ -114,12 +158,12 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     
     private func scheduleAppRefresh() {
         let request = BGAppRefreshTaskRequest(identifier: "com.infinitum.blocksmash.refresh")
-        request.earliestBeginDate = Date(timeIntervalSinceNow: 3600) // Schedule for 1 hour from now
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60) // 15 minutes
         
         do {
             try BGTaskScheduler.shared.submit(request)
         } catch {
-            print("[Background Refresh] Could not schedule app refresh: \(error.localizedDescription)")
+            print("Could not schedule app refresh: \(error)")
         }
     }
     
@@ -144,6 +188,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 struct Infinitum_Block_SmashApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var gameState = GameState()
+    @Environment(\.scenePhase) private var scenePhase
     
     var body: some Scene {
         WindowGroup {
@@ -159,36 +204,36 @@ struct Infinitum_Block_SmashApp: App {
             switch newPhase {
             case .background:
                 // Save game state when app moves to background
-                do {
-                    try gameState.saveProgress()
-                    print("[App] Successfully saved game progress in background")
-                } catch {
-                    print("[App] Error saving game progress in background: \(error.localizedDescription)")
+                Task {
+                    do {
+                        try await gameState.saveProgress()
+                        print("[App] Successfully saved game progress in background")
+                    } catch {
+                        print("[App] Error saving game progress in background: \(error.localizedDescription)")
+                    }
                 }
                 // Notify game scene to pause animations
                 NotificationCenter.default.post(name: NSNotification.Name("PauseBackgroundAnimations"), object: nil)
             case .inactive:
                 // Save game state when app becomes inactive
-                do {
-                    try gameState.saveProgress()
-                    print("[App] Successfully saved game progress when inactive")
-                } catch {
-                    print("[App] Error saving game progress when inactive: \(error.localizedDescription)")
+                Task {
+                    do {
+                        try await gameState.saveProgress()
+                        print("[App] Successfully saved game progress when inactive")
+                    } catch {
+                        print("[App] Error saving game progress when inactive: \(error.localizedDescription)")
+                    }
                 }
                 // Notify game scene to pause animations
                 NotificationCenter.default.post(name: NSNotification.Name("PauseBackgroundAnimations"), object: nil)
             case .active:
-                // App became active
-                print("[App] App became active")
-                // Notify game scene to resume animations
+                // Resume animations
                 NotificationCenter.default.post(name: NSNotification.Name("ResumeBackgroundAnimations"), object: nil)
             @unknown default:
                 break
             }
         }
     }
-    
-    @Environment(\.scenePhase) private var scenePhase
 }
 
 // MARK: - Loading View
@@ -204,42 +249,36 @@ struct LoadingView: View {
 }
 
 // MARK: - SceneDelegate
-class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+class SceneDelegate: NSObject, UIWindowSceneDelegate {
     var gameState: GameState?
     
-    func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
-        guard let windowScene = (scene as? UIWindowScene) else { return }
-        let window = UIWindow(windowScene: windowScene)
-        window.rootViewController = UIHostingController(rootView: ContentView())
-        self.window = window
-        window.makeKeyAndVisible()
-    }
-    
     func sceneDidEnterBackground(_ scene: UIScene) {
-        // Save game state when app moves to background
-        if let gameState = gameState {
+        // Save game state when app enters background
+        guard let gameState = gameState else { return }
+        
+        Task {
             do {
-                try gameState.saveProgress()
-                print("[SceneDelegate] Successfully saved game progress")
+                try await gameState.saveProgress()
+                print("[Scene] Successfully saved game progress in background")
             } catch {
-                print("[SceneDelegate] Error saving game progress: \(error.localizedDescription)")
+                print("[Scene] Error saving game progress in background: \(error.localizedDescription)")
             }
         }
     }
     
     func sceneWillTerminate(_ scene: UIScene) {
         // Save game state when app is about to terminate
-        if let gameState = gameState {
+        guard let gameState = gameState else { return }
+        
+        Task {
             do {
-                try gameState.saveProgress()
-                print("[SceneDelegate] Successfully saved game progress before termination")
+                try await gameState.saveProgress()
+                print("[Scene] Successfully saved game progress before termination")
             } catch {
-                print("[SceneDelegate] Error saving game progress before termination: \(error.localizedDescription)")
+                print("[Scene] Error saving game progress before termination: \(error.localizedDescription)")
             }
         }
     }
-    
-    var window: UIWindow?
 }
 
 // MARK: - HomeView

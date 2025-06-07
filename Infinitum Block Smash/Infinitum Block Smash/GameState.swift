@@ -114,6 +114,12 @@ final class GameState: ObservableObject {
     
     private let subscriptionManager = SubscriptionManager.shared
     
+    // Add missing properties
+    private let saveQueue = DispatchQueue(label: "com.infinitum.blocksmash.savequeue")
+    private let saveSemaphore = DispatchSemaphore(value: 1)
+    @Published var highScore: Int = 0
+    @Published var highestLevel: Int = 1
+    
     // MARK: - Initialization
     init() {
         print("[GameState] Initializing GameState")
@@ -164,12 +170,8 @@ final class GameState: ObservableObject {
     
     @objc private func handleAppWillResignActive() {
         print("[GameState] App will resign active - saving statistics")
-        saveStatistics()
-        do {
-            try saveProgress()
-            print("[GameState] Successfully saved progress before resigning active")
-        } catch {
-            print("[GameState] Failed to save progress before resigning active: \(error)")
+        Task { [weak self] in
+            await self?.handleAppWillResignActive()
         }
     }
     
@@ -1220,7 +1222,7 @@ final class GameState: ObservableObject {
         playTimeTimer?.invalidate()
         Task { @MainActor in
             updatePlayTime() // Final update of play time
-            try? saveProgress()
+            try? await saveProgress()
         }
     }
     
@@ -1237,12 +1239,12 @@ final class GameState: ObservableObject {
         playTimeTimer?.invalidate()
         Task { @MainActor in
             updatePlayTime() // Final update of play time
-            try? saveProgress()
+            try? await saveProgress()
             
             // Update leaderboard if user is not guest and has a username
             if !UserDefaults.standard.bool(forKey: "isGuest") {
                 if let username = UserDefaults.standard.string(forKey: "username"), !username.isEmpty {
-                    updateLeaderboard()
+                    updateLeaderboard() // Removed await since it's not async
                 } else {
                     print("[GameState] Cannot update leaderboard: Username not set")
                 }
@@ -1254,72 +1256,30 @@ final class GameState: ObservableObject {
         return userDefaults.bool(forKey: hasSavedGameKey)
     }
     
-    func loadSavedGame() throws {
-        guard let data = userDefaults.data(forKey: progressKey) else {
-            throw GameError.loadFailed(NSError(domain: "GameState", code: -1, userInfo: [NSLocalizedDescriptionKey: "No saved game found"]))
-        }
-        
-        guard let progress = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let score = progress["score"] as? Int,
-              let level = progress["level"] as? Int,
-              let gridData = progress["grid"] as? [[String?]],
-              let trayData = progress["tray"] as? [[String: String]] else {
-            throw GameError.loadFailed(NSError(domain: "GameState", code: -2, userInfo: [NSLocalizedDescriptionKey: "Invalid saved game data"]))
-        }
-        
-        // Load total play time if available
-        if let savedPlayTime = progress["totalPlayTime"] as? TimeInterval {
-            totalPlayTime = savedPlayTime
-        }
-        
-        // Set the seed for the current level first
-        setSeed(for: level)
-        
-        // Initialize grid with saved data
-        var newGrid: [[BlockColor?]] = []
-        for row in gridData {
-            let rowData: [BlockColor?] = row.map { colorStr in
-                if let colorStr = colorStr,
-                   let color = BlockColor(rawValue: colorStr) {
-                    return color
-                }
-                return nil
+    func loadSavedGame() async throws {
+        do {
+            let progress = try await FirebaseManager.shared.loadGameProgress()
+            
+            // Update state on main thread
+            await MainActor.run {
+                self.score = progress.score
+                self.level = progress.level
+                self.blocksPlaced = progress.blocksPlaced
+                self.linesCleared = progress.linesCleared
+                self.gamesCompleted = progress.gamesCompleted
+                self.perfectLevels = progress.perfectLevels
+                self.totalPlayTime = progress.totalPlayTime
+                self.highScore = progress.highScore
+                self.highestLevel = progress.highestLevel
             }
-            newGrid.append(rowData)
+            
+            // Notify success
+            NotificationCenter.default.post(name: .gameStateLoaded, object: nil)
+        } catch {
+            // Notify failure
+            NotificationCenter.default.post(name: .gameStateLoadFailed, object: error)
+            throw GameError.loadFailed(error)
         }
-        
-        // Initialize tray with saved data
-        var newTray: [Block] = []
-        for blockData in trayData {
-            guard let colorStr = blockData["color"],
-                  let shapeStr = blockData["shape"],
-                  let idStr = blockData["id"],
-                  let color = BlockColor(rawValue: colorStr),
-                  let shape = BlockShape(rawValue: shapeStr),
-                  let id = UUID(uuidString: idStr) else {
-                continue
-            }
-            let block = Block(color: color, shape: shape, id: id)
-            newTray.append(block)
-        }
-        
-        // Update game state
-        self.grid = newGrid
-        self.tray = newTray
-        self.score = score
-        self.level = level
-        self.isGameOver = false
-        self.isPaused = false
-        self.blocksPlaced = 0
-        self.linesCleared = 0
-        self.currentChain = 0
-        self.usedColors.removeAll(keepingCapacity: true)
-        self.usedShapes.removeAll(keepingCapacity: true)
-        self.isPerfectLevel = true
-        self.gameStartTime = Date()
-        
-        // Notify delegate of state change
-        delegate?.gameStateDidUpdate()
     }
     
     private func loadStatistics() {
@@ -1363,23 +1323,53 @@ final class GameState: ObservableObject {
         print("[GameState] Saved statistics - Blocks: \(blocksPlaced), Lines: \(linesCleared), Games: \(gamesCompleted), Perfect: \(perfectLevels)")
     }
 
-    func saveProgress() throws {
-        print("[GameState] Saving game progress")
-        // Save high score and highest level
-        if score > userDefaults.integer(forKey: scoreKey) {
-            userDefaults.set(score, forKey: scoreKey)
-            achievementsManager.updateAchievement(id: "high_score", value: score)
+    func handleAppWillResignActive() async {
+        do {
+            try await saveProgress()
+            print("[GameState] Successfully saved game progress when app resigned active")
+        } catch {
+            print("[GameState] Error saving game progress when app resigned active: \(error.localizedDescription)")
         }
-        if level > userDefaults.integer(forKey: levelKey) {
-            userDefaults.set(level, forKey: levelKey)
-            achievementsManager.updateAchievement(id: "highest_level", value: level)
+    }
+    
+    func loadCloudData() async {
+        do {
+            let progress = try await FirebaseManager.shared.loadGameProgress()
+            // Since we're @MainActor, we don't need MainActor.run
+            self.score = progress.score
+            self.level = progress.level
+            self.blocksPlaced = progress.blocksPlaced
+            self.linesCleared = progress.linesCleared
+            self.gamesCompleted = progress.gamesCompleted
+            self.perfectLevels = progress.perfectLevels
+            self.totalPlayTime = progress.totalPlayTime
+            self.highScore = progress.highScore
+            self.highestLevel = progress.highestLevel
+            print("[GameState] Successfully loaded cloud data")
+        } catch {
+            print("[GameState] Error loading cloud data: \(error.localizedDescription)")
         }
-        
-        // Save statistics
-        saveStatistics()
-        
-        // Sync with Firebase if user is logged in
-        Task {
+    }
+    
+    func saveProgress() async throws {
+        // Use async/await compatible synchronization
+        let task = Task {
+            // Create a continuation for semaphore wait
+            let semaphoreResult = await withCheckedContinuation { continuation in
+                // Try to acquire semaphore with timeout
+                let result = saveSemaphore.wait(timeout: .now() + 5.0)
+                continuation.resume(returning: result)
+            }
+            
+            // Check if we got the semaphore
+            guard semaphoreResult == .success else {
+                throw GameError.saveFailed(NSError(domain: "GameState", code: -1, userInfo: [NSLocalizedDescriptionKey: "Save operation timed out"]))
+            }
+            
+            defer {
+                saveSemaphore.signal()
+            }
+            
             do {
                 let progress = GameProgress(
                     score: score,
@@ -1389,62 +1379,49 @@ final class GameState: ObservableObject {
                     gamesCompleted: gamesCompleted,
                     perfectLevels: perfectLevels,
                     totalPlayTime: totalPlayTime,
-                    highScore: userDefaults.integer(forKey: scoreKey),
-                    highestLevel: userDefaults.integer(forKey: levelKey)
+                    highScore: highScore,
+                    highestLevel: highestLevel
                 )
+                
                 try await FirebaseManager.shared.saveGameProgress(progress)
-                print("[GameState] Successfully synced with Firebase")
-            } catch {
-                print("[GameState] Failed to sync with Firebase: \(error)")
-            }
-        }
-        
-        // Convert grid to a property list compatible format
-        var gridData: [[String]] = []
-        for row in grid {
-            let rowData: [String] = row.map { color in
-                if let color = color {
-                    return String(describing: color.rawValue)
+                
+                // Update local storage on main actor
+                await MainActor.run {
+                    do {
+                        let progressData: [String: Any] = [
+                            "score": progress.score,
+                            "level": progress.level,
+                            "blocksPlaced": progress.blocksPlaced,
+                            "linesCleared": progress.linesCleared,
+                            "gamesCompleted": progress.gamesCompleted,
+                            "perfectLevels": progress.perfectLevels,
+                            "totalPlayTime": progress.totalPlayTime,
+                            "highScore": progress.highScore,
+                            "highestLevel": progress.highestLevel
+                        ]
+                        let data = try JSONSerialization.data(withJSONObject: progressData)
+                        self.userDefaults.set(data, forKey: self.progressKey)
+                    } catch {
+                        print("[GameState] Error saving to UserDefaults: \(error.localizedDescription)")
+                    }
                 }
-                return "empty" // Use "empty" instead of nil
+                
+                // Notify success
+                await MainActor.run {
+                    NotificationCenter.default.post(name: .gameStateSaved, object: nil)
+                }
+            } catch {
+                // Notify failure
+                await MainActor.run {
+                    NotificationCenter.default.post(name: .gameStateSaveFailed, object: error)
+                }
+                throw GameError.saveFailed(error)
             }
-            gridData.append(rowData)
         }
         
-        // Convert tray to a property list compatible format
-        let trayData = tray.map { block in
-            [
-                "color": String(describing: block.color.rawValue),
-                "shape": String(describing: block.shape.rawValue),
-                "id": block.id.uuidString
-            ] as [String: String]
-        }
-        
-        // Create a property list compatible dictionary
-        let progress: [String: Any] = [
-            "score": score,
-            "level": level,
-            "grid": gridData,
-            "tray": trayData,
-            "blocksPlaced": blocksPlaced,
-            "linesCleared": linesCleared,
-            "gamesCompleted": gamesCompleted,
-            "perfectLevels": perfectLevels,
-            "totalPlayTime": totalPlayTime
-        ]
-        
-        do {
-            let data = try PropertyListSerialization.data(fromPropertyList: progress, format: .binary, options: 0)
-            userDefaults.set(data, forKey: progressKey)
-            userDefaults.set(true, forKey: hasSavedGameKey)
-            userDefaults.synchronize() // Ensure data is written immediately
-            print("[GameState] Successfully saved game progress")
-        } catch {
-            print("[GameState] Failed to save game progress: \(error)")
-            throw error
-        }
+        return try await task.value
     }
-    
+
     func deleteSavedGame() {
         userDefaults.removeObject(forKey: progressKey)
         userDefaults.set(false, forKey: hasSavedGameKey)
@@ -1648,61 +1625,6 @@ final class GameState: ObservableObject {
         levelComplete = false
         isPerfectLevel = true
     }
-    
-    // Add new method to load cloud data
-    func loadCloudData() async {
-        do {
-            let progress = try await FirebaseManager.shared.loadGameProgress()
-            
-            // Update local statistics with cloud data
-            await MainActor.run {
-                blocksPlaced = progress.blocksPlaced
-                linesCleared = progress.linesCleared
-                gamesCompleted = progress.gamesCompleted
-                perfectLevels = progress.perfectLevels
-                totalPlayTime = progress.totalPlayTime
-                
-                // Update high score and highest level if cloud data is higher
-                if progress.highScore > userDefaults.integer(forKey: scoreKey) {
-                    userDefaults.set(progress.highScore, forKey: scoreKey)
-                }
-                if progress.highestLevel > userDefaults.integer(forKey: levelKey) {
-                    userDefaults.set(progress.highestLevel, forKey: levelKey)
-                }
-                
-                // Save updated values to UserDefaults
-                userDefaults.set(blocksPlaced, forKey: blocksPlacedKey)
-                userDefaults.set(linesCleared, forKey: linesClearedKey)
-                userDefaults.set(gamesCompleted, forKey: gamesCompletedKey)
-                userDefaults.set(perfectLevels, forKey: perfectLevelsKey)
-                userDefaults.set(totalPlayTime, forKey: totalPlayTimeKey)
-                userDefaults.synchronize()
-            }
-        } catch {
-            print("[Error] Failed to load cloud data: \(error)")
-        }
-    }
-    
-    func updateTargetFPS(_ newFPS: Int) {
-        targetFPS = newFPS
-        delegate?.updateFPS(newFPS)
-    }
-    
-    func showContinueAd(completion: @escaping (Bool) -> Void) {
-        Task {
-            await adManager.showRewardedInterstitial(onReward: {
-                completion(true)
-            })
-        }
-    }
-    
-    func showUndoAd(completion: @escaping (Bool) -> Void) {
-        Task {
-            await adManager.showRewardedInterstitial(onReward: {
-                completion(true)
-            })
-        }
-    }
 }
 
 // Deterministic seeded random generator
@@ -1818,4 +1740,12 @@ enum GameError: LocalizedError {
             return "Failed to load saved game: \(error.localizedDescription)"
         }
     }
+}
+
+// Add notification names
+extension Notification.Name {
+    static let gameStateSaved = Notification.Name("gameStateSaved")
+    static let gameStateSaveFailed = Notification.Name("gameStateSaveFailed")
+    static let gameStateLoaded = Notification.Name("gameStateLoaded")
+    static let gameStateLoadFailed = Notification.Name("gameStateLoadFailed")
 }

@@ -5,6 +5,7 @@ import FirebaseAuth
 class ReferralManager: ObservableObject {
     static let shared = ReferralManager()
     private let db = Firestore.firestore()
+    private var authStateHandle: AuthStateDidChangeListenerHandle?
     
     @Published var referralCode: String = ""
     @Published var adFreeTimeRemaining: TimeInterval = 0
@@ -13,8 +14,23 @@ class ReferralManager: ObservableObject {
     private let adFreeTimePerReferral: TimeInterval = 24 * 60 * 60 // 24 hours in seconds
     
     private init() {
-        if let userID = Auth.auth().currentUser?.uid {
-            loadUserReferralData(userID: userID)
+        // Set up auth state listener
+        authStateHandle = Auth.auth().addStateDidChangeListener { [weak self] (_, user) in
+            if let userID = user?.uid {
+                self?.loadUserReferralData(userID: userID)
+            } else {
+                // Reset data when user signs out
+                self?.referralCode = ""
+                self?.adFreeTimeRemaining = 0
+                self?.totalReferrals = 0
+            }
+        }
+    }
+    
+    deinit {
+        // Remove the auth state listener when the manager is deallocated
+        if let handle = authStateHandle {
+            Auth.auth().removeStateDidChangeListener(handle)
         }
     }
     
@@ -25,6 +41,7 @@ class ReferralManager: ObservableObject {
     }
     
     func loadUserReferralData(userID: String) {
+        print("Loading referral data for user: \(userID)")
         db.collection("users").document(userID).getDocument { [weak self] (document, error) in
             guard let self = self else { return }
             
@@ -37,10 +54,13 @@ class ReferralManager: ObservableObject {
                 let data = document.data()
                 if let existingCode = data?["referralCode"] as? String {
                     // Use existing code
+                    print("Found existing referral code: \(existingCode)")
                     self.referralCode = existingCode
                 } else {
                     // Generate and save new code only if one doesn't exist
-                    self.referralCode = self.generateReferralCode()
+                    let newCode = self.generateReferralCode()
+                    print("Generated new referral code: \(newCode)")
+                    self.referralCode = newCode
                     self.saveUserReferralData(userID: userID)
                 }
                 
@@ -53,7 +73,9 @@ class ReferralManager: ObservableObject {
                 }
             } else {
                 // Document doesn't exist, create new referral data
-                self.referralCode = self.generateReferralCode()
+                let newCode = self.generateReferralCode()
+                print("Created new user with referral code: \(newCode)")
+                self.referralCode = newCode
                 self.saveUserReferralData(userID: userID)
             }
         }
@@ -69,6 +91,8 @@ class ReferralManager: ObservableObject {
         db.collection("users").document(userID).setData(data, merge: true) { error in
             if let error = error {
                 print("Error saving referral data: \(error.localizedDescription)")
+            } else {
+                print("Successfully saved referral data for user: \(userID)")
             }
         }
     }
@@ -98,7 +122,7 @@ class ReferralManager: ObservableObject {
         // Update referrer's data
         let referrerData = referrerDoc.data()
         let currentAdFreeUntil = referrerData["adFreeUntil"] as? Timestamp ?? Timestamp(date: Date())
-        let newAdFreeUntil = Timestamp(date: currentAdFreeUntil.dateValue().addingTimeInterval(adFreeTimePerReferral))
+        let newAdFreeUntil = Timestamp(date: currentAdFreeUntil.dateValue().addingTimeInterval(self.adFreeTimePerReferral))
         let totalReferrals = (referrerData["totalReferrals"] as? Int ?? 0) + 1
         
         try await db.collection("users").document(referrerID).updateData([

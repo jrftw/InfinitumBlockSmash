@@ -3,6 +3,201 @@ import AppTrackingTransparency
 import MessageUI
 import SafariServices
 
+// MARK: - Theme Management
+private func updateTheme(_ theme: String) {
+    guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+          let window = windowScene.windows.first else { return }
+    
+    switch theme {
+    case "light":
+        window.overrideUserInterfaceStyle = .light
+    case "dark":
+        window.overrideUserInterfaceStyle = .dark
+    case "auto":
+        window.overrideUserInterfaceStyle = .unspecified
+    default:
+        break
+    }
+}
+
+// MARK: - Subviews
+private struct GameSettingsSection: View {
+    @Binding var theme: String
+    @Binding var showTutorial: Bool
+    @Binding var autoSave: Bool
+    @ObservedObject var fpsManager: FPSManager
+    @ObservedObject var gameState: GameState
+    let themes: [String]
+    
+    private var fpsBinding: Binding<Int> {
+        Binding(
+            get: { fpsManager.targetFPS },
+            set: { newValue in
+                fpsManager.setTargetFPS(newValue)
+                gameState.targetFPS = fpsManager.getDisplayFPS(for: newValue)
+            }
+        )
+    }
+    
+    var body: some View {
+        Section(header: Text("Game Settings")) {
+            Picker("Theme", selection: $theme) {
+                ForEach(themes, id: \.self) { theme in
+                    Text(theme.capitalized)
+                        .tag(theme)
+                }
+            }
+            .onChange(of: theme) { newValue in
+                updateTheme(newValue)
+            }
+            
+            Picker("Target FPS", selection: fpsBinding) {
+                ForEach(fpsManager.availableFPSOptions, id: \.self) { fps in
+                    Text(fpsManager.getFPSDisplayName(for: fps))
+                        .tag(fps)
+                }
+            }
+            
+            Toggle("Show Tutorial", isOn: $showTutorial)
+            Toggle("Auto Save", isOn: $autoSave)
+        }
+    }
+}
+
+private struct GameplaySettingsSection: View {
+    @Binding var placementPrecision: Double
+    @Binding var blockDragOffset: Double
+    @Binding var showingPlacementPrecisionInfo: Bool
+    @Binding var showingBlockDragInfo: Bool
+    
+    var body: some View {
+        Section(header: Text("Gameplay Settings")) {
+            PlacementPrecisionView(
+                placementPrecision: $placementPrecision,
+                showingInfo: $showingPlacementPrecisionInfo
+            )
+            
+            BlockDragView(
+                blockDragOffset: $blockDragOffset,
+                showingInfo: $showingBlockDragInfo
+            )
+        }
+    }
+}
+
+private struct PlacementPrecisionView: View {
+    @Binding var placementPrecision: Double
+    @Binding var showingInfo: Bool
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Placement Precision")
+                Button(action: { showingInfo = true }) {
+                    Image(systemName: "info.circle")
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(PlainButtonStyle())
+                Spacer()
+                Text("\(Int((1 - placementPrecision) * 100))%")
+                    .foregroundColor(.secondary)
+            }
+            HStack {
+                Image(systemName: "hand.tap")
+                Slider(value: $placementPrecision, in: 0.05...0.3)
+                Image(systemName: "hand.tap.fill")
+            }
+            HStack {
+                Text("Lower = More Precise")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Button("Reset") {
+                    placementPrecision = 0.15
+                }
+                .font(.caption)
+                .buttonStyle(PlainButtonStyle())
+            }
+        }
+    }
+}
+
+private struct BlockDragView: View {
+    @Binding var blockDragOffset: Double
+    @Binding var showingInfo: Bool
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Block Drag Position")
+                Button(action: { showingInfo = true }) {
+                    Image(systemName: "info.circle")
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(PlainButtonStyle())
+                Spacer()
+                Text("\(Int(blockDragOffset * 100))%")
+                    .foregroundColor(.secondary)
+            }
+            HStack {
+                Image(systemName: "hand.point.up")
+                Slider(value: $blockDragOffset, in: 0.0...2.0)
+                Image(systemName: "hand.point.up.fill")
+            }
+            HStack {
+                Text("Higher = Block Above Finger")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Button("Reset") {
+                    blockDragOffset = 0.4
+                }
+                .font(.caption)
+                .buttonStyle(PlainButtonStyle())
+            }
+        }
+    }
+}
+
+private struct AudioSettingsSection: View {
+    @Binding var soundEnabled: Bool
+    @Binding var hapticsEnabled: Bool
+    @Binding var musicVolume: Double
+    @Binding var sfxVolume: Double
+    
+    var body: some View {
+        Section(header: Text("Audio Settings")) {
+            Toggle("Sound Effects", isOn: $soundEnabled)
+            Toggle("Haptic Feedback", isOn: $hapticsEnabled)
+            
+            VolumeControlView(title: "Music Volume", volume: $musicVolume)
+            VolumeControlView(title: "SFX Volume", volume: $sfxVolume)
+        }
+    }
+}
+
+private struct VolumeControlView: View {
+    let title: String
+    @Binding var volume: Double
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+            HStack {
+                Image(systemName: "speaker.fill")
+                Slider(value: $volume, in: 0...1)
+                Image(systemName: "speaker.wave.3.fill")
+            }
+            if title == "SFX Volume" {
+                Text("Note: For optimal sound experience, ensure your device's ringer volume is turned up and not muted.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+}
+
+// MARK: - Main View
 struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
     @ObservedObject var gameState: GameState
@@ -40,9 +235,7 @@ struct SettingsView: View {
         NavigationView {
             List {
                 Section {
-                    Button(action: {
-                        showingSubscriptions = true
-                    }) {
+                    Button(action: { showingSubscriptions = true }) {
                         HStack {
                             Image(systemName: "star.circle.fill")
                                 .foregroundColor(.yellow)
@@ -67,97 +260,21 @@ struct SettingsView: View {
                     }
                 }
                 
-                Section(header: Text("Game Settings")) {
-                    Picker("Theme", selection: $theme) {
-                        ForEach(themes, id: \.self) { theme in
-                            Text(theme.capitalized)
-                        }
-                    }
-                    .onChange(of: theme) { newValue in
-                        updateTheme(newValue)
-                    }
-                    
-                    Picker("Target FPS", selection: Binding(
-                        get: { fpsManager.targetFPS },
-                        set: { newValue in
-                            fpsManager.setTargetFPS(newValue)
-                            gameState.updateTargetFPS(fpsManager.getDisplayFPS(for: newValue))
-                        }
-                    )) {
-                        ForEach(fpsManager.availableFPSOptions, id: \.self) { fps in
-                            Text(fpsManager.getFPSDisplayName(for: fps)).tag(fps)
-                        }
-                    }
-                    
-                    Toggle("Show Tutorial", isOn: $showTutorial)
-                    Toggle("Auto Save", isOn: $autoSave)
-                }
+                GameSettingsSection(
+                    theme: $theme,
+                    showTutorial: $showTutorial,
+                    autoSave: $autoSave,
+                    fpsManager: fpsManager,
+                    gameState: gameState,
+                    themes: themes
+                )
                 
-                Section(header: Text("Gameplay Settings")) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Placement Precision")
-                            Button(action: {
-                                showingPlacementPrecisionInfo = true
-                            }) {
-                                Image(systemName: "info.circle")
-                                    .foregroundColor(.secondary)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            Spacer()
-                            Text("\(Int((1 - placementPrecision) * 100))%")
-                                .foregroundColor(.secondary)
-                        }
-                        HStack {
-                            Image(systemName: "hand.tap")
-                            Slider(value: $placementPrecision, in: 0.05...0.3)
-                            Image(systemName: "hand.tap.fill")
-                        }
-                        HStack {
-                            Text("Lower = More Precise")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            Spacer()
-                            Button("Reset") {
-                                placementPrecision = 0.15
-                            }
-                            .font(.caption)
-                            .buttonStyle(PlainButtonStyle())
-                        }
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Block Drag Position")
-                            Button(action: {
-                                showingBlockDragInfo = true
-                            }) {
-                                Image(systemName: "info.circle")
-                                    .foregroundColor(.secondary)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            Spacer()
-                            Text("\(Int(blockDragOffset * 100))%")
-                                .foregroundColor(.secondary)
-                        }
-                        HStack {
-                            Image(systemName: "hand.point.up")
-                            Slider(value: $blockDragOffset, in: 0.0...2.0)
-                            Image(systemName: "hand.point.up.fill")
-                        }
-                        HStack {
-                            Text("Higher = Block Above Finger")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            Spacer()
-                            Button("Reset") {
-                                blockDragOffset = 0.4
-                            }
-                            .font(.caption)
-                            .buttonStyle(PlainButtonStyle())
-                        }
-                    }
-                }
+                GameplaySettingsSection(
+                    placementPrecision: $placementPrecision,
+                    blockDragOffset: $blockDragOffset,
+                    showingPlacementPrecisionInfo: $showingPlacementPrecisionInfo,
+                    showingBlockDragInfo: $showingBlockDragInfo
+                )
                 
                 Section(header: Text("Game Mode Rules")) {
                     NavigationLink(destination: GameRulesView(gameMode: "Classic")) {
@@ -173,31 +290,12 @@ struct SettingsView: View {
                     }
                 }
                 
-                Section(header: Text("Audio Settings")) {
-                    Toggle("Sound Effects", isOn: $soundEnabled)
-                    Toggle("Haptic Feedback", isOn: $hapticsEnabled)
-                    
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Music Volume")
-                        HStack {
-                            Image(systemName: "speaker.fill")
-                            Slider(value: $musicVolume, in: 0...1)
-                            Image(systemName: "speaker.wave.3.fill")
-                        }
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("SFX Volume")
-                        HStack {
-                            Image(systemName: "speaker.fill")
-                            Slider(value: $sfxVolume, in: 0...1)
-                            Image(systemName: "speaker.wave.3.fill")
-                        }
-                        Text("Note: For optimal sound experience, ensure your device's ringer volume is turned up and not muted.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
+                AudioSettingsSection(
+                    soundEnabled: $soundEnabled,
+                    hapticsEnabled: $hapticsEnabled,
+                    musicVolume: $musicVolume,
+                    sfxVolume: $sfxVolume
+                )
                 
                 Section(header: Text("Game Progress")) {
                     HStack {
@@ -248,41 +346,13 @@ struct SettingsView: View {
                     Toggle("Allow anonymous usage analytics", isOn: $allowAnalytics)
                     Toggle("Allow data sharing for app features", isOn: $allowDataSharing)
                 }
-                
-                Section(header: Text("Notifications")) {
-                    NavigationLink(destination: NotificationPreferencesView()) {
-                        Text("Notification Preferences")
-                    }
-                }
-                
-                Section {
-                    VStack(spacing: 8) {
-                        Text(AppVersion.location)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        
-                        Text(AppVersion.formattedVersion)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        
-                        Text(AppVersion.copyright)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        Text(AppVersion.credits)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                }
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
-                        presentationMode.wrappedValue.dismiss()
+                        dismiss()
                     }
                 }
             }
@@ -328,22 +398,6 @@ struct SettingsView: View {
             .sheet(isPresented: $showingSubscriptions) {
                 SubscriptionView()
             }
-        }
-    }
-    
-    private func updateTheme(_ newValue: String) {
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let window = windowScene.windows.first else { return }
-        
-        switch newValue {
-        case "auto":
-            window.overrideUserInterfaceStyle = .unspecified
-        case "dark":
-            window.overrideUserInterfaceStyle = .dark
-        case "light":
-            window.overrideUserInterfaceStyle = .light
-        default:
-            break
         }
     }
     

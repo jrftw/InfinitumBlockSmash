@@ -155,15 +155,17 @@ struct GameView: View {
                 isPresented: isPaused,
                 onResume: { handleSettingsAction(.resume) },
                 onSave: {
-                    do {
-                        try gameState.saveProgress()
-                        isPaused = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            presentationMode.wrappedValue.dismiss()
+                    Task {
+                        do {
+                            try await gameState.saveProgress()
+                            isPaused = false
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                presentationMode.wrappedValue.dismiss()
+                            }
+                        } catch {
+                            print("[PauseMenu] Error saving progress: \(error.localizedDescription)")
+                            isPaused = false
                         }
-                    } catch {
-                        print("[PauseMenu] Error saving progress: \(error.localizedDescription)")
-                        isPaused = false
                     }
                 },
                 onRestart: { handleSettingsAction(.restart) },
@@ -179,7 +181,9 @@ struct GameView: View {
             VStack {
                 Spacer()
                 BannerAdView()
-                    .frame(width: 320, height: 50)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+                    .background(Color.black.opacity(0.1))
             }
             
             // Overlay views

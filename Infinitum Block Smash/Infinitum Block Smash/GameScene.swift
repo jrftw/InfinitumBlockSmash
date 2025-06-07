@@ -110,9 +110,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     override func willMove(from view: SKView) {
         super.willMove(from: view)
-        setBackgroundAnimationsActive(false)
-        
-        // Remove notification observers
+        cleanupMemory()
         NotificationCenter.default.removeObserver(self)
     }
     
@@ -201,7 +199,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Calculate available space (accounting for safe areas and UI elements)
         let availableWidth = frame.width * 0.9 // Use 90% of screen width
-        let availableHeight = frame.height * 0.7 // Use 70% of screen height
+        let availableHeight = frame.height * 0.65 // Use 65% of screen height to account for banner ad
         
         // Calculate scale to fit the grid within available space
         let scaleX = availableWidth / totalWidth
@@ -863,14 +861,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Remove unused nodes
         blockNodes.removeAll(where: { $0.parent == nil })
         
-        // Cleanup particle emitters
-        activeParticleEmitters.forEach { $0.removeFromParent() }
-        activeParticleEmitters.removeAll()
+        // Enhanced particle effect cleanup
+        cleanupParticleEffects()
         
-        // Clear any cached textures
-        SKTexture.preload([]) { [weak self] in
-            self?.removeAllActions()
-        }
+        // Enhanced texture cleanup
+        cleanupTextures()
         
         // Clear any cached images
         UIGraphicsEndImageContext()
@@ -882,6 +877,26 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Log memory usage
         MemoryMonitor.shared.logMemoryUsage()
+    }
+
+    private func cleanupParticleEffects() {
+        activeParticleEmitters.forEach { emitter in
+            emitter.particleBirthRate = 0
+            emitter.removeFromParent()
+        }
+        activeParticleEmitters.removeAll()
+        
+        // Remove any lingering particle effects
+        enumerateChildNodes(withName: "particle") { node, _ in
+            node.removeFromParent()
+        }
+    }
+
+    private func cleanupTextures() {
+        SKTexture.preload([]) { [weak self] in
+            self?.removeAllActions()
+            self?.removeAllChildren()
+        }
     }
 
     private func handleGameOver() {
