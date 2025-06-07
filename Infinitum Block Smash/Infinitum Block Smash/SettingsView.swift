@@ -277,6 +277,7 @@ struct SettingsView: View {
     @State private var showingTestFlightAlert = false
     @State private var showingTestFlightWebView = false
     @State private var showingStore = false
+    @AppStorage("forceUpdateEnabled") private var forceUpdateEnabled = false
     
     private let difficulties = ["easy", "normal", "hard", "expert"]
     private let themes = ["light", "dark", "auto"]
@@ -347,6 +348,19 @@ struct SettingsView: View {
                     musicVolume: $musicVolume,
                     sfxVolume: $sfxVolume
                 )
+                .onChange(of: soundEnabled) { newValue in
+                    AudioManager.shared.updateSettings(soundEnabled: newValue, musicVolume: musicVolume, sfxVolume: sfxVolume)
+                }
+                .onChange(of: musicVolume) { newValue in
+                    AudioManager.shared.updateSettings(soundEnabled: soundEnabled, musicVolume: newValue, sfxVolume: sfxVolume)
+                }
+                .onChange(of: sfxVolume) { newValue in
+                    AudioManager.shared.updateSettings(soundEnabled: soundEnabled, musicVolume: musicVolume, sfxVolume: newValue)
+                }
+                .onChange(of: hapticsEnabled) { newValue in
+                    UserDefaults.standard.set(newValue, forKey: "hapticsEnabled")
+                    UserDefaults.standard.synchronize()
+                }
                 
                 Section(header: Text("Game Progress")) {
                     HStack {
@@ -391,6 +405,13 @@ struct SettingsView: View {
                     Button("Suggest a Feature") {
                         showingFeatureMail = true
                     }
+                }
+                
+                Section(header: Text("Update Settings")) {
+                    Toggle("Force Public Version", isOn: Binding(
+                        get: { ForcePublicVersion.shared.isEnabled },
+                        set: { ForcePublicVersion.shared.isEnabled = $0 }
+                    ))
                 }
                 
                 Section(header: Text("Privacy")) {

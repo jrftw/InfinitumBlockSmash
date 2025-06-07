@@ -134,6 +134,7 @@ final class GameState: ObservableObject {
         gameStartTime = Date()
         loadLastPlayDate()
         startPlayTimeTimer()
+        startPeriodicSave() // Add periodic save
         
         // Register for app lifecycle notifications
         NotificationCenter.default.addObserver(
@@ -1300,8 +1301,51 @@ final class GameState: ObservableObject {
         }
         
         print("[GameState] Loaded statistics - Blocks: \(blocksPlaced), Lines: \(linesCleared), Games: \(gamesCompleted), Perfect: \(perfectLevels)")
+
+        // Load from Firebase if user is logged in
+        Task {
+            if !UserDefaults.standard.bool(forKey: "isGuest") {
+                do {
+                    let progress = try await FirebaseManager.shared.loadGameProgress()
+                    // Update local statistics with Firebase data if it's more recent
+                    if progress.totalPlayTime > totalPlayTime {
+                        blocksPlaced = progress.blocksPlaced
+                        linesCleared = progress.linesCleared
+                        gamesCompleted = progress.gamesCompleted
+                        perfectLevels = progress.perfectLevels
+                        totalPlayTime = progress.totalPlayTime
+                        highScore = progress.highScore
+                        highestLevel = progress.highestLevel
+                        
+                        // Update UserDefaults with Firebase data
+                        userDefaults.set(blocksPlaced, forKey: blocksPlacedKey)
+                        userDefaults.set(linesCleared, forKey: linesClearedKey)
+                        userDefaults.set(gamesCompleted, forKey: gamesCompletedKey)
+                        userDefaults.set(perfectLevels, forKey: perfectLevelsKey)
+                        userDefaults.set(totalPlayTime, forKey: totalPlayTimeKey)
+                        userDefaults.set(highScore, forKey: scoreKey)
+                        userDefaults.set(highestLevel, forKey: levelKey)
+                        userDefaults.synchronize()
+                        
+                        print("[GameState] Updated local statistics with Firebase data")
+                    }
+                } catch {
+                    print("[GameState] Error loading statistics from Firebase: \(error.localizedDescription)")
+                }
+            }
+        }
     }
-    
+
+    // Add this method to save statistics periodically
+    private func startPeriodicSave() {
+        Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.saveStatistics()
+            }
+        }
+    }
+
+    @MainActor
     private func saveStatistics() {
         print("[GameState] Saving statistics to UserDefaults")
         // Save statistics to UserDefaults
@@ -1319,8 +1363,32 @@ final class GameState: ObservableObject {
             userDefaults.set(level, forKey: levelKey)
         }
         
-        userDefaults.synchronize() // Force immediate save
+        // Force immediate save and synchronize
+        userDefaults.synchronize()
         print("[GameState] Saved statistics - Blocks: \(blocksPlaced), Lines: \(linesCleared), Games: \(gamesCompleted), Perfect: \(perfectLevels)")
+
+        // Sync with Firebase if user is logged in
+        Task {
+            if !UserDefaults.standard.bool(forKey: "isGuest") {
+                do {
+                    let progress = GameProgress(
+                        score: score,
+                        level: level,
+                        blocksPlaced: blocksPlaced,
+                        linesCleared: linesCleared,
+                        gamesCompleted: gamesCompleted,
+                        perfectLevels: perfectLevels,
+                        totalPlayTime: totalPlayTime,
+                        highScore: highScore,
+                        highestLevel: highestLevel
+                    )
+                    try await FirebaseManager.shared.saveGameProgress(progress)
+                    print("[GameState] Successfully synced statistics with Firebase")
+                } catch {
+                    print("[GameState] Error syncing statistics with Firebase: \(error.localizedDescription)")
+                }
+            }
+        }
     }
 
     func handleAppWillResignActive() async {

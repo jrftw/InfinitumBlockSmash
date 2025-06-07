@@ -62,7 +62,7 @@ class TrayNode: SKNode {
 
         // 3. Calculate scale to fit height first, with a maximum scale of 0.8
         let scaleY = availableHeight / maxHeight
-        let scale = min(0.8, scaleY) // Increased max scale from 0.6 to 0.8
+        let scale = min(0.8, scaleY)
         lastScale = scale
         lastBlockSize = blockSize * scale
 
@@ -70,11 +70,12 @@ class TrayNode: SKNode {
         let scaledShapeWidths = shapeWidths.map { $0 * scale }
         let totalShapesWidth = scaledShapeWidths.reduce(0, +)
         
-        // 5. Calculate even spacing between shapes
+        // 5. Calculate minimum spacing needed between shapes to prevent overlap
+        let minSpacing = blockSize * scale * 0.5 // Minimum spacing of half a block
         let totalSpacing = availableWidth - totalShapesWidth
-        let spacingBetweenShapes = totalSpacing / CGFloat(blocks.count + 1) // +1 for edges
+        let spacingBetweenShapes = max(minSpacing, totalSpacing / CGFloat(blocks.count + 1))
 
-        // 6. Position shapes with even spacing
+        // 6. Position shapes with proper spacing
         var xOffset: CGFloat = -availableWidth / 2 + spacingBetweenShapes
         for (i, block) in blocks.enumerated() {
             let shapeWidth = scaledShapeWidths[i]

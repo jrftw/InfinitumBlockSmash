@@ -11,27 +11,25 @@ class VersionCheckService {
     private(set) var isUpdateRequired = false
     
     func checkForUpdates() {
-        #if DEBUG
-        // In debug/simulator, check for updates just like in production
-        checkAppStoreUpdate()
-        #else
-        if isTestFlight() {
-            // In TestFlight, check for beta updates
-            checkTestFlightUpdate()
+        if ForcePublicVersion.shared.isEnabled {
+            // If force public version is enabled, show the public version prompt
+            ForcePublicVersion.shared.showUpdatePrompt()
         } else {
-            // In production, check for App Store updates
-            checkAppStoreUpdate()
+            // Otherwise, check for the latest version (beta or public)
+            if isTestFlight() {
+                checkTestFlightVersion()
+            } else {
+                checkPublicVersion()
+            }
         }
-        #endif
     }
     
-    private func isTestFlight() -> Bool {
+    func isTestFlight() -> Bool {
         return Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
     }
     
-    private func checkTestFlightUpdate() {
-        // For TestFlight, we'll check if there's a new version available
-        // by comparing the current version with the latest TestFlight version
+    private func checkTestFlightVersion() {
+        // Get the current app version
         guard let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
               let currentBuild = Bundle.main.infoDictionary?["CFBundleVersion"] as? String else {
             return
@@ -54,15 +52,16 @@ class VersionCheckService {
                (currentVersion == testFlightVersion && self.compareVersions(currentBuild, testFlightBuild) == .orderedAscending) {
                 DispatchQueue.main.async {
                     self.isUpdateRequired = true
-                    self.showForcedUpdatePrompt(isTestFlight: true)
+                    self.showUpdatePrompt(isTestFlight: true)
                 }
             }
         }.resume()
     }
     
-    private func checkAppStoreUpdate() {
+    private func checkPublicVersion() {
         // Get the current app version
-        guard let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String else {
+        guard let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
+              let currentBuild = Bundle.main.infoDictionary?["CFBundleVersion"] as? String else {
             return
         }
         
@@ -73,28 +72,30 @@ class VersionCheckService {
             guard let data = data,
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let results = json["results"] as? [[String: Any]],
-                  let appStoreVersion = results.first?["version"] as? String else {
+                  let appStoreVersion = results.first?["version"] as? String,
+                  let appStoreBuild = results.first?["buildNumber"] as? String else {
                 return
             }
             
-            // Compare versions
-            if self.compareVersions(currentVersion, appStoreVersion) == .orderedAscending {
+            // Compare versions and builds
+            if self.compareVersions(currentVersion, appStoreVersion) == .orderedAscending ||
+               (currentVersion == appStoreVersion && self.compareVersions(currentBuild, appStoreBuild) == .orderedAscending) {
                 DispatchQueue.main.async {
                     self.isUpdateRequired = true
-                    self.showForcedUpdatePrompt(isTestFlight: false)
+                    self.showUpdatePrompt(isTestFlight: false)
                 }
             }
         }.resume()
     }
     
-    private func showForcedUpdatePrompt(isTestFlight: Bool) {
+    private func showUpdatePrompt(isTestFlight: Bool) {
         // Create a blocking window for the update prompt
         let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene
         let updateWindow = UIWindow(windowScene: windowScene!)
         updateWindow.windowLevel = .alert + 1
         
         // Create the update view
-        let updateView = ForcedUpdateView(isTestFlight: isTestFlight)
+        let updateView = UpdatePromptView(isTestFlight: isTestFlight)
         let hostingController = UIHostingController(rootView: updateView)
         hostingController.view.backgroundColor = .clear
         
@@ -110,8 +111,7 @@ class VersionCheckService {
     }
 }
 
-// Add a new SwiftUI view for the forced update screen
-struct ForcedUpdateView: View {
+struct UpdatePromptView: View {
     let isTestFlight: Bool
     
     var body: some View {
@@ -129,8 +129,8 @@ struct ForcedUpdateView: View {
                     .fontWeight(.bold)
                 
                 Text(isTestFlight ? 
-                    "A new beta version is available. You must update to continue testing." :
-                    "A new version is available. You must update to continue playing.")
+                    "A new beta version is available. Please update to continue testing." :
+                    "A new version is available. Please update to continue using the app.")
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
                 

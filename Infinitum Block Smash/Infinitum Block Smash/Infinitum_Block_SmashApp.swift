@@ -14,6 +14,9 @@ import BackgroundTasks
 // MARK: - AppDelegate
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+        // Enable force logout
+        ForceLogout.shared.isForceLogoutEnabled = true
+        
         // Initialize Firebase on the main thread
         FirebaseApp.configure()
         
@@ -180,15 +183,31 @@ struct Infinitum_Block_SmashApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var gameState = GameState()
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("userID") private var userID: String = ""
+    @AppStorage("username") private var username: String = ""
+    @AppStorage("isGuest") private var isGuest: Bool = false
     
     var body: some Scene {
         WindowGroup {
-            if VersionCheckService.shared.isUpdateRequired {
-                // Show a loading view while checking for updates
-                LoadingView()
+            if ForcePublicVersion.shared.isEnabled {
+                // Show the public version update prompt
+                PublicVersionUpdateView()
+            } else if VersionCheckService.shared.isUpdateRequired {
+                // Show the regular update prompt
+                UpdatePromptView(isTestFlight: VersionCheckService.shared.isTestFlight())
             } else {
                 ContentView()
                     .environmentObject(gameState)
+                    .onAppear {
+                        // Check for force logout on app launch
+                        if ForceLogout.shared.checkAndHandleForceLogout() {
+                            // Force logout the user
+                            userID = ""
+                            username = ""
+                            isGuest = false
+                            try? Auth.auth().signOut()
+                        }
+                    }
             }
         }
         .onChange(of: scenePhase) { newPhase in

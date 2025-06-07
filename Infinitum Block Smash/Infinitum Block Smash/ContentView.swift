@@ -11,6 +11,7 @@ struct ContentView: View {
     @State private var showingGameView = false
     @State private var showingAuth = false
     @State private var showingStats = false
+    @State private var showingLeaderboardAlert = false
     @AppStorage("userID") private var userID: String = ""
     @AppStorage("username") private var username: String = ""
     @AppStorage("isGuest") private var isGuest: Bool = false
@@ -69,7 +70,7 @@ struct ContentView: View {
                         }
                         
                         MenuButton(title: "Leaderboard", icon: "trophy.fill") {
-                            showingLeaderboard = true
+                            handleLeaderboardAccess()
                         }
                         
                         MenuButton(title: "Statistics", icon: "chart.bar.fill") {
@@ -139,6 +140,9 @@ struct ContentView: View {
         .fullScreenCover(isPresented: $showingChangeInfo) {
             ChangeInformationView()
         }
+        .fullScreenCover(isPresented: $showingAuth) {
+            AuthView()
+        }
         .sheet(isPresented: $showingStats) {
             StatsView(gameState: gameState)
         }
@@ -153,6 +157,22 @@ struct ContentView: View {
             }
         } message: {
             Text("This will delete your saved game and start a new one. Are you sure?")
+        }
+        .alert("Sign in Required", isPresented: $showingLeaderboardAlert) {
+            Button("Sign In") {
+                showingAuth = true
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Sign in or create an account to view the leaderboard")
+        }
+    }
+    
+    private func handleLeaderboardAccess() {
+        if isGuest {
+            showingLeaderboardAlert = true
+        } else {
+            showingLeaderboard = true
         }
     }
 }

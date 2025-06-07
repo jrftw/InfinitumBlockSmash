@@ -78,15 +78,25 @@ struct SignInFormView: View {
                 .textFieldStyle(ModernTextFieldStyle())
             SecureField("Password", text: $viewModel.password)
                 .textFieldStyle(ModernTextFieldStyle())
-            Button("Sign In") {
-                viewModel.signInWithEmail()
+            VStack(spacing: 12) {
+                Button("Sign In") {
+                    viewModel.signInWithEmail()
+                }
+                .font(.headline)
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .background(Color.clear)
+                .buttonStyle(ModernButtonStyle())
+                
+                Button("Back") { viewModel.showSignIn = false }
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .background(Color.clear)
+                    .buttonStyle(ModernButtonStyle(filled: false, accent: .gray))
             }
-            .buttonStyle(ModernButtonStyle())
-            Button("Back") { viewModel.showSignIn = false }
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 40)
-                .buttonStyle(ModernButtonStyle(filled: false, accent: .gray))
+            .frame(maxWidth: .infinity)
+            .padding(.top, 8)
         }
+        .padding(.horizontal)
     }
 }
 
@@ -104,15 +114,25 @@ struct SignUpFormView: View {
                 .textFieldStyle(ModernTextFieldStyle())
             TextField("Referral Code (Optional)", text: $viewModel.referralCode)
                 .textFieldStyle(ModernTextFieldStyle())
-            Button("Create Account") {
-                viewModel.signUpWithEmail()
+            VStack(spacing: 12) {
+                Button("Create Account") {
+                    viewModel.signUpWithEmail()
+                }
+                .font(.headline)
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .background(Color.clear)
+                .buttonStyle(ModernButtonStyle())
+                
+                Button("Back") { viewModel.showSignUp = false }
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .background(Color.clear)
+                    .buttonStyle(ModernButtonStyle(filled: false, accent: .gray))
             }
-            .buttonStyle(ModernButtonStyle())
-            Button("Back") { viewModel.showSignUp = false }
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 40)
-                .buttonStyle(ModernButtonStyle(filled: false, accent: .gray))
+            .frame(maxWidth: .infinity)
+            .padding(.top, 8)
         }
+        .padding(.horizontal)
     }
 }
 

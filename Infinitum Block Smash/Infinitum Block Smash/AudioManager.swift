@@ -13,6 +13,7 @@ class AudioManager {
     private init() {
         setupAudioSession()
         loadSounds()
+        loadSettings() // Load saved settings on init
     }
     
     private func setupAudioSession() {
@@ -138,11 +139,25 @@ class AudioManager {
         setMusicVolume(Float(musicVolume))
         setSoundEffectsVolume(Float(sfxVolume))
         
+        // Save settings to UserDefaults
+        UserDefaults.standard.set(soundEnabled, forKey: "soundEnabled")
+        UserDefaults.standard.set(musicVolume, forKey: "musicVolume")
+        UserDefaults.standard.set(sfxVolume, forKey: "sfxVolume")
+        UserDefaults.standard.synchronize()
+        
         if soundEnabled {
             playBackgroundMusic()
         } else {
             stopBackgroundMusic()
         }
+    }
+    
+    private func loadSettings() {
+        let soundEnabled = UserDefaults.standard.bool(forKey: "soundEnabled")
+        let musicVolume = UserDefaults.standard.double(forKey: "musicVolume")
+        let sfxVolume = UserDefaults.standard.double(forKey: "sfxVolume")
+        
+        updateSettings(soundEnabled: soundEnabled, musicVolume: musicVolume, sfxVolume: sfxVolume)
     }
     
     private func cleanupSoundEffects() {

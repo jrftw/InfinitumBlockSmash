@@ -516,8 +516,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
            let blockIdString = node.name?.replacingOccurrences(of: "trayShape_", with: ""),
            let block = gameState.tray.first(where: { $0.id.uuidString == blockIdString }) {
             draggingBlock = block
-            // Create drag node at full grid size
+            // Create drag node at full grid size and apply the grid's scale
             dragNode = ShapeNode(block: block, blockSize: GameConstants.blockSize)
+            dragNode?.setScale(gridNode.xScale) // Apply the same scale as the grid
             let touchLocation = touch.location(in: self)
             let blockDragOffset = UserDefaults.standard.double(forKey: "blockDragOffset")
             dragNode?.position = CGPoint(x: touchLocation.x, y: touchLocation.y + GameConstants.blockSize * blockDragOffset)
