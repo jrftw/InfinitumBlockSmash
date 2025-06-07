@@ -20,6 +20,7 @@ class AuthViewModel: ObservableObject {
     @Published var errorMessage = ""
     @Published var isLoading = false
     @Published var showingNotificationPermission = false
+    @Published var referralCode: String = ""
     
     // MARK: - AppStorage Properties
     @AppStorage("userID") var userID: String = ""
@@ -44,6 +45,7 @@ class AuthViewModel: ObservableObject {
         showAdditionalInfo = false
         tempUserID = ""
         tempAuthProvider = ""
+        referralCode = ""
     }
     
     // MARK: - Auth Methods
@@ -85,6 +87,32 @@ class AuthViewModel: ObservableObject {
             self.storedUsername = self.username
             self.saveUsername()
             self.isGuest = false
+            
+            // Track account creation for this device
+            Task {
+                do {
+                    try await DeviceManager.shared.trackAccountCreation(userID: user.uid)
+                    
+                    // Handle referral code if provided
+                    if !self.referralCode.isEmpty {
+                        do {
+                            try await ReferralManager.shared.applyReferralCode(self.referralCode, forUserID: user.uid)
+                            print("Referral code applied successfully.")
+                        } catch {
+                            print("Failed to apply referral code: \(error.localizedDescription)")
+                            // Show error to user if it's not the device limit error
+                            if (error as NSError).code != 3 {
+                                await MainActor.run {
+                                    self.errorMessage = error.localizedDescription
+                                }
+                            }
+                        }
+                    }
+                } catch {
+                    print("Failed to track account creation: \(error.localizedDescription)")
+                }
+            }
+            
             self.handleSuccessfulAuth()
         }
     }
@@ -303,10 +331,29 @@ class AuthViewModel: ObservableObject {
     private func handleSuccessfulAuth() {
         isLoading = false
         resetState()
-        if !hasRequestedNotifications {
-            showingNotificationPermission = true
-        } else {
-            dismiss()
+        checkNotificationStatus()
+    }
+    
+    private func checkNotificationStatus() {
+        UNUserNotificationCenter.current().getNotificationSettings { [weak self] settings in
+            guard let self = self else { return }
+            DispatchQueue.main.async {
+                switch settings.authorizationStatus {
+                case .notDetermined:
+                    if !self.hasRequestedNotifications {
+                        self.showingNotificationPermission = true
+                    } else {
+                        self.dismiss()
+                    }
+                case .denied:
+                    // Always show the permission request if notifications were denied
+                    self.showingNotificationPermission = true
+                case .authorized, .provisional, .ephemeral:
+                    self.dismiss()
+                @unknown default:
+                    self.dismiss()
+                }
+            }
         }
     }
     
@@ -345,6 +392,12 @@ class AuthViewModel: ObservableObject {
                 self.hasRequestedNotifications = true
                 if granted {
                     UIApplication.shared.registerForRemoteNotifications()
+                    // Set all notification preferences to true by default
+                    UserDefaults.standard.set(true, forKey: "notificationsEnabled")
+                    UserDefaults.standard.set(true, forKey: "eventNotifications")
+                    UserDefaults.standard.set(true, forKey: "updateNotifications")
+                    UserDefaults.standard.set(true, forKey: "reminderNotifications")
+                    NotificationManager.shared.scheduleDailyReminder()
                 }
                 self.dismiss()
             }

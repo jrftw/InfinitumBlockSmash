@@ -8,6 +8,7 @@ struct NotificationPreferencesView: View {
     @AppStorage("reminderNotifications") private var reminderNotifications = true
     @State private var deviceToken: String = UserDefaults.standard.string(forKey: "deviceToken") ?? "Not registered"
     @State private var showingPermissionAlert = false
+    @State private var showingSettingsAlert = false
     
     var body: some View {
         List {
@@ -65,10 +66,31 @@ struct NotificationPreferencesView: View {
         } message: {
             Text("Please enable notifications in Settings to receive updates and reminders.")
         }
+        .alert("Notification Settings", isPresented: $showingSettingsAlert) {
+            Button("Open Settings", role: .none) {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Please enable notifications in your device settings to receive game updates and reminders.")
+        }
         .onAppear {
             updateDeviceToken()
             if notificationsEnabled {
-                requestNotificationPermission()
+                checkNotificationStatus()
+            }
+        }
+    }
+    
+    private func checkNotificationStatus() {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            DispatchQueue.main.async {
+                if settings.authorizationStatus == .denied {
+                    notificationsEnabled = false
+                    showingSettingsAlert = true
+                }
             }
         }
     }

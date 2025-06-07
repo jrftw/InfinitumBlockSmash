@@ -10,6 +10,10 @@ struct SignUpView: View {
     @State private var username = ""
     @State private var showingError = false
     @State private var errorMessage = ""
+    @State private var referralCode: String = ""
+    @State private var showReferralError = false
+    @State private var referralErrorMessage = ""
+    @State private var isLoading = false
     
     var body: some View {
         NavigationView {
@@ -29,13 +33,26 @@ struct SignUpView: View {
                     
                     SecureField("Confirm Password", text: $confirmPassword)
                         .textContentType(.newPassword)
+                    
+                    TextField("Referral Code (Optional)", text: $referralCode)
+                        .textContentType(.newPassword)
+                        .autocapitalization(.allCharacters)
                 }
                 
                 Section {
-                    Button("Create Account") {
-                        createAccount()
+                    Button(action: {
+                        Task {
+                            await createAccount()
+                        }
+                    }) {
+                        if isLoading {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle())
+                        } else {
+                            Text("Create Account")
+                        }
                     }
-                    .disabled(!isValidInput)
+                    .disabled(!isValidInput || isLoading)
                 }
             }
             .navigationTitle("Sign Up")
@@ -56,29 +73,45 @@ struct SignUpView: View {
         ProfanityFilter.isAppropriate(username)
     }
     
-    private func createAccount() {
+    private func createAccount() async {
         guard password == confirmPassword else {
             errorMessage = "Passwords do not match"
             showingError = true
             return
         }
         
-        Auth.auth().createUser(withEmail: email, password: password) { result, error in
-            if let error = error {
-                errorMessage = error.localizedDescription
-                showingError = true
-            } else if let user = result?.user {
-                // Update user profile with username
-                let changeRequest = user.createProfileChangeRequest()
-                changeRequest.displayName = username
-                changeRequest.commitChanges { error in
-                    if let error = error {
-                        print("Error updating profile: \(error.localizedDescription)")
-                    }
+        isLoading = true
+        defer { isLoading = false }
+        
+        do {
+            // Create the user account
+            let result = try await Auth.auth().createUser(withEmail: email, password: password)
+            let user = result.user
+            
+            // Update the user's profile with username
+            let changeRequest = user.createProfileChangeRequest()
+            changeRequest.displayName = username
+            try await changeRequest.commitChanges()
+            
+            // If a referral code was provided, apply it
+            if !referralCode.isEmpty {
+                do {
+                    try await ReferralManager.shared.applyReferralCode(referralCode, forUserID: user.uid)
+                } catch {
+                    referralErrorMessage = error.localizedDescription
+                    showReferralError = true
                 }
-                
+            }
+            
+            // Sign in successful
+            await MainActor.run {
                 isAuthenticated = true
                 dismiss()
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+                showingError = true
             }
         }
     }

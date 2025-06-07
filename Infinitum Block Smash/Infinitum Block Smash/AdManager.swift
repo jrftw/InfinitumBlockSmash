@@ -85,7 +85,13 @@ class AdManager: NSObject, ObservableObject {
     
     private func shouldShowAds() async -> Bool {
         // Check if user has purchased the no-ads feature
-        return !(await subscriptionManager.hasFeature(.noAds))
+        let hasNoAdsFeature = await subscriptionManager.hasFeature(.noAds)
+        if hasNoAdsFeature {
+            return false
+        }
+        
+        // Check if user has referral-based ad-free time
+        return !ReferralManager.shared.hasAdFreeTime()
     }
     
     // MARK: - Banner Ads

@@ -106,16 +106,7 @@ struct ContentView: View {
                     }
                 }
             } else {
-                Button(action: { showingAuth = true }) {
-                    Text("Sign In / Sign Up")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.blue)
-                        .cornerRadius(10)
-                }
-                .padding()
+                AuthView()
             }
         }
         .onAppear {
@@ -148,9 +139,6 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showingStats) {
             StatsView(gameState: gameState)
-        }
-        .sheet(isPresented: $showingAuth) {
-            AuthView()
         }
         .sheet(isPresented: $showingStore) {
             StoreView()

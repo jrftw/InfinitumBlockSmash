@@ -102,6 +102,8 @@ struct SignUpFormView: View {
                 .textFieldStyle(ModernTextFieldStyle())
             TextField("Username", text: $viewModel.username)
                 .textFieldStyle(ModernTextFieldStyle())
+            TextField("Referral Code (Optional)", text: $viewModel.referralCode)
+                .textFieldStyle(ModernTextFieldStyle())
             Button("Create Account") {
                 viewModel.signUpWithEmail()
             }

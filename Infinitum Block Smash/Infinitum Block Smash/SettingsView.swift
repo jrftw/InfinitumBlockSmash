@@ -54,6 +54,19 @@ struct SettingsView: View {
                     }
                 }
                 
+                Section {
+                    NavigationLink {
+                        ReferralView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "person.2.fill")
+                                .foregroundColor(.green)
+                            Text("Refer Friends")
+                            Spacer()
+                        }
+                    }
+                }
+                
                 Section(header: Text("Game Settings")) {
                     Picker("Theme", selection: $theme) {
                         ForEach(themes, id: \.self) { theme in
