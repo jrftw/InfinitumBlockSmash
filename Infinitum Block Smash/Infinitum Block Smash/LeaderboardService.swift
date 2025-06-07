@@ -239,6 +239,8 @@ final class LeaderboardService {
                                 type.scoreField: score,
                                 "timestamp": Timestamp(date: now)
                             ])
+                            // Submit to Game Center
+                            GameCenterManager.shared.submitScore(score, for: type, period: period)
                         } else if score > prevScore {
                             print("[Leaderboard] Updating daily score - Higher score")
                             try await docRef.setData([
@@ -246,6 +248,8 @@ final class LeaderboardService {
                                 type.scoreField: score,
                                 "timestamp": Timestamp(date: now)
                             ], merge: true)
+                            // Submit to Game Center
+                            GameCenterManager.shared.submitScore(score, for: type, period: period)
                         }
                     } else {
                         // For backward compatibility - if no timestamp exists, create new entry
@@ -255,6 +259,8 @@ final class LeaderboardService {
                             type.scoreField: score,
                             "timestamp": Timestamp(date: now)
                         ])
+                        // Submit to Game Center
+                        GameCenterManager.shared.submitScore(score, for: type, period: period)
                     }
                 } else if score > prevScore {
                     // For other periods, only update if score is higher
@@ -264,6 +270,8 @@ final class LeaderboardService {
                         type.scoreField: score,
                         "timestamp": Timestamp(date: now)
                     ], merge: true)
+                    // Submit to Game Center
+                    GameCenterManager.shared.submitScore(score, for: type, period: period)
                 } else {
                     print("[Leaderboard] Skipping \(period) update - Score not higher")
                 }

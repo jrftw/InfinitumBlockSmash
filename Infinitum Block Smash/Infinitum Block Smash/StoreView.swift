@@ -616,8 +616,15 @@ struct ThemeCard: View {
             }
             
             try await subscriptionManager.purchase(product)
-            themeManager.setTheme(themeKey)
-            showSuccess = true
+            // Update purchased products and check if theme is now unlocked
+            await subscriptionManager.updatePurchasedProducts()
+            if await subscriptionManager.isThemeUnlocked(themeKey) {
+                themeManager.setTheme(themeKey)
+                showSuccess = true
+            } else {
+                errorMessage = "Theme purchase successful but could not be applied. Please try again."
+                showError = true
+            }
         } catch {
             errorMessage = error.localizedDescription
             showError = true

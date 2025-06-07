@@ -35,6 +35,7 @@ private struct GameSettingsSection: View {
     @StateObject private var themeManager = ThemeManager.shared
     @StateObject private var subscriptionManager = SubscriptionManager.shared
     @State private var hasEliteAccess = false
+    @State private var unlockedThemes: Set<String> = []
     
     private var fpsBinding: Binding<Int> {
         Binding(
@@ -50,7 +51,7 @@ private struct GameSettingsSection: View {
         if themeKey == "system" || ["light", "dark", "auto"].contains(themeKey) {
             return true
         }
-        return subscriptionManager.purchasedProducts.contains("com.infinitum.blocksmash.theme.\(themeKey)") || hasEliteAccess
+        return unlockedThemes.contains(themeKey)
     }
     
     var body: some View {
@@ -97,9 +98,6 @@ private struct GameSettingsSection: View {
                     }
                 }
             }
-            .task {
-                hasEliteAccess = await subscriptionManager.hasFeature(.allThemes)
-            }
             
             Picker("Target FPS", selection: fpsBinding) {
                 ForEach(fpsManager.availableFPSOptions, id: \.self) { fps in
@@ -110,6 +108,19 @@ private struct GameSettingsSection: View {
             
             Toggle("Show Tutorial", isOn: $showTutorial)
             Toggle("Auto Save", isOn: $autoSave)
+        }
+        .task {
+            // Load initial state
+            hasEliteAccess = await subscriptionManager.hasFeature(.allThemes)
+            
+            // Load unlocked themes
+            var unlocked: Set<String> = []
+            for themeKey in themeManager.getAvailableThemes().keys {
+                if await subscriptionManager.isThemeUnlocked(themeKey) {
+                    unlocked.insert(themeKey)
+                }
+            }
+            unlockedThemes = unlocked
         }
     }
 }

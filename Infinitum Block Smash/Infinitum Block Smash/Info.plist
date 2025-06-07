@@ -488,5 +488,7 @@
 	<false/>
 	<key>com.apple.developer.devicecheck.appattest-environment</key>
 	<string>development</string>
+	<key>GKGameCenterEnabled</key>
+	<true/>
 </dict>
 </plist>

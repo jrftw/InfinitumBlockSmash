@@ -275,9 +275,9 @@ class SubscriptionManager: ObservableObject {
             return purchasedProducts.contains("com.infinitum.blocksmash.elite") ||
                    purchasedProducts.contains("com.infinitum.blocksmash.removeads")
         case .customTheme:
-            return purchasedProducts.contains("com.infinitum.blocksmash.theme.neon") ||
-                   purchasedProducts.contains("com.infinitum.blocksmash.theme.retro") ||
-                   purchasedProducts.contains("com.infinitum.blocksmash.theme.nature")
+            // Check if any theme is purchased or if user has Elite subscription
+            return purchasedProducts.contains { $0.starts(with: "com.infinitum.blocksmash.theme.") } ||
+                   purchasedProducts.contains("com.infinitum.blocksmash.elite")
         case .allThemes:
             return purchasedProducts.contains("com.infinitum.blocksmash.elite")
         }
@@ -289,8 +289,9 @@ class SubscriptionManager: ObservableObject {
             return true
         }
         
-        // Otherwise, check if the specific theme was purchased
-        return purchasedProducts.contains(themeId)
+        // Check if the specific theme was purchased
+        let themeProductId = "com.infinitum.blocksmash.theme.\(themeId)"
+        return purchasedProducts.contains(themeProductId)
     }
     
     func checkSubscriptionStatus() async {
