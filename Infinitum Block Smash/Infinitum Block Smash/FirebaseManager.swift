@@ -41,10 +41,61 @@ final class FirebaseManager {
     private let minimumSaveInterval: TimeInterval = 30 // Only save every 30 seconds
     private let userDefaults = UserDefaults.standard
     private let lastSaveTimeKey = "lastFirebaseSaveTime"
+    private let lastBackgroundSyncKey = "lastBackgroundSyncTime"
     
     private init() {
         // Load last save time from UserDefaults
         lastSaveTime = userDefaults.object(forKey: lastSaveTimeKey) as? Date
+    }
+    
+    // Add background sync method
+    func syncDataInBackground() async throws {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            throw FirebaseError.notAuthenticated
+        }
+        
+        // Check if we should sync based on last sync time
+        let now = Date()
+        if let lastSync = userDefaults.object(forKey: lastBackgroundSyncKey) as? Date,
+           now.timeIntervalSince(lastSync) < 3600 { // Minimum 1 hour between syncs
+            return
+        }
+        
+        do {
+            // Fetch latest data from Firestore
+            let document = try await db.collection("users").document(userId).getDocument()
+            guard let data = document.data() else {
+                return
+            }
+            
+            // Update local cache with latest data
+            let progress = GameProgress(
+                score: data["score"] as? Int ?? 0,
+                level: data["level"] as? Int ?? 1,
+                blocksPlaced: data["blocksPlaced"] as? Int ?? 0,
+                linesCleared: data["linesCleared"] as? Int ?? 0,
+                gamesCompleted: data["gamesCompleted"] as? Int ?? 0,
+                perfectLevels: data["perfectLevels"] as? Int ?? 0,
+                totalPlayTime: data["totalPlayTime"] as? TimeInterval ?? 0,
+                highScore: data["highScore"] as? Int ?? data["score"] as? Int ?? 0,
+                highestLevel: data["highestLevel"] as? Int ?? data["level"] as? Int ?? 1
+            )
+            
+            // Update cache and sync time
+            cachedProgress = progress
+            userDefaults.set(now, forKey: lastBackgroundSyncKey)
+            
+            // Update UserDefaults with latest high scores
+            if let highScore = data["highScore"] as? Int {
+                UserDefaults.standard.set(highScore, forKey: "highScore")
+            }
+            if let highestLevel = data["highestLevel"] as? Int {
+                UserDefaults.standard.set(highestLevel, forKey: "highestLevel")
+            }
+            
+        } catch {
+            throw FirebaseError.loadFailed(error)
+        }
     }
     
     func saveGameProgress(gameState: GameState) async throws {

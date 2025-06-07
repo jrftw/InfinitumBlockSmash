@@ -456,5 +456,9 @@
 		<key>InAppPurchase</key>
 		<true/>
 	</dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.infinitum.blocksmash.refresh</string>
+	</array>
 </dict>
 </plist>

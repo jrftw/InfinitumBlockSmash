@@ -9,6 +9,7 @@ import FirebaseCrashlytics
 import FirebaseAuth
 import FirebaseFirestore
 import UserNotifications
+import BackgroundTasks
 
 // MARK: - AppDelegate
 class AppDelegate: NSObject, UIApplicationDelegate {
@@ -39,6 +40,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         
         // Check for updates immediately
         VersionCheckService.shared.checkForUpdates()
+        
+        // Configure background tasks
+        configureBackgroundTasks()
         
         return true
     }
@@ -76,6 +80,46 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                     break
                 }
             }
+        }
+    }
+    
+    private func configureBackgroundTasks() {
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: "com.infinitum.blocksmash.refresh", using: nil) { task in
+            self.handleAppRefresh(task: task as! BGAppRefreshTask)
+        }
+    }
+    
+    private func handleAppRefresh(task: BGAppRefreshTask) {
+        // Schedule the next background refresh
+        scheduleAppRefresh()
+        
+        // Set up an expiration handler
+        task.expirationHandler = {
+            // Cancel any ongoing work
+            task.setTaskCompleted(success: false)
+        }
+        
+        // Perform background work
+        Task {
+            do {
+                // Attempt to sync data in background
+                try await FirebaseManager.shared.syncDataInBackground()
+                task.setTaskCompleted(success: true)
+            } catch {
+                print("[Background Refresh] Error syncing data: \(error.localizedDescription)")
+                task.setTaskCompleted(success: false)
+            }
+        }
+    }
+    
+    private func scheduleAppRefresh() {
+        let request = BGAppRefreshTaskRequest(identifier: "com.infinitum.blocksmash.refresh")
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 3600) // Schedule for 1 hour from now
+        
+        do {
+            try BGTaskScheduler.shared.submit(request)
+        } catch {
+            print("[Background Refresh] Could not schedule app refresh: \(error.localizedDescription)")
         }
     }
     
