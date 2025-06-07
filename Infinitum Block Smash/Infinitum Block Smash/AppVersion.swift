@@ -1,10 +1,29 @@
 import Foundation
 
 struct AppVersion {
-    static let current = "1.0.2"
+    static let current = "1.0.3"
     static let build = "1"
     
     static let changelog: [String: [String]] = [
+        "1.0.3 (Build 1)": [
+            "Enhanced subscription and in-app purchase system",
+            "Added comprehensive purchase verification",
+            "Improved subscription status tracking",
+            "Enhanced trial period handling",
+            "Added detailed purchase logging",
+            "Improved error handling for purchases",
+            "Enhanced restore purchases functionality",
+            "Added subscription expiration tracking",
+            "Improved feature access verification",
+            "Enhanced purchase UI feedback",
+            "Added environment-specific testing",
+            "Improved sandbox testing support",
+            "Enhanced production purchase handling",
+            "Added detailed purchase analytics",
+            "Improved subscription management",
+            "Enhanced purchase security",
+            "Bug fixes and performance improvements"
+        ],
         "1.0.2 (Build 1)": [
             "Added new version tracking system",
             "Improved version display in settings",

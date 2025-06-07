@@ -3,6 +3,7 @@ import SwiftUI
 struct StoreView: View {
     @Environment(\.dismiss) var dismiss
     @State private var selectedTab = 0
+    @StateObject private var subscriptionManager = SubscriptionManager.shared
     
     var body: some View {
         NavigationView {
@@ -21,6 +22,26 @@ struct StoreView: View {
                 } else {
                     ThemesView()
                 }
+                
+                #if DEBUG
+                // Test buttons (only visible in debug mode)
+                VStack(spacing: 10) {
+                    Button("Test Purchase Flow") {
+                        Task {
+                            await subscriptionManager.verifyTestPurchase()
+                        }
+                    }
+                    .foregroundColor(.blue)
+                    
+                    Button("Simulate Expiration") {
+                        Task {
+                            await subscriptionManager.simulateSubscriptionExpiration()
+                        }
+                    }
+                    .foregroundColor(.red)
+                }
+                .padding()
+                #endif
             }
             .navigationTitle("Store")
             .navigationBarTitleDisplayMode(.inline)

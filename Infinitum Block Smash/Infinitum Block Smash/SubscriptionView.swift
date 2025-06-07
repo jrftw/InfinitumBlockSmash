@@ -26,6 +26,7 @@ struct SubscriptionView: View {
     @State private var showTrialInfo = false
     @State private var showTerms = false
     @State private var showPrivacy = false
+    @State private var expirationDate: Date?
     
     let plans = [
         SubscriptionPlan(
@@ -75,6 +76,25 @@ struct SubscriptionView: View {
                     Text("Start with a 3-day free trial and unlock exclusive features. Choose your plan below 👇")
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
+                }
+                
+                // Subscription Status
+                if subscriptionManager.hasActiveSubscription {
+                    VStack(spacing: 8) {
+                        Text("Active Subscription")
+                            .font(.headline)
+                            .foregroundColor(.green)
+                        
+                        if let expiration = expirationDate {
+                            Text("Expires: \(expiration.formatted(date: .abbreviated, time: .shortened))")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding()
+                    .background(Color(.systemBackground))
+                    .cornerRadius(12)
+                    .shadow(radius: 2)
                 }
                 
                 ForEach(plans) { plan in
@@ -278,6 +298,8 @@ struct SubscriptionView: View {
         }
         .task {
             await subscriptionManager.loadProducts()
+            await subscriptionManager.checkSubscriptionStatus()
+            expirationDate = await subscriptionManager.getSubscriptionExpirationDate()
         }
     }
     
