@@ -127,37 +127,28 @@ final class GameState: ObservableObject {
     
     // MARK: - Initialization
     init() {
-        print("[GameState] Initializing GameState")
-        // Load saved statistics
+        // Load high score from UserDefaults first
+        highScore = userDefaults.integer(forKey: scoreKey)
+        highestLevel = userDefaults.integer(forKey: levelKey)
+        
+        // Load other statistics
         loadStatistics()
         
-        self.grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
-        self.tray = []
-        refillTray()
-        setupSubscriptions()
+        // Setup initial game state
         setupInitialGame()
-        gameStartTime = Date()
+        setupSubscriptions()
+        
+        // Load last play date for consecutive days tracking
         loadLastPlayDate()
+        
+        // Start play time timer
         startPlayTimeTimer()
         
-        // Register for app lifecycle notifications
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleAppDidBecomeActive),
-            name: UIApplication.didBecomeActiveNotification,
-            object: nil
-        )
-        
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleAppWillResignActive),
-            name: UIApplication.willResignActiveNotification,
-            object: nil
-        )
-        
-        // Setup memory management
+        // Load cloud data if user is logged in
         Task {
-            await setupMemoryManagement()
+            if !UserDefaults.standard.bool(forKey: "isGuest") {
+                await loadCloudData()
+            }
         }
     }
     
@@ -1346,18 +1337,21 @@ final class GameState: ObservableObject {
                         gamesCompleted = progress.gamesCompleted
                         perfectLevels = progress.perfectLevels
                         totalPlayTime = progress.totalPlayTime
-                        highScore = progress.highScore
-                        highestLevel = progress.highestLevel
                         
-                        // Update UserDefaults with Firebase data
-                        userDefaults.set(blocksPlaced, forKey: blocksPlacedKey)
-                        userDefaults.set(linesCleared, forKey: linesClearedKey)
-                        userDefaults.set(gamesCompleted, forKey: gamesCompletedKey)
-                        userDefaults.set(perfectLevels, forKey: perfectLevelsKey)
-                        userDefaults.set(totalPlayTime, forKey: totalPlayTimeKey)
-                        userDefaults.set(highScore, forKey: scoreKey)
-                        userDefaults.set(highestLevel, forKey: levelKey)
-                        userDefaults.synchronize()
+                        // Only update high score if Firebase has a higher score
+                        if progress.highScore > highScore {
+                            highScore = progress.highScore
+                            userDefaults.set(highScore, forKey: scoreKey)
+                        }
+                        
+                        // Only update highest level if Firebase has a higher level
+                        if progress.highestLevel > highestLevel {
+                            highestLevel = progress.highestLevel
+                            userDefaults.set(highestLevel, forKey: levelKey)
+                        }
+                        
+                        // Save all statistics to UserDefaults
+                        saveStatisticsToUserDefaults()
                         
                         print("[GameState] Updated local statistics with Firebase data")
                     }
@@ -1368,49 +1362,24 @@ final class GameState: ObservableObject {
         }
     }
 
-    @MainActor
-    private func saveStatistics() {
-        print("[GameState] Saving statistics to UserDefaults")
-        // Save statistics to UserDefaults
+    private func saveStatisticsToUserDefaults() {
         userDefaults.set(blocksPlaced, forKey: blocksPlacedKey)
         userDefaults.set(linesCleared, forKey: linesClearedKey)
         userDefaults.set(gamesCompleted, forKey: gamesCompletedKey)
         userDefaults.set(perfectLevels, forKey: perfectLevelsKey)
         userDefaults.set(totalPlayTime, forKey: totalPlayTimeKey)
-        
-        // Save high score and highest level
-        if score > highScore {
-            highScore = score
-            userDefaults.set(highScore, forKey: scoreKey)
-            print("[HighScore] Updated all-time high score: \(highScore)")
-            
-            // Update leaderboard with final score when game ends
-            Task {
-                if !UserDefaults.standard.bool(forKey: "isGuest"),
-                   let username = UserDefaults.standard.string(forKey: "username"),
-                   let userID = UserDefaults.standard.string(forKey: "userID") {
-                    do {
-                        try await LeaderboardService.shared.updateLeaderboard(
-                            type: .score,
-                            score: highScore,
-                            username: username,
-                            userID: userID
-                        )
-                        print("[Leaderboard] Successfully updated leaderboard with final score: \(highScore)")
-                    } catch {
-                        print("[Leaderboard] Error updating leaderboard: \(error.localizedDescription)")
-                    }
-                }
-            }
-        }
-        if level > highestLevel {
-            highestLevel = level
-            userDefaults.set(highestLevel, forKey: levelKey)
-            print("[HighScore] Updated highest level: \(highestLevel)")
-        }
-        
-        // Force immediate save and synchronize
+        userDefaults.set(highScore, forKey: scoreKey)
+        userDefaults.set(highestLevel, forKey: levelKey)
         userDefaults.synchronize()
+    }
+
+    @MainActor
+    private func saveStatistics() {
+        print("[GameState] Saving statistics to UserDefaults")
+        
+        // Save all statistics to UserDefaults
+        saveStatisticsToUserDefaults()
+        
         print("[GameState] Saved statistics - Blocks: \(blocksPlaced), Lines: \(linesCleared), Games: \(gamesCompleted), Perfect: \(perfectLevels), High Score: \(highScore), Highest Level: \(highestLevel)")
 
         // Sync with Firebase if user is logged in, but only if enough time has passed
@@ -1445,6 +1414,9 @@ final class GameState: ObservableObject {
     }
 
     func handleAppWillResignActive() async {
+        // Save statistics before app goes to background
+        saveStatistics()
+        
         do {
             try await saveProgress()
             print("[GameState] Successfully saved game progress when app resigned active")
