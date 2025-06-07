@@ -7,6 +7,7 @@ import SwiftUI
 import FirebaseDatabase
 import FirebaseAppCheck
 import FirebaseCore
+import FirebaseCrashlytics
 
 // Network monitoring class
 final class NetworkMonitor {
@@ -119,6 +120,11 @@ final class FirebaseManager {
         
         // Load offline changes
         loadOfflineChanges()
+        
+        // Set up Crashlytics user identifier if user is logged in
+        if let userId = Auth.auth().currentUser?.uid {
+            Crashlytics.crashlytics().setUserID(userId)
+        }
         
         Self.isConfigured = true
     }

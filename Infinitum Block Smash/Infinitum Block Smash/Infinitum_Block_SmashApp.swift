@@ -20,6 +20,11 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Initialize Firebase on the main thread
         FirebaseApp.configure()
         
+        // Configure Crashlytics
+        #if !targetEnvironment(simulator)
+        Crashlytics.crashlytics().setCrashlyticsCollectionEnabled(true)
+        #endif
+        
         // Configure AppCheck with proper provider
         configureAppCheck()
         
