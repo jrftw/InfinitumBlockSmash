@@ -155,9 +155,9 @@ final class GameState: ObservableObject {
             object: nil
         )
         
-        // Start periodic memory cleanup
+        // Setup memory management
         Task {
-            await MemorySystem.shared.startPeriodicCleanup()
+            await setupMemoryManagement()
         }
     }
     
@@ -1735,9 +1735,6 @@ final class GameState: ObservableObject {
     private func cleanupMemory() async {
         print("[GameState] Performing memory cleanup")
         
-        // Clear cached data
-        cachedData.removeAll()
-        
         // Clear undo history if it's too large
         if let move = lastMove, move.timestamp.timeIntervalSinceNow < -300 { // Clear moves older than 5 minutes
             previousGrid = nil
@@ -1776,6 +1773,35 @@ final class GameState: ObservableObject {
     func update() async {
         await checkMemoryUsage()
         // ... rest of update logic ...
+    }
+    
+    private func setupMemoryManagement() async {
+        // Setup notification observers
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleMemoryWarningNotification),
+            name: .memoryWarning,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleMemoryCriticalNotification),
+            name: .memoryCritical,
+            object: nil
+        )
+    }
+    
+    @objc private func handleMemoryWarningNotification() {
+        Task {
+            await cleanupMemory()
+        }
+    }
+    
+    @objc private func handleMemoryCriticalNotification() {
+        Task {
+            await cleanupMemory()
+        }
     }
 }
 

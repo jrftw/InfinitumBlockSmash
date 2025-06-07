@@ -589,7 +589,7 @@ final class FirebaseManager {
     func cleanup() {
         cancellables.removeAll()
         NetworkMonitor.shared.stopMonitoring()
-        CacheManager.shared.clearAllCaches()
+        MemorySystem.shared.clearAllCaches()
         
         // Cleanup online users tracking
         if let userId = Auth.auth().currentUser?.uid {

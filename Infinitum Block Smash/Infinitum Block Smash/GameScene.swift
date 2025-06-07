@@ -827,9 +827,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     // MARK: - Memory Management
     private func setupMemoryManagement() async {
-        // Start periodic memory cleanup
-        await MemorySystem.shared.startPeriodicCleanup()
-        
         // Setup notification observers
         NotificationCenter.default.addObserver(
             self,
@@ -882,7 +879,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Perform periodic memory cleanup
         if currentTime - lastMemoryCleanup > memoryCleanupInterval {
             Task { @MainActor in
-                await cleanupMemory()
+                await MemorySystem.shared.cleanupMemory()
                 lastMemoryCleanup = currentTime
             }
         }
@@ -890,7 +887,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Check memory status periodically
         if currentTime - lastMemoryCheck > 5.0 {
             Task { @MainActor in
-                let status = await MemorySystem.shared.checkMemoryStatus()
+                let status = MemorySystem.shared.checkMemoryStatus()
                 switch status {
                 case .critical:
                     NotificationCenter.default.post(name: .memoryCritical, object: nil)

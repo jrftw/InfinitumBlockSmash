@@ -10,10 +10,6 @@ struct BlockShapeView: View {
     private static var gradientCache: [String: UIImage] = [:]
     private static let cacheQueue = DispatchQueue(label: "com.infinitum.blocksmash.gradientcache")
     private static let maxCacheSize = 100 // Increased from 50
-    private static var cacheHits = 0
-    private static var cacheMisses = 0
-    private static var lastCleanupTime = Date()
-    private static let cleanupInterval: TimeInterval = 60 // Cleanup every minute
     
     var body: some View {
         ZStack {
@@ -35,7 +31,7 @@ struct BlockShapeView: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: block.id)
         .onDisappear {
             Task {
-                await cleanupMemory()
+                await MemorySystem.shared.cleanupMemory()
             }
         }
     }
@@ -50,51 +46,11 @@ struct BlockShapeView: View {
         return CGFloat(maxY + 1) * cellSize
     }
     
-    private func cleanupMemory() async {
-        // Clear gradient cache if it gets too large
-        await withCheckedContinuation { continuation in
-            BlockShapeView.cacheQueue.async {
-                let now = Date()
-                
-                // Only cleanup if enough time has passed
-                guard now.timeIntervalSince(BlockShapeView.lastCleanupTime) >= BlockShapeView.cleanupInterval else {
-                    continuation.resume()
-                    return
-                }
-                
-                BlockShapeView.lastCleanupTime = now
-                
-                if BlockShapeView.gradientCache.count > BlockShapeView.maxCacheSize {
-                    // Remove least recently used entries when cache is full
-                    let sortedKeys = BlockShapeView.gradientCache.keys.sorted()
-                    let keysToRemove = sortedKeys.prefix(BlockShapeView.gradientCache.count - BlockShapeView.maxCacheSize)
-                    keysToRemove.forEach { BlockShapeView.gradientCache.removeValue(forKey: $0) }
-                }
-                
-                // Log cache statistics
-                let hitRate = Double(BlockShapeView.cacheHits) / Double(BlockShapeView.cacheHits + BlockShapeView.cacheMisses)
-                print("[BlockShapeView] Cache hit rate: \(hitRate * 100)%")
-                
-                // Reset statistics
-                BlockShapeView.cacheHits = 0
-                BlockShapeView.cacheMisses = 0
-                
-                continuation.resume()
-            }
-        }
-    }
-    
     // MARK: - Gradient Cache
     private static func getCachedGradient(for color: BlockColor, size: CGSize) -> UIImage? {
         let key = "\(color.rawValue)_\(size.width)_\(size.height)"
         return cacheQueue.sync {
-            let result = gradientCache[key]
-            if result != nil {
-                cacheHits += 1
-            } else {
-                cacheMisses += 1
-            }
-            return result
+            gradientCache[key]
         }
     }
     
@@ -118,8 +74,6 @@ extension BlockShapeView {
     static func clearCache() {
         cacheQueue.async {
             gradientCache.removeAll()
-            cacheHits = 0
-            cacheMisses = 0
         }
     }
     
@@ -130,12 +84,6 @@ extension BlockShapeView {
                 let keysToRemove = sortedKeys.prefix(gradientCache.count - maxCacheSize)
                 keysToRemove.forEach { gradientCache.removeValue(forKey: $0) }
             }
-        }
-    }
-    
-    static func getCacheStats() -> (hits: Int, misses: Int, size: Int) {
-        return cacheQueue.sync {
-            (cacheHits, cacheMisses, gradientCache.count)
         }
     }
 } 
