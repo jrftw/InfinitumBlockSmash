@@ -1381,7 +1381,18 @@ final class GameState: ObservableObject {
         // Sync with Firebase if user is logged in
         Task {
             do {
-                try await FirebaseManager.shared.saveGameProgress(gameState: self)
+                let progress = GameProgress(
+                    score: score,
+                    level: level,
+                    blocksPlaced: blocksPlaced,
+                    linesCleared: linesCleared,
+                    gamesCompleted: gamesCompleted,
+                    perfectLevels: perfectLevels,
+                    totalPlayTime: totalPlayTime,
+                    highScore: userDefaults.integer(forKey: scoreKey),
+                    highestLevel: userDefaults.integer(forKey: levelKey)
+                )
+                try await FirebaseManager.shared.saveGameProgress(progress)
                 print("[GameState] Successfully synced with Firebase")
             } catch {
                 print("[GameState] Failed to sync with Firebase: \(error)")

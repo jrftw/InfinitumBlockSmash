@@ -1,6 +1,6 @@
 import Foundation
 
-struct LeaderboardEntry: Identifiable {
+struct LeaderboardEntry: Identifiable, Codable {
     let id: String
     let username: String
     let score: Int
