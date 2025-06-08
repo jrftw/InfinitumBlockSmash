@@ -10,6 +10,7 @@ final class LeaderboardService {
     private var cancellables = Set<AnyCancellable>()
     private var resetTimer: Timer?
     private let estTimeZone = TimeZone(identifier: "America/New_York")!
+    private let pageSize = 20
     
     private init() {
         Task {
@@ -282,8 +283,17 @@ final class LeaderboardService {
         }
     }
     
-    func getLeaderboard(type: LeaderboardType, period: String) async throws -> [LeaderboardEntry] {
-        print("[Leaderboard] Fetching \(period) leaderboard for type: \(type)")
+    func getLeaderboard(type: LeaderboardType, period: String, page: Int = 1) async throws -> (entries: [LeaderboardEntry], hasMore: Bool) {
+        print("[Leaderboard] Fetching \(period) leaderboard for type: \(type), page: \(page)")
+        
+        // Try to get cached data first
+        if let cachedData = LeaderboardCache.shared.getCachedLeaderboard(type: type, period: period) {
+            let startIndex = (page - 1) * pageSize
+            let endIndex = min(startIndex + pageSize, cachedData.count)
+            let pageData = Array(cachedData[startIndex..<endIndex])
+            return (pageData, endIndex < cachedData.count)
+        }
+        
         do {
             let now = Date()
             let calendar = Calendar.current
@@ -307,7 +317,21 @@ final class LeaderboardService {
                 .document(period)
                 .collection("scores")
                 .order(by: type.scoreField, descending: true)
-                .limit(to: 10)
+                .limit(to: pageSize)
+            
+            if page > 1 {
+                // Get the last document from the previous page
+                let previousPageQuery = db.collection(type.collectionName)
+                    .document(period)
+                    .collection("scores")
+                    .order(by: type.scoreField, descending: true)
+                    .limit(to: (page - 1) * pageSize)
+                
+                let previousPageSnapshot = try await previousPageQuery.getDocuments()
+                if let lastDocument = previousPageSnapshot.documents.last {
+                    query = query.start(afterDocument: lastDocument)
+                }
+            }
             
             if let startDate = startDate {
                 query = query.whereField("timestamp", isGreaterThanOrEqualTo: Timestamp(date: startDate))
@@ -316,7 +340,7 @@ final class LeaderboardService {
             let snapshot = try await query.getDocuments()
             print("[Leaderboard] Retrieved \(snapshot.documents.count) entries for \(period) leaderboard")
             
-            return snapshot.documents.compactMap { document -> LeaderboardEntry? in
+            let entries = snapshot.documents.compactMap { document -> LeaderboardEntry? in
                 guard let username = document.data()["username"] as? String,
                       let score = document.data()[type.scoreField] as? Int,
                       let timestamp = (document.data()["timestamp"] as? Timestamp)?.dateValue() else {
@@ -325,6 +349,16 @@ final class LeaderboardService {
                 }
                 return LeaderboardEntry(id: document.documentID, username: username, score: score, timestamp: timestamp)
             }
+            
+            // Cache the results
+            if page == 1 {
+                LeaderboardCache.shared.cacheLeaderboard(entries, type: type, period: period)
+            }
+            
+            // Check if there are more results
+            let hasMore = snapshot.documents.count == pageSize
+            
+            return (entries, hasMore)
         } catch {
             print("[Leaderboard] Error loading \(period) leaderboard: \(error.localizedDescription)")
             throw LeaderboardError.loadFailed(error)

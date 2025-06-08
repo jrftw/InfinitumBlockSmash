@@ -13,6 +13,9 @@ struct LeaderboardView: View {
     @State private var allTimeUserPosition: Int?
     @State private var lastUpdated: Date?
     @State private var totalUsers: Int = 0
+    @State private var currentPage = 1
+    @State private var hasMorePages = false
+    @State private var isOfflineMode = false
     
     private let periods = ["daily", "weekly", "monthly", "alltime"]
     private let periodNames = ["Daily", "Weekly", "Monthly", "All Time"]
@@ -116,6 +119,21 @@ struct LeaderboardView: View {
                 }
                 .padding(.horizontal)
                 
+                if isOfflineMode {
+                    HStack {
+                        Image(systemName: "wifi.slash")
+                            .foregroundColor(.orange)
+                        Text("Offline Mode - Showing Cached Data")
+                            .font(.subheadline)
+                            .foregroundColor(.orange)
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 12)
+                    .background(Color.orange.opacity(0.1))
+                    .cornerRadius(8)
+                    .padding(.horizontal)
+                }
+                
                 if isLoading {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle())
@@ -156,6 +174,23 @@ struct LeaderboardView: View {
                             .padding(.vertical, 4)
                             .listRowBackground(getBackgroundColor(for: index))
                         }
+                        
+                        if hasMorePages {
+                            Button(action: {
+                                currentPage += 1
+                                Task {
+                                    await loadMoreData()
+                                }
+                            }) {
+                                HStack {
+                                    Spacer()
+                                    Text("Load More")
+                                        .foregroundColor(.blue)
+                                    Spacer()
+                                }
+                            }
+                            .padding(.vertical, 8)
+                        }
                     }
                 }
             }
@@ -187,65 +222,107 @@ struct LeaderboardView: View {
     private func loadLeaderboardData() async {
         isLoading = true
         error = nil
-        let db = Firestore.firestore()
-        let scoresCollection = db.collection(selectedType.collectionName)
-            .document(selectedPeriod)
-            .collection("scores")
+        currentPage = 1
+        isOfflineMode = false
+        
         do {
-            // Query for top 10
-            let snapshot = try await scoresCollection
-                .order(by: selectedType.scoreField, descending: true)
-                .limit(to: 10)
-                .getDocuments()
-            leaderboardData = snapshot.documents.compactMap { document -> LeaderboardEntry? in
-                guard let username = document.data()["username"] as? String,
-                      let score = document.data()[selectedType.scoreField] as? Int,
-                      let timestamp = (document.data()["timestamp"] as? Timestamp)?.dateValue() else {
-                    return nil
-                }
-                return LeaderboardEntry(id: document.documentID, username: username, score: score, timestamp: timestamp)
-            }
+            // Load main leaderboard data
+            let result = try await LeaderboardService.shared.getLeaderboard(
+                type: selectedType,
+                period: selectedPeriod,
+                page: currentPage
+            )
+            
+            leaderboardData = result.entries
+            hasMorePages = result.hasMore
+            totalUsers = result.entries.count
+            
+            // Update last updated time
+            lastUpdated = Date()
             
             // Find user's position in current period
             if let userID = UserDefaults.standard.string(forKey: "userID") {
+                // First check if user is in current page
                 if let idx = leaderboardData.firstIndex(where: { $0.id == userID }) {
                     userPosition = idx + 1
                 } else {
-                    // If not in top 10, find user's position in the whole leaderboard
-                    let allSnapshot = try await scoresCollection
-                        .order(by: selectedType.scoreField, descending: true)
-                        .getDocuments()
-                    if let idx = allSnapshot.documents.firstIndex(where: { $0.documentID == userID }) {
+                    // If not in current page, find user's position in the whole leaderboard
+                    // Only do this if we're not in offline mode
+                    if !isOfflineMode {
+                        do {
+                            let allTimeResult = try await LeaderboardService.shared.getLeaderboard(
+                                type: selectedType,
+                                period: selectedPeriod,
+                                page: 1
+                            )
+                            if let idx = allTimeResult.entries.firstIndex(where: { $0.id == userID }) {
+                                userPosition = idx + 1
+                            } else {
+                                userPosition = nil
+                            }
+                        } catch {
+                            print("[Leaderboard] Error finding user position: \(error.localizedDescription)")
+                            userPosition = nil
+                        }
+                    }
+                }
+                
+                // Check All Time position only if we're not in offline mode
+                if !isOfflineMode {
+                    do {
+                        let allTimeResult = try await LeaderboardService.shared.getLeaderboard(
+                            type: selectedType,
+                            period: "alltime",
+                            page: 1
+                        )
+                        if let idx = allTimeResult.entries.firstIndex(where: { $0.id == userID }) {
+                            allTimeUserPosition = idx + 1
+                        } else {
+                            allTimeUserPosition = nil
+                        }
+                    } catch {
+                        print("[Leaderboard] Error finding all-time position: \(error.localizedDescription)")
+                        allTimeUserPosition = nil
+                    }
+                }
+            }
+            
+        } catch {
+            self.error = error.localizedDescription
+            // Check if we have cached data
+            if let cachedData = LeaderboardCache.shared.getCachedLeaderboard(type: selectedType, period: selectedPeriod) {
+                leaderboardData = cachedData
+                isOfflineMode = true
+                self.error = nil
+                
+                // Try to find user position in cached data
+                if let userID = UserDefaults.standard.string(forKey: "userID") {
+                    if let idx = cachedData.firstIndex(where: { $0.id == userID }) {
                         userPosition = idx + 1
                     } else {
                         userPosition = nil
                     }
                 }
             }
+        }
+        
+        isLoading = false
+    }
+    
+    private func loadMoreData() async {
+        do {
+            let result = try await LeaderboardService.shared.getLeaderboard(
+                type: selectedType,
+                period: selectedPeriod,
+                page: currentPage
+            )
             
-            // Always check All Time position
-            if let userID = UserDefaults.standard.string(forKey: "userID") {
-                let allTimeCollection = db.collection(selectedType.collectionName)
-                    .document("alltime")
-                    .collection("scores")
-                let allTimeSnapshot = try await allTimeCollection
-                    .order(by: selectedType.scoreField, descending: true)
-                    .getDocuments()
-                if let idx = allTimeSnapshot.documents.firstIndex(where: { $0.documentID == userID }) {
-                    allTimeUserPosition = idx + 1
-                } else {
-                    allTimeUserPosition = nil
-                }
-            }
-            
-            // Update last updated time
-            lastUpdated = Date()
-            // Query for total users
-            let totalSnapshot = try await scoresCollection.getDocuments()
-            totalUsers = totalSnapshot.documents.count
+            leaderboardData.append(contentsOf: result.entries)
+            hasMorePages = result.hasMore
         } catch {
             self.error = error.localizedDescription
+            // Don't show error for pagination failures, just stop loading more
+            hasMorePages = false
         }
-        isLoading = false
     }
 }

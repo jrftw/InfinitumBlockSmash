@@ -97,9 +97,9 @@ class AdManager: NSObject, ObservableObject {
     
     func checkTopThreeStatus() async {
         do {
-            let leaderboard = try await LeaderboardService.shared.getLeaderboard(type: .score, period: "alltime")
+            let result = try await LeaderboardService.shared.getLeaderboard(type: .score, period: "alltime")
             if let userID = UserDefaults.standard.string(forKey: "userID"),
-               let userIndex = leaderboard.firstIndex(where: { $0.id == userID }) {
+               let userIndex = result.entries.firstIndex(where: { $0.id == userID }) {
                 await MainActor.run {
                     isTopThreePlayer = userIndex < 3
                 }
