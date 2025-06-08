@@ -366,6 +366,96 @@ final class FirebaseManager {
         }
     }
     
+    // Add new method for initial device sync
+    func performInitialDeviceSync() async throws {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            throw FirebaseError.notAuthenticated
+        }
+        
+        // Get local data
+        let localProgress = getCachedGameProgress()
+        
+        // Get cloud data
+        let cloudProgress = try await loadGameProgress()
+        
+        // Compare timestamps and merge data
+        if let local = localProgress {
+            if local.lastSaveTime > cloudProgress.lastSaveTime {
+                // Local data is newer, upload it
+                try await saveGameProgress(local)
+            } else if cloudProgress.lastSaveTime > local.lastSaveTime {
+                // Cloud data is newer, update local
+                cacheGameProgress(cloudProgress)
+                cachedProgress = cloudProgress
+                
+                // Update UserDefaults
+                UserDefaults.standard.set(cloudProgress.highScore, forKey: "highScore")
+                UserDefaults.standard.set(cloudProgress.highestLevel, forKey: "highestLevel")
+                UserDefaults.standard.set(cloudProgress.lastSaveTime, forKey: "lastSaveTime")
+                UserDefaults.standard.synchronize()
+            }
+        } else {
+            // No local data, use cloud data
+            cacheGameProgress(cloudProgress)
+            cachedProgress = cloudProgress
+            
+            // Update UserDefaults
+            UserDefaults.standard.set(cloudProgress.highScore, forKey: "highScore")
+            UserDefaults.standard.set(cloudProgress.highestLevel, forKey: "highestLevel")
+            UserDefaults.standard.set(cloudProgress.lastSaveTime, forKey: "lastSaveTime")
+            UserDefaults.standard.synchronize()
+        }
+        
+        // Sync achievements
+        try await syncAchievements()
+    }
+    
+    private func syncAchievements() async throws {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            throw FirebaseError.notAuthenticated
+        }
+        
+        // Get local achievements
+        let localAchievements = try? await db.collection("users").document(userId)
+            .collection("achievements")
+            .getDocuments()
+        
+        // Get cloud achievements
+        let cloudAchievements = try await db.collection("users").document(userId)
+            .collection("achievements")
+            .getDocuments()
+        
+        // Merge achievements
+        var mergedAchievements: [String: [String: Any]] = [:]
+        
+        // Add local achievements
+        localAchievements?.documents.forEach { doc in
+            mergedAchievements[doc.documentID] = doc.data()
+        }
+        
+        // Add or update with cloud achievements
+        cloudAchievements.documents.forEach { doc in
+            if let localData = mergedAchievements[doc.documentID],
+               let localTimestamp = localData["lastUpdated"] as? Timestamp,
+               let cloudTimestamp = doc.data()["lastUpdated"] as? Timestamp {
+                // Keep the more recent version
+                if cloudTimestamp.dateValue() > localTimestamp.dateValue() {
+                    mergedAchievements[doc.documentID] = doc.data()
+                }
+            } else {
+                mergedAchievements[doc.documentID] = doc.data()
+            }
+        }
+        
+        // Save merged achievements
+        for (id, data) in mergedAchievements {
+            try await db.collection("users").document(userId)
+                .collection("achievements")
+                .document(id)
+                .setData(data, merge: true)
+        }
+    }
+    
     private func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async throws -> T) async throws -> T {
         try await withThrowingTaskGroup(of: T.self) { group in
             group.addTask {

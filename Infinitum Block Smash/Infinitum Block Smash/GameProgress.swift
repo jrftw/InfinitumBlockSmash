@@ -1,6 +1,7 @@
 import Foundation
 
 struct GameProgress: Codable {
+    let version: Int
     let score: Int
     let level: Int
     let blocksPlaced: Int
@@ -12,8 +13,10 @@ struct GameProgress: Codable {
     let highestLevel: Int
     let grid: [[BlockColor?]]
     let tray: [Block]
+    let lastSaveTime: Date
     
     init(
+        version: Int = GameDataVersion.currentVersion,
         score: Int = 0,
         level: Int = 1,
         blocksPlaced: Int = 0,
@@ -24,8 +27,10 @@ struct GameProgress: Codable {
         highScore: Int = 0,
         highestLevel: Int = 1,
         grid: [[BlockColor?]] = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize),
-        tray: [Block] = []
+        tray: [Block] = [],
+        lastSaveTime: Date = Date()
     ) {
+        self.version = version
         self.score = score
         self.level = level
         self.blocksPlaced = blocksPlaced
@@ -37,12 +42,14 @@ struct GameProgress: Codable {
         self.highestLevel = highestLevel
         self.grid = grid
         self.tray = tray
+        self.lastSaveTime = lastSaveTime
     }
     
     // MARK: - Dictionary Conversion
     
     var dictionary: [String: Any] {
         return [
+            "version": version,
             "score": score,
             "level": level,
             "blocksPlaced": blocksPlaced,
@@ -58,12 +65,17 @@ struct GameProgress: Codable {
                     "color": block.color.rawValue,
                     "shape": block.shape.rawValue
                 ]
-            }
+            },
+            "lastSaveTime": lastSaveTime.timeIntervalSince1970
         ]
     }
     
     init?(dictionary: [String: Any]) {
-        guard let score = dictionary["score"] as? Int,
+        // Validate data version
+        guard GameDataVersion.validateData(dictionary) else { return nil }
+        
+        guard let version = dictionary["version"] as? Int,
+              let score = dictionary["score"] as? Int,
               let level = dictionary["level"] as? Int,
               let blocksPlaced = dictionary["blocksPlaced"] as? Int,
               let linesCleared = dictionary["linesCleared"] as? Int,
@@ -73,7 +85,8 @@ struct GameProgress: Codable {
               let highScore = dictionary["highScore"] as? Int,
               let highestLevel = dictionary["highestLevel"] as? Int,
               let gridData = dictionary["grid"] as? [[String]],
-              let trayData = dictionary["tray"] as? [[String: String]] else {
+              let trayData = dictionary["tray"] as? [[String: String]],
+              let lastSaveTimeInterval = dictionary["lastSaveTime"] as? TimeInterval else {
             return nil
         }
         
@@ -96,6 +109,7 @@ struct GameProgress: Codable {
         }
         
         self.init(
+            version: version,
             score: score,
             level: level,
             blocksPlaced: blocksPlaced,
@@ -106,7 +120,8 @@ struct GameProgress: Codable {
             highScore: highScore,
             highestLevel: highestLevel,
             grid: grid,
-            tray: tray
+            tray: tray,
+            lastSaveTime: Date(timeIntervalSince1970: lastSaveTimeInterval)
         )
     }
 } 

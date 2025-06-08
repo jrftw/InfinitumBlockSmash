@@ -324,6 +324,7 @@ struct SettingsView: View {
     @State private var showingTestFlightWebView = false
     @State private var showingStore = false
     @AppStorage("forceUpdateEnabled") private var forceUpdateEnabled = false
+    @AppStorage("autoSyncEnabled") private var autoSyncEnabled = true
     
     private let difficulties = ["easy", "normal", "hard", "expert"]
     private let themes = ["light", "dark", "auto"]
@@ -427,6 +428,8 @@ struct SettingsView: View {
                 StatsForNerdsSection(gameState: gameState)
                 
                 Section(header: Text("Data Management")) {
+                    Toggle("Auto Sync Data", isOn: $autoSyncEnabled)
+                    
                     Button("Reset Game Data") {
                         showingResetConfirmation = true
                     }

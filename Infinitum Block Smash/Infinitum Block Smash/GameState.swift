@@ -120,6 +120,9 @@ final class GameState: ObservableObject {
     @Published var highScore: Int = 0
     @Published var highestLevel: Int = 1
     
+    // Add auto-sync toggle
+    @AppStorage("autoSyncEnabled") private var autoSyncEnabled: Bool = true
+    
     // Add memory management properties
     private var lastMemoryCleanup: Date = Date()
     private let memoryCleanupInterval: TimeInterval = 60.0 // Cleanup every minute
@@ -127,6 +130,9 @@ final class GameState: ObservableObject {
     
     // MARK: - Initialization
     init() {
+        // Run data migration if needed
+        GameDataVersion.migrateIfNeeded()
+        
         // Load high score from UserDefaults first
         highScore = userDefaults.integer(forKey: scoreKey)
         highestLevel = userDefaults.integer(forKey: levelKey)
@@ -144,10 +150,15 @@ final class GameState: ObservableObject {
         // Start play time timer
         startPlayTimeTimer()
         
-        // Load cloud data if user is logged in
+        // Perform initial device sync if user is logged in and auto-sync is enabled
         Task {
-            if !UserDefaults.standard.bool(forKey: "isGuest") {
-                await loadCloudData()
+            if !UserDefaults.standard.bool(forKey: "isGuest") && UserDefaults.standard.bool(forKey: "autoSyncEnabled") {
+                do {
+                    try await FirebaseManager.shared.performInitialDeviceSync()
+                    print("[GameState] Successfully performed initial device sync")
+                } catch {
+                    print("[GameState] Error performing initial device sync: \(error.localizedDescription)")
+                }
             }
         }
     }
@@ -263,6 +274,7 @@ final class GameState: ObservableObject {
         Task { [weak self] in
             guard let self = self else { return }
             await MainActor.run {
+                // Only reset current game state, preserve statistics
                 self.score = 0
                 self.level = 1
                 self.isGameOver = false
@@ -290,11 +302,6 @@ final class GameState: ObservableObject {
                 
                 // Reset ad-related state
                 self.resetAdState()
-                
-                // Reset saved score and level in UserDefaults
-                self.userDefaults.set(0, forKey: self.scoreKey)
-                self.userDefaults.set(1, forKey: self.levelKey)
-                self.userDefaults.synchronize()
                 
                 // Notify delegate of state change
                 self.delegate?.gameStateDidUpdate()
@@ -1312,6 +1319,7 @@ final class GameState: ObservableObject {
     
     private func loadStatistics() {
         print("[GameState] Loading statistics from UserDefaults")
+        
         // Load statistics from UserDefaults
         blocksPlaced = userDefaults.integer(forKey: blocksPlacedKey)
         linesCleared = userDefaults.integer(forKey: linesClearedKey)
@@ -1325,13 +1333,16 @@ final class GameState: ObservableObject {
         
         print("[GameState] Loaded statistics - Blocks: \(blocksPlaced), Lines: \(linesCleared), Games: \(gamesCompleted), Perfect: \(perfectLevels), High Score: \(highScore), Highest Level: \(highestLevel)")
 
-        // Load from Firebase if user is logged in
+        // Load from Firebase if user is logged in and auto-sync is enabled
         Task {
-            if !UserDefaults.standard.bool(forKey: "isGuest") {
+            if !UserDefaults.standard.bool(forKey: "isGuest") && autoSyncEnabled {
                 do {
                     let progress = try await FirebaseManager.shared.loadGameProgress()
-                    // Update local statistics with Firebase data if it's more recent
-                    if progress.totalPlayTime > totalPlayTime {
+                    
+                    // Only update if Firebase data is more recent
+                    if let localLastSave = userDefaults.object(forKey: "lastSaveTime") as? Date,
+                       progress.lastSaveTime > localLastSave {
+                        // Update local statistics with Firebase data
                         blocksPlaced = progress.blocksPlaced
                         linesCleared = progress.linesCleared
                         gamesCompleted = progress.gamesCompleted
@@ -1370,6 +1381,7 @@ final class GameState: ObservableObject {
         userDefaults.set(totalPlayTime, forKey: totalPlayTimeKey)
         userDefaults.set(highScore, forKey: scoreKey)
         userDefaults.set(highestLevel, forKey: levelKey)
+        userDefaults.set(Date(), forKey: "lastSaveTime")
         userDefaults.synchronize()
     }
 
@@ -1382,9 +1394,9 @@ final class GameState: ObservableObject {
         
         print("[GameState] Saved statistics - Blocks: \(blocksPlaced), Lines: \(linesCleared), Games: \(gamesCompleted), Perfect: \(perfectLevels), High Score: \(highScore), Highest Level: \(highestLevel)")
 
-        // Sync with Firebase if user is logged in, but only if enough time has passed
+        // Sync with Firebase if user is logged in and auto-sync is enabled
         Task {
-            if !UserDefaults.standard.bool(forKey: "isGuest") {
+            if !UserDefaults.standard.bool(forKey: "isGuest") && autoSyncEnabled {
                 let now = Date()
                 let lastSaveTime = userDefaults.object(forKey: "lastFirebaseSaveTime") as? Date ?? Date.distantPast
                 
@@ -1400,7 +1412,10 @@ final class GameState: ObservableObject {
                             perfectLevels: perfectLevels,
                             totalPlayTime: totalPlayTime,
                             highScore: highScore,
-                            highestLevel: highestLevel
+                            highestLevel: highestLevel,
+                            grid: grid,
+                            tray: tray,
+                            lastSaveTime: now
                         )
                         try await FirebaseManager.shared.saveGameProgress(progress)
                         userDefaults.set(now, forKey: "lastFirebaseSaveTime")
