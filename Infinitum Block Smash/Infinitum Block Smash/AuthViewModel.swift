@@ -12,6 +12,7 @@ class AuthViewModel: ObservableObject {
     @Published var showPhoneSignIn = false
     @Published var showGameCenterSignIn = false
     @Published var showAdditionalInfo = false
+    @Published var showPasswordReset = false
     @Published var tempUserID = ""
     @Published var tempAuthProvider = ""
     @Published var email = ""
@@ -43,6 +44,7 @@ class AuthViewModel: ObservableObject {
         showPhoneSignIn = false
         showGameCenterSignIn = false
         showAdditionalInfo = false
+        showPasswordReset = false
         tempUserID = ""
         tempAuthProvider = ""
         referralCode = ""
@@ -407,5 +409,26 @@ class AuthViewModel: ObservableObject {
     func skipNotificationPermission() {
         hasRequestedNotifications = true
         dismiss()
+    }
+    
+    // MARK: - Password Reset
+    func resetPassword(email: String) {
+        guard !email.isEmpty else {
+            errorMessage = "Please enter your email address."
+            return
+        }
+        
+        isLoading = true
+        Auth.auth().sendPasswordReset(withEmail: email) { [weak self] error in
+            guard let self = self else { return }
+            self.isLoading = false
+            
+            if let error = error {
+                self.handleAuthError(error)
+            } else {
+                self.errorMessage = "Password reset email sent. Please check your inbox."
+                self.showPasswordReset = false
+            }
+        }
     }
 } 

@@ -78,6 +78,15 @@ struct SignInFormView: View {
                 .textFieldStyle(ModernTextFieldStyle())
             SecureField("Password", text: $viewModel.password)
                 .textFieldStyle(ModernTextFieldStyle())
+            
+            Button("Forgot Password?") {
+                viewModel.showPasswordReset = true
+            }
+            .font(.subheadline)
+            .foregroundColor(.white.opacity(0.8))
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .padding(.top, -4)
+            
             VStack(spacing: 12) {
                 Button("Sign In") {
                     viewModel.signInWithEmail()
@@ -219,5 +228,51 @@ struct MainAuthButtonsView: View {
             }
             .buttonStyle(ModernButtonStyle(filled: false, accent: .gray))
         }
+    }
+}
+
+// MARK: - Password Reset Form View
+struct PasswordResetFormView: View {
+    @ObservedObject var viewModel: AuthViewModel
+    @State private var email = ""
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            Text("Reset Password")
+                .font(.title2)
+                .foregroundColor(.white)
+                .padding(.bottom, 8)
+            
+            Text("Enter your email address and we'll send you a link to reset your password.")
+                .font(.subheadline)
+                .foregroundColor(.white.opacity(0.8))
+                .multilineTextAlignment(.center)
+                .padding(.bottom, 16)
+            
+            TextField("Email", text: $email)
+                .textFieldStyle(ModernTextFieldStyle())
+                .textContentType(.emailAddress)
+                .keyboardType(.emailAddress)
+                .autocapitalization(.none)
+            
+            VStack(spacing: 12) {
+                Button("Send Reset Link") {
+                    viewModel.resetPassword(email: email)
+                }
+                .font(.headline)
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .background(Color.clear)
+                .buttonStyle(ModernButtonStyle())
+                
+                Button("Back") { viewModel.showPasswordReset = false }
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .background(Color.clear)
+                    .buttonStyle(ModernButtonStyle(filled: false, accent: .gray))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 8)
+        }
+        .padding(.horizontal)
     }
 } 

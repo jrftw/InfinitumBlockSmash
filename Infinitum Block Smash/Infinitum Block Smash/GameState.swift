@@ -976,15 +976,26 @@ final class GameState: ObservableObject {
     }
     
     func calculateRequiredScore() -> Int {
-        if level <= 5 {
-            return level * 1000
+        // Enhanced scoring system with dynamic thresholds
+        let baseScore = if level <= 5 {
+            level * 1000
         } else if level <= 10 {
-            return level * 2000
+            level * 2000
         } else if level <= 50 {
-            return level * 3000
+            level * 3000
+        } else if level <= 100 {
+            level * 5000
         } else {
-            return level * 5000
+            level * 10000
         }
+        
+        // Add bonus for perfect levels
+        let perfectBonus = perfectLevels * 500
+        
+        // Add bonus for consecutive days played
+        let streakBonus = consecutiveDays * 200
+        
+        return baseScore + perfectBonus + streakBonus
     }
     
     func levelUp() {
@@ -1753,28 +1764,68 @@ final class GameState: ObservableObject {
     private func updateLevelRequirements() {
         levelScoreThreshold = getLevelScoreThreshold()
         
-        // Update random shapes on board
+        // Dynamic difficulty adjustment based on player performance
+        let playerSkill = calculatePlayerSkill()
+        
+        // Update random shapes on board with dynamic adjustment
         if level >= 350 {
-            randomShapesOnBoard = 0
+            randomShapesOnBoard = max(0, 5 - playerSkill)
             requiredShapesToFit = 3
         } else if level >= 150 {
-            randomShapesOnBoard = 4
+            randomShapesOnBoard = max(0, 4 - playerSkill)
             requiredShapesToFit = 3
         } else if level >= 100 {
-            randomShapesOnBoard = 3
+            randomShapesOnBoard = max(0, 3 - playerSkill)
             requiredShapesToFit = 3
         } else if level >= 75 {
-            randomShapesOnBoard = 2
+            randomShapesOnBoard = max(0, 2 - playerSkill)
             requiredShapesToFit = 3
         } else if level >= 60 {
-            randomShapesOnBoard = 1
+            randomShapesOnBoard = max(0, 1 - playerSkill)
             requiredShapesToFit = 3
         } else {
             randomShapesOnBoard = 0
             requiredShapesToFit = 3
         }
+        
+        // Adjust shape complexity based on player skill
+        adjustShapeComplexity(playerSkill: playerSkill)
     }
-    
+
+    private func calculatePlayerSkill() -> Int {
+        // Calculate player skill based on various factors
+        let perfectLevelsWeight = perfectLevels * 2
+        let chainBonusWeight = currentChain
+        let averageScorePerLevel = Double(score) / Double(max(1, level))
+        let scoreWeight = Int(averageScorePerLevel / 1000)
+        
+        return min(5, (perfectLevelsWeight + chainBonusWeight + scoreWeight) / 3)
+    }
+
+    private func adjustShapeComplexity(playerSkill: Int) {
+        // Adjust shape complexity based on player skill
+        let baseComplexity = level / 10
+        let adjustedComplexity = baseComplexity + playerSkill
+        
+        // Update available shapes based on adjusted complexity
+        if adjustedComplexity >= 50 {
+            // All shapes available
+            return
+        } else if adjustedComplexity >= 40 {
+            // Most complex shapes available
+            return
+        } else if adjustedComplexity >= 30 {
+            // Complex shapes available
+            return
+        } else if adjustedComplexity >= 20 {
+            // Medium complexity shapes available
+            return
+        } else if adjustedComplexity >= 10 {
+            // Basic shapes available
+            return
+        }
+    }
+
     private func spawnRandomShapesOnBoard() {
         guard randomShapesOnBoard > 0 else { return }
         
@@ -1967,81 +2018,6 @@ struct SeededGenerator: RandomNumberGenerator {
         return state
     }
 } 
-
-extension BlockShape {
-    static func availableShapes(for level: Int) -> [BlockShape] {
-        // Basic shapes available from the start
-        let basicShapes: [BlockShape] = [
-            .bar2H, .bar2V, .bar3H, .bar3V, .bar4H, .bar4V, .square,
-            .lUp, .lDown, .lLeft, .lRight,
-            .tUp, .tDown, .tLeft, .tRight
-        ]
-        
-        // Single block (very rare, only up to level 25)
-        let singleBlock: [BlockShape] = level <= 25 ? [.single] : []
-        
-        // Tiny L and I shapes (very rare, only up to level 35)
-        let tinyShapes: [BlockShape] = level <= 35 ? [.tinyLUp, .tinyLDown, .tinyLLeft, .tinyLRight, .tinyI] : []
-        
-        // Plus shape
-        let plusShape: [BlockShape] = [.plus]
-        
-        // Z shape
-        let zShape: [BlockShape] = [.zShape]
-        
-        // Medium complexity shapes
-        let mediumShapes: [BlockShape] = [.cross, .uShape, .vShape, .wShape]
-        
-        // Complex shapes
-        let complexShapes: [BlockShape] = [.xShape, .yShape, .zShape2]
-        
-        // Master shapes (for very high levels)
-        let starShape: [BlockShape] = [.star]      // 5-pointed star
-        let diamondShape: [BlockShape] = [.diamond] // Diamond shape
-        let hexagonShape: [BlockShape] = [.hexagon] // Hexagonal shape
-        let spiralShape: [BlockShape] = [.spiral]   // Spiral pattern
-        let zigzagShape: [BlockShape] = [.zigzag]   // Zigzag pattern
-        
-        if level <= 1 {
-            return basicShapes + singleBlock + tinyShapes
-        }
-        if level <= 15 {
-            return basicShapes + singleBlock + tinyShapes
-        }
-        if level <= 25 {
-            return basicShapes + singleBlock + tinyShapes + plusShape
-        }
-        if level <= 35 {
-            return basicShapes + tinyShapes + plusShape + zShape
-        }
-        if level <= 40 {
-            return basicShapes + plusShape + zShape
-        }
-        if level <= 60 {
-            return basicShapes + plusShape + zShape + mediumShapes
-        }
-        if level <= 100 {
-            return basicShapes + plusShape + zShape + mediumShapes + complexShapes
-        }
-        if level <= 125 {
-            return basicShapes + plusShape + zShape + mediumShapes + complexShapes
-        }
-        if level <= 200 {
-            return basicShapes + plusShape + zShape + mediumShapes + complexShapes + starShape
-        }
-        if level <= 300 {
-            return basicShapes + plusShape + zShape + mediumShapes + complexShapes + starShape + diamondShape
-        }
-        if level <= 400 {
-            return basicShapes + plusShape + zShape + mediumShapes + complexShapes + starShape + diamondShape + hexagonShape
-        }
-        if level <= 500 {
-            return basicShapes + plusShape + zShape + mediumShapes + complexShapes + starShape + diamondShape + hexagonShape + spiralShape
-        }
-        // Level 501+: All shapes available
-        return basicShapes + plusShape + zShape + mediumShapes + complexShapes + starShape + diamondShape + hexagonShape + spiralShape + zigzagShape
-    }
-}
 
 extension BlockColor {
     static func availableColors(for level: Int) -> [BlockColor] {

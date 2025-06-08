@@ -40,6 +40,10 @@ struct AuthView: View {
                         SignInFormView(viewModel: viewModel)
                     }
                     
+                    if viewModel.showPasswordReset {
+                        PasswordResetFormView(viewModel: viewModel)
+                    }
+                    
                     if viewModel.showAdditionalInfo {
                         AdditionalInfoFormView(viewModel: viewModel)
                     }

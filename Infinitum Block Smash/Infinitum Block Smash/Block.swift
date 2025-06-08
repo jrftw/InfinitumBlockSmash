@@ -227,4 +227,116 @@ enum BlockShape: String, CaseIterable, Codable {
         let availableShapes = BlockShape.allCases.filter { $0.requiredLevel <= level }
         return availableShapes.randomElement() ?? .bar2H
     }
+    
+    var isBasicShape: Bool {
+        switch self {
+        case .bar2H, .bar2V, .bar3H, .bar3V, .bar4H, .bar4V, .square,
+             .lUp, .lDown, .lLeft, .lRight,
+             .tUp, .tDown, .tLeft, .tRight:
+            return true
+        default:
+            return false
+        }
+    }
+    
+    var complexity: Int {
+        switch self {
+        case .single, .tinyLUp, .tinyLDown, .tinyLLeft, .tinyLRight, .tinyI:
+            return 1
+        case .bar2H, .bar2V, .bar3H, .bar3V, .bar4H, .bar4V, .square:
+            return 2
+        case .lUp, .lDown, .lLeft, .lRight, .tUp, .tDown, .tLeft, .tRight:
+            return 3
+        case .zShape, .plus, .cross:
+            return 4
+        case .uShape, .vShape, .wShape:
+            return 5
+        case .xShape, .yShape, .zShape2:
+            return 6
+        case .rect2x3, .rect3x2:
+            return 7
+        case .rect3x3:
+            return 8
+        case .star, .diamond:
+            return 9
+        case .hexagon, .spiral:
+            return 10
+        case .zigzag:
+            return 11
+        }
+    }
+    
+    static func availableShapes(for level: Int) -> [BlockShape] {
+        // Basic shapes available from the start
+        let basicShapes: [BlockShape] = [
+            .bar2H, .bar2V, .bar3H, .bar3V, .bar4H, .bar4V, .square,
+            .lUp, .lDown, .lLeft, .lRight,
+            .tUp, .tDown, .tLeft, .tRight
+        ]
+        
+        // Single block (very rare, only up to level 25)
+        let singleBlock: [BlockShape] = level <= 25 ? [.single] : []
+        
+        // Tiny L and I shapes (very rare, only up to level 35)
+        let tinyShapes: [BlockShape] = level <= 35 ? [.tinyLUp, .tinyLDown, .tinyLLeft, .tinyLRight, .tinyI] : []
+        
+        // Plus shape
+        let plusShape: [BlockShape] = [.plus]
+        
+        // Z shape
+        let zShape: [BlockShape] = [.zShape]
+        
+        // Medium complexity shapes
+        let mediumShapes: [BlockShape] = [.cross, .uShape, .vShape, .wShape]
+        
+        // Complex shapes
+        let complexShapes: [BlockShape] = [.xShape, .yShape, .zShape2]
+        
+        // Rectangle shapes
+        let rectangleShapes: [BlockShape] = [.rect2x3, .rect3x2, .rect3x3]
+        
+        // Master shapes (for very high levels)
+        let starShape: [BlockShape] = [.star]      // 5-pointed star
+        let diamondShape: [BlockShape] = [.diamond] // Diamond shape
+        let hexagonShape: [BlockShape] = [.hexagon] // Hexagonal shape
+        let spiralShape: [BlockShape] = [.spiral]   // Spiral pattern
+        let zigzagShape: [BlockShape] = [.zigzag]   // Zigzag pattern
+        
+        // Progressive shape introduction based on level
+        if level <= 1 {
+            return basicShapes.filter { $0.isBasicShape }
+        }
+        if level <= 5 {
+            return basicShapes + singleBlock
+        }
+        if level <= 10 {
+            return basicShapes + singleBlock + tinyShapes
+        }
+        if level <= 15 {
+            return basicShapes + singleBlock + tinyShapes + plusShape
+        }
+        if level <= 25 {
+            return basicShapes + singleBlock + tinyShapes + plusShape + zShape
+        }
+        if level <= 35 {
+            return basicShapes + tinyShapes + plusShape + zShape + mediumShapes
+        }
+        if level <= 50 {
+            return basicShapes + plusShape + zShape + mediumShapes + complexShapes
+        }
+        if level <= 75 {
+            return basicShapes + plusShape + zShape + mediumShapes + complexShapes + rectangleShapes
+        }
+        if level <= 100 {
+            return basicShapes + plusShape + zShape + mediumShapes + complexShapes + rectangleShapes + starShape
+        }
+        if level <= 150 {
+            return basicShapes + plusShape + zShape + mediumShapes + complexShapes + rectangleShapes + starShape + diamondShape
+        }
+        if level <= 200 {
+            return basicShapes + plusShape + zShape + mediumShapes + complexShapes + rectangleShapes + starShape + diamondShape + hexagonShape
+        }
+        // Level 201+: All shapes available
+        return basicShapes + plusShape + zShape + mediumShapes + complexShapes + rectangleShapes + starShape + diamondShape + hexagonShape + spiralShape + zigzagShape
+    }
 } 
