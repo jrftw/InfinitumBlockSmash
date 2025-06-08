@@ -259,10 +259,6 @@ struct GameView: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Pause Menu")
             
-            if showingTutorial {
-                TutorialModal(showingTutorial: $showingTutorial, showTutorial: $showTutorial)
-            }
-            
             if showingAchievements {
                 AchievementsView(achievementsManager: gameState.achievementsManager)
             }
@@ -320,68 +316,6 @@ struct GameView: View {
         case .showStats:
             showingStats = true
         }
-    }
-}
-
-struct TutorialModal: View {
-    @Binding var showingTutorial: Bool
-    @Binding var showTutorial: Bool
-    @State private var step = 0
-    private let steps: [(String, String, String?)] = [
-        ("Welcome to Infinitum Block Smash!", "Get ready to stack and smash blocks for high scores.", "star.fill"),
-        ("Drag Shapes", "Drag shapes from the tray onto the grid.", "hand.point.up.left.fill"),
-        ("Clear Lines", "Fill an entire row or column to clear it and earn points.", "line.horizontal.3.decrease.circle"),
-        ("Level Up", "The game gets harder as you level up, with more complex shapes.", "arrow.up.right.square"),
-        ("Game Over", "The game ends when no more moves are possible.", "xmark.octagon"),
-        ("Achievements", "Try to beat your high score and unlock achievements!", "star.fill")
-    ]
-    
-    var body: some View {
-        VStack(spacing: 32) {
-            Spacer()
-            if let icon = steps[step].2 {
-                Image(systemName: icon)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 60, height: 60)
-                    .foregroundColor(.accentColor)
-            }
-            Text(steps[step].0)
-                .font(.title.bold())
-                .multilineTextAlignment(.center)
-            Text(steps[step].1)
-                .font(.title3)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-            Spacer()
-            HStack {
-                if step > 0 {
-                    Button("Back") { step -= 1 }
-                        .padding()
-                }
-                Spacer()
-                if step < steps.count - 1 {
-                    Button("Next") { step += 1 }
-                        .padding()
-                } else {
-                    Button("Done") {
-                        showTutorial = false
-                        showingTutorial = false
-                    }
-                    .padding()
-                }
-            }
-            Button("Skip Tutorial") {
-                showTutorial = false
-                showingTutorial = false
-            }
-            .foregroundColor(.red)
-            .padding(.top, 8)
-        }
-        .padding()
-        .background(BlurView(style: .systemUltraThinMaterialDark))
-        .cornerRadius(24)
-        .padding(32)
     }
 }
 
