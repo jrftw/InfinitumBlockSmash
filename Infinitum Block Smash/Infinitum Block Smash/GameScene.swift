@@ -10,8 +10,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var draggingBlock: Block?
     private var dragNode: SKNode?
     private var previewNode: SKNode?
-    private var lastPlacementTime: TimeInterval = 0
-    private let placementDebounceInterval: TimeInterval = 0.1 // 100ms debounce
+    private var lastPlacementTime: CFTimeInterval = 0
+    private let placementDebounceInterval: CFTimeInterval = 0.1 // Reduced from previous value
     
     // Visual effects
     private var particleEmitter: SKEmitterNode?
