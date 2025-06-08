@@ -1,0 +1,16 @@
+/* Settings View */
+"Game Settings" = "Настройки игры";
+"System Theme" = "Системная тема";
+"Light" = "Светлая";
+"Dark" = "Тёмная";
+"Auto" = "Авто";
+"Custom Theme" = "Пользовательская тема";
+"Locked" = "Заблокировано";
+"Target FPS" = "Целевой FPS";
+"Show Tutorial" = "Показать обучение";
+"Auto Save" = "Автосохранение";
+"Gameplay Settings" = "Настройки геймплея";
+"Placement Precision" = "Точность размещения";
+"Block Drag Position" = "Позиция перетаскивания блока";
+"Lower = More Precise" = "Ниже = Точнее";
+"Reset" = "Сбросить"; 

@@ -9,34 +9,34 @@ struct AchievementsView: View {
     @State private var selectedCategory: String? = nil
     
     private let categories = [
-        "All",
-        "Score",
-        "Level",
-        "Clearing",
-        "Combo",
-        "Special",
-        "Daily"
+        NSLocalizedString("All", comment: "All achievements category"),
+        NSLocalizedString("Score", comment: "Score achievements category"),
+        NSLocalizedString("Level", comment: "Level achievements category"),
+        NSLocalizedString("Clearing", comment: "Clearing achievements category"),
+        NSLocalizedString("Combo", comment: "Combo achievements category"),
+        NSLocalizedString("Special", comment: "Special achievements category"),
+        NSLocalizedString("Daily", comment: "Daily achievements category")
     ]
     
     private func achievementsForCategory(_ category: String) -> [Achievement] {
-        if category == "All" {
+        if category == NSLocalizedString("All", comment: "All achievements category") {
             return achievementsManager.getAllAchievements()
         }
         
         return achievementsManager.getAllAchievements().filter { achievement in
             switch category {
-            case "Score":
+            case NSLocalizedString("Score", comment: "Score achievements category"):
                 return achievement.id.starts(with: "score_")
-            case "Level":
+            case NSLocalizedString("Level", comment: "Level achievements category"):
                 return achievement.id.starts(with: "level_")
-            case "Clearing":
+            case NSLocalizedString("Clearing", comment: "Clearing achievements category"):
                 return achievement.id.starts(with: "clear_") || achievement.id.starts(with: "first_clear")
-            case "Combo":
+            case NSLocalizedString("Combo", comment: "Combo achievements category"):
                 return achievement.id.starts(with: "combo_") || achievement.id.starts(with: "chain_")
-            case "Special":
+            case NSLocalizedString("Special", comment: "Special achievements category"):
                 return achievement.id.starts(with: "perfect_") || achievement.id.starts(with: "color_") ||
                        achievement.id.starts(with: "shape_") || achievement.id.starts(with: "grid_")
-            case "Daily":
+            case NSLocalizedString("Daily", comment: "Daily achievements category"):
                 return achievement.id.starts(with: "login_") || achievement.id.starts(with: "daily_")
             default:
                 return false
@@ -50,7 +50,7 @@ struct AchievementsView: View {
                 // Total points display
                 HStack {
                     VStack(alignment: .leading) {
-                        Text("Total Points")
+                        Text(NSLocalizedString("Total Points", comment: "Total points label"))
                             .font(.headline)
                             .foregroundColor(.secondary)
                         Text("\(achievementsManager.totalPoints)")
@@ -61,7 +61,7 @@ struct AchievementsView: View {
                     Button(action: { showingLeaderboard = true }) {
                         HStack {
                             Image(systemName: "trophy.fill")
-                            Text("Leaderboard")
+                            Text(NSLocalizedString("Leaderboard", comment: "Leaderboard button"))
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
@@ -77,7 +77,7 @@ struct AchievementsView: View {
                     HStack(spacing: 12) {
                         ForEach(categories, id: \.self) { category in
                             Button(action: {
-                                selectedCategory = category == "All" ? nil : category
+                                selectedCategory = category == NSLocalizedString("All", comment: "All achievements category") ? nil : category
                             }) {
                                 Text(category)
                                     .font(.headline)
@@ -95,12 +95,12 @@ struct AchievementsView: View {
                 
                 // Achievements list
                 List {
-                    ForEach(achievementsForCategory(selectedCategory ?? "All")) { achievement in
+                    ForEach(achievementsForCategory(selectedCategory ?? NSLocalizedString("All", comment: "All achievements category"))) { achievement in
                         AchievementRow(achievement: achievement)
                     }
                 }
             }
-            .navigationTitle("Achievements")
+            .navigationTitle(NSLocalizedString("Achievements", comment: "Achievements view title"))
             .sheet(isPresented: $showingLeaderboard) {
                 AchievementLeaderboardView()
             }
@@ -133,7 +133,10 @@ struct AchievementRow: View {
                             .progressViewStyle(LinearProgressViewStyle())
                             .frame(height: 4)
                         
-                        Text("\(achievement.progress)/\(achievement.goal) (\(Int((Double(achievement.progress) / Double(achievement.goal)) * 100))%)")
+                        Text(String(format: NSLocalizedString("Progress: %d/%d (%d%%)", comment: "Achievement progress"), 
+                            achievement.progress, 
+                            achievement.goal,
+                            Int((Double(achievement.progress) / Double(achievement.goal)) * 100)))
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -142,7 +145,7 @@ struct AchievementRow: View {
             
             Spacer()
             
-            Text("\(achievement.points) pts")
+            Text(String(format: NSLocalizedString("%d pts", comment: "Achievement points"), achievement.points))
                 .font(.headline)
                 .foregroundColor(.blue)
         }
@@ -161,7 +164,7 @@ struct AchievementNotification: View {
                 .font(.system(size: 40))
                 .foregroundColor(.yellow)
             
-            Text("Achievement Unlocked!")
+            Text(NSLocalizedString("Achievement Unlocked!", comment: "Achievement unlocked notification"))
                 .font(.headline)
             
             Text(achievement.name)

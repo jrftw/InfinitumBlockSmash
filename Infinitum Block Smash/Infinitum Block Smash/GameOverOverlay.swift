@@ -20,7 +20,7 @@ struct GameOverOverlay: View {
                 .overlay(
                     VStack(spacing: 24) {
                         // Game Over Text with Animation
-                        Text("Game Over")
+                        Text(NSLocalizedString("Game Over", comment: "Game over title"))
                             .font(.system(size: 36, weight: .bold))
                             .foregroundColor(.white)
                             .shadow(radius: 2)
@@ -33,16 +33,16 @@ struct GameOverOverlay: View {
                             // Score Display
                             HStack(spacing: 20) {
                                 VStack(spacing: 8) {
-                                    Text("Final Score")
+                                    Text(NSLocalizedString("Final Score", comment: "Final score label"))
                                         .font(.headline)
                                         .foregroundColor(.white.opacity(0.8))
                                     if #available(iOS 16.0, *) {
-                                        Text("\(score)")
+                                        Text(String(format: NSLocalizedString("%d points", comment: "Final score value"), score))
                                             .font(.system(size: 32, weight: .bold, design: .rounded))
                                             .foregroundColor(.white)
                                             .contentTransition(.numericText())
                                     } else {
-                                        Text("\(score)")
+                                        Text(String(format: NSLocalizedString("%d points", comment: "Final score value"), score))
                                             .font(.system(size: 32, weight: .bold, design: .rounded))
                                             .foregroundColor(.white)
                                     }
@@ -53,16 +53,16 @@ struct GameOverOverlay: View {
                                 
                                 // Level Display
                                 VStack(spacing: 8) {
-                                    Text("Level Reached")
+                                    Text(NSLocalizedString("Level Reached", comment: "Level reached label"))
                                         .font(.headline)
                                         .foregroundColor(.white.opacity(0.8))
                                     if #available(iOS 16.0, *) {
-                                        Text("\(level)")
+                                        Text(String(format: NSLocalizedString("%d level", comment: "Level reached value"), level))
                                             .font(.system(size: 32, weight: .bold, design: .rounded))
                                             .foregroundColor(.yellow)
                                             .contentTransition(.numericText())
                                     } else {
-                                        Text("\(level)")
+                                        Text(String(format: NSLocalizedString("%d level", comment: "Level reached value"), level))
                                             .font(.system(size: 32, weight: .bold, design: .rounded))
                                             .foregroundColor(.yellow)
                                     }
@@ -89,7 +89,7 @@ struct GameOverOverlay: View {
                                 }) {
                                     HStack {
                                         Image(systemName: "play.fill")
-                                        Text("Continue")
+                                        Text(NSLocalizedString("Continue", comment: "Continue button"))
                                     }
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 40)
@@ -105,7 +105,7 @@ struct GameOverOverlay: View {
                                     .shadow(color: Color.green.opacity(0.3), radius: 8, x: 0, y: 4)
                                 }
                                 .buttonStyle(ScaleButtonStyle())
-                                .accessibilityHint("Continue from where you left off")
+                                .accessibilityHint(NSLocalizedString("Continue from where you left off", comment: "Continue button accessibility hint"))
                             }
                             
                             Button(action: {
@@ -121,7 +121,7 @@ struct GameOverOverlay: View {
                             }) {
                                 HStack {
                                     Image(systemName: "arrow.clockwise")
-                                    Text("Try Again")
+                                    Text(NSLocalizedString("Try Again", comment: "Try again button"))
                                 }
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 40)
@@ -137,7 +137,7 @@ struct GameOverOverlay: View {
                                 .shadow(color: Color.blue.opacity(0.3), radius: 8, x: 0, y: 4)
                             }
                             .buttonStyle(ScaleButtonStyle())
-                            .accessibilityHint("Start a new game")
+                            .accessibilityHint(NSLocalizedString("Start a new game", comment: "Try again button accessibility hint"))
                             
                             Button(action: {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -152,7 +152,7 @@ struct GameOverOverlay: View {
                             }) {
                                 HStack {
                                     Image(systemName: "house.fill")
-                                    Text("Main Menu")
+                                    Text(NSLocalizedString("Main Menu", comment: "Main menu button"))
                                 }
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 40)
@@ -168,7 +168,7 @@ struct GameOverOverlay: View {
                                 .shadow(color: Color.purple.opacity(0.3), radius: 8, x: 0, y: 4)
                             }
                             .buttonStyle(ScaleButtonStyle())
-                            .accessibilityHint("Return to the main menu")
+                            .accessibilityHint(NSLocalizedString("Return to the main menu", comment: "Main menu button accessibility hint"))
                         }
                     }
                     .padding(32)

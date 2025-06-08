@@ -1,0 +1,16 @@
+/* Settings View */
+"Game Settings" = "গেম সেটিংস";
+"System Theme" = "সিস্টেম থিম";
+"Light" = "লাইট";
+"Dark" = "ডার্ক";
+"Auto" = "অটো";
+"Custom Theme" = "কাস্টম থিম";
+"Locked" = "লক";
+"Target FPS" = "টার্গেট FPS";
+"Show Tutorial" = "টিউটোরিয়াল দেখান";
+"Auto Save" = "অটো সেভ";
+"Gameplay Settings" = "গেমপ্লে সেটিংস";
+"Placement Precision" = "প্লেসমেন্ট প্রিসিশন";
+"Block Drag Position" = "ব্লক ড্র্যাগ পজিশন";
+"Lower = More Precise" = "কম = বেশি সঠিক";
+"Reset" = "রিসেট"; 

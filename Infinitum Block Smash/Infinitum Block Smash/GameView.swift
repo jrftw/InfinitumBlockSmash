@@ -116,7 +116,7 @@ struct GameView: View {
     
     private var scoreView: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("Score")
+            Text(NSLocalizedString("Score", comment: "Score label"))
                 .font(.caption)
                 .foregroundColor(.white.opacity(0.9))
             Text("\(gameState.score)")
@@ -124,7 +124,7 @@ struct GameView: View {
                 .foregroundColor(.white)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Score: \(gameState.score)")
+        .accessibilityLabel(String(format: NSLocalizedString("%d points", comment: "Score accessibility label"), gameState.score))
     }
     
     private var undoButtonView: some View {
@@ -134,22 +134,28 @@ struct GameView: View {
                     await gameState.undo()
                 }
             }) {
-                Text(gameState.canUndo ? "Undo Last Move" : "Watch Ad for Undo")
+                Text(gameState.canUndo ? 
+                    NSLocalizedString("Undo Last Move", comment: "Undo button text") :
+                    NSLocalizedString("Watch Ad for Undo", comment: "Watch ad for undo button text"))
                     .font(.headline)
                     .foregroundColor(gameState.canUndo ? Color(#colorLiteral(red: 0.2, green: 0.5, blue: 1, alpha: 1)) : Color.gray)
             }
             .disabled(!gameState.canUndo && !gameState.canAdUndo)
             .buttonStyle(PlainButtonStyle())
-            .accessibilityLabel(gameState.canUndo ? "Undo Last Move" : "Watch Ad for Undo")
-            .accessibilityHint(gameState.canUndo ? "Tap to undo your last move" : "Watch an ad to get more undos")
+            .accessibilityLabel(gameState.canUndo ? 
+                NSLocalizedString("Undo Last Move", comment: "Undo button accessibility label") :
+                NSLocalizedString("Watch Ad for Undo", comment: "Watch ad for undo button accessibility label"))
+            .accessibilityHint(gameState.canUndo ? 
+                NSLocalizedString("Tap to undo your last move", comment: "Undo button accessibility hint") :
+                NSLocalizedString("Watch an ad to get more undos", comment: "Watch ad for undo button accessibility hint"))
             
             if !gameState.canUndo && gameState.canAdUndo {
-                Text("Undos: \(gameState.adUndoCount)")
+                Text(String(format: NSLocalizedString("Undos: %d", comment: "Remaining undos count"), gameState.adUndoCount))
                     .font(.caption2)
                     .foregroundColor(.white.opacity(0.9))
             }
             
-            Text("Need: \(gameState.calculateRequiredScore() - gameState.score)")
+            Text(String(format: NSLocalizedString("Need: %d", comment: "Required score"), gameState.calculateRequiredScore() - gameState.score))
                 .font(.caption2)
                 .foregroundColor(.white.opacity(0.9))
         }
@@ -157,7 +163,7 @@ struct GameView: View {
     
     private var levelView: some View {
         VStack(alignment: .trailing, spacing: 2) {
-            Text("Level")
+            Text(NSLocalizedString("Level", comment: "Level label"))
                 .font(.caption)
                 .foregroundColor(.white.opacity(0.9))
             Text("\(gameState.level)")
@@ -165,24 +171,26 @@ struct GameView: View {
                 .foregroundColor(.yellow)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Level: \(gameState.level)")
+        .accessibilityLabel(String(format: NSLocalizedString("%d level", comment: "Level accessibility label"), gameState.level))
     }
     
     private var highScoresView: some View {
         HStack {
-            Text("Level High: \(UserDefaults.standard.integer(forKey: "highScore_level_\(gameState.level)"))")
+            Text(String(format: NSLocalizedString("Level High: %d", comment: "Level high score"), UserDefaults.standard.integer(forKey: "highScore_level_\(gameState.level)")))
                 .font(.caption2)
                 .foregroundColor(Color.blue.opacity(0.9))
                 .padding(.leading, 12)
             Spacer()
-            Text("All-Time High: \(gameState.highScore)")
+            Text(String(format: NSLocalizedString("All-Time High: %d", comment: "All-time high score"), gameState.highScore))
                 .font(.caption2)
                 .foregroundColor(Color.orange.opacity(0.9))
                 .padding(.trailing, 12)
         }
         .padding(.bottom, 6)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Level High Score: \(UserDefaults.standard.integer(forKey: "highScore_level_\(gameState.level)")) and All-Time High Score: \(gameState.highScore)")
+        .accessibilityLabel(String(format: NSLocalizedString("Level High Score: %d and All-Time High Score: %d", comment: "High scores accessibility label"), 
+            UserDefaults.standard.integer(forKey: "highScore_level_\(gameState.level)"),
+            gameState.highScore))
     }
     
     private var overlays: some View {

@@ -1,0 +1,200 @@
+/* Common */
+"OK" = "موافق";
+"Cancel" = "إلغاء";
+"Save" = "حفظ";
+"Delete" = "حذف";
+"Edit" = "تعديل";
+"Done" = "تم";
+"Loading..." = "جاري التحميل...";
+"Error" = "خطأ";
+"Success" = "نجاح";
+"Warning" = "تحذير";
+"Info" = "معلومات";
+
+/* Language Selection */
+"Language" = "اللغة";
+"Language Changed" = "تم تغيير اللغة";
+"Please restart the app for the language change to take effect." = "يرجى إعادة تشغيل التطبيق لتفعيل تغيير اللغة.";
+
+/* Settings View */
+"Game Settings" = "إعدادات اللعبة";
+"System Theme" = "مظهر النظام";
+"Light" = "فاتح";
+"Dark" = "داكن";
+"Auto" = "تلقائي";
+"Custom Theme" = "مظهر مخصص";
+"Locked" = "مقفل";
+"Target FPS" = "معدل الإطارات المستهدف";
+"Show Tutorial" = "عرض التعليمات";
+"Auto Save" = "حفظ تلقائي";
+"Gameplay Settings" = "إعدادات اللعب";
+"Placement Precision" = "دقة الموضع";
+"Block Drag Position" = "موقع سحب المكعبات";
+"Lower = More Precise" = "أقل = أكثر دقة";
+"Reset" = "إعادة تعيين";
+"Sound Effects" = "المؤثرات الصوتية";
+"Music" = "الموسيقى";
+"Vibration" = "الاهتزاز";
+"Notifications" = "الإشعارات";
+"Privacy" = "الخصوصية";
+"Terms of Service" = "شروط الخدمة";
+"About" = "حول";
+"Version" = "الإصدار";
+"Contact Support" = "اتصل بالدعم";
+"Rate App" = "قيم التطبيق";
+"Share App" = "شارك التطبيق";
+
+/* Game View */
+"Score" = "النتيجة";
+"Level" = "المستوى";
+"Undo Last Move" = "تراجع عن آخر حركة";
+"Watch Ad for Undo" = "شاهد إعلاناً للتراجع";
+"Undos: %d" = "التراجعات: %d";
+"Need: %d" = "المطلوب: %d";
+"Level High: %d" = "أعلى مستوى: %d";
+"All-Time High: %d" = "أعلى نتيجة: %d";
+"Pause" = "إيقاف مؤقت";
+"Resume" = "متابعة";
+"Restart" = "إعادة تشغيل";
+"Quit" = "خروج";
+"Next Level" = "المستوى التالي";
+"Level Complete!" = "اكتمل المستوى!";
+"New High Score!" = "نتيجة عالية جديدة!";
+"Combo: %dx" = "تتابع: %dx";
+"Perfect!" = "ممتاز!";
+"Great!" = "رائع!";
+"Good!" = "جيد!";
+
+/* Game Over */
+"Game Over" = "انتهت اللعبة";
+"Final Score" = "النتيجة النهائية";
+"Level Reached" = "المستوى الذي تم الوصول إليه";
+"Continue" = "متابعة";
+"Try Again" = "حاول مرة أخرى";
+"Main Menu" = "القائمة الرئيسية";
+"Share Score" = "مشاركة النتيجة";
+"View Leaderboard" = "عرض المتصدرين";
+"New Record!" = "رقم قياسي جديد!";
+"Best Score: %d" = "أفضل نتيجة: %d";
+"Time Played: %@" = "وقت اللعب: %@";
+
+/* Achievements */
+"Achievements" = "الإنجازات";
+"Total Points" = "مجموع النقاط";
+"Leaderboard" = "المتصدرون";
+"All" = "الكل";
+"Score" = "النتيجة";
+"Level" = "المستوى";
+"Clearing" = "التصفية";
+"Combo" = "التتابع";
+"Special" = "خاص";
+"Daily" = "يومي";
+"Achievement Unlocked!" = "تم فتح الإنجاز!";
+"%d pts" = "%d نقطة";
+"Progress: %d/%d (%d%%)" = "التقدم: %d/%d (%d%%)";
+"Locked Achievement" = "إنجاز مقفل";
+"Complete to unlock" = "أكمل للفتح";
+"View Details" = "عرض التفاصيل";
+"Recent Achievements" = "الإنجازات الأخيرة";
+"Achievement Progress" = "تقدم الإنجاز";
+
+/* Store & Subscriptions */
+"Store" = "المتجر";
+"Subscriptions" = "الاشتراكات";
+"Premium" = "بريميوم";
+"Elite" = "إيليت";
+"Monthly" = "شهري";
+"Yearly" = "سنوي";
+"Best Value" = "أفضل قيمة";
+"Subscribe" = "اشترك";
+"Restore Purchases" = "استعادة المشتريات";
+"Terms & Conditions" = "الشروط والأحكام";
+"Privacy Policy" = "سياسة الخصوصية";
+"Subscription Benefits" = "مزايا الاشتراك";
+"Current Plan" = "الخطة الحالية";
+"Expires: %@" = "ينتهي: %@";
+"Active" = "نشط";
+"Expired" = "منتهي";
+"Trial" = "تجريبي";
+
+/* Authentication */
+"Sign In" = "تسجيل الدخول";
+"Sign Up" = "إنشاء حساب";
+"Sign Out" = "تسجيل الخروج";
+"Email" = "البريد الإلكتروني";
+"Password" = "كلمة المرور";
+"Forgot Password?" = "نسيت كلمة المرور؟";
+"Reset Password" = "إعادة تعيين كلمة المرور";
+"Username" = "اسم المستخدم";
+"Confirm Password" = "تأكيد كلمة المرور";
+"Create Account" = "إنشاء حساب";
+"Already have an account?" = "لديك حساب بالفعل؟";
+"Don't have an account?" = "ليس لديك حساب؟";
+"Continue with Apple" = "المتابعة باستخدام Apple";
+"Continue with Google" = "المتابعة باستخدام Google";
+"Continue as Guest" = "المتابعة كضيف";
+
+/* Date/Time Formatting */
+"Today" = "اليوم";
+"Yesterday" = "الأمس";
+"Last Week" = "الأسبوع الماضي";
+"Last Month" = "الشهر الماضي";
+"Just Now" = "الآن";
+"%d minutes ago" = "منذ %d دقيقة";
+"%d hours ago" = "منذ %d ساعة";
+"%d days ago" = "منذ %d يوم";
+"%d weeks ago" = "منذ %d أسبوع";
+"%d months ago" = "منذ %d شهر";
+"%d years ago" = "منذ %d سنة";
+"Date: %@" = "التاريخ: %@";
+"Time: %@" = "الوقت: %@";
+
+/* Pluralization */
+"%d point" = "%d نقطة";
+"%d points" = "%d نقطة";
+"%d level" = "%d مستوى";
+"%d levels" = "%d مستوى";
+"%d undo" = "%d تراجع";
+"%d undos" = "%d تراجع";
+"%d minute" = "%d دقيقة";
+"%d minutes" = "%d دقيقة";
+"%d hour" = "%d ساعة";
+"%d hours" = "%d ساعة";
+"%d day" = "%d يوم";
+"%d days" = "%d يوم";
+"%d week" = "%d أسبوع";
+"%d weeks" = "%d أسبوع";
+"%d month" = "%d شهر";
+"%d months" = "%d شهر";
+"%d year" = "%d سنة";
+"%d years" = "%d سنة";
+"%d achievement" = "%d إنجاز";
+"%d achievements" = "%d إنجاز";
+"%d player" = "%d لاعب";
+"%d players" = "%d لاعب";
+"%d game" = "%d لعبة";
+"%d games" = "%d لعبة";
+
+/* Notifications */
+"Enable Notifications" = "تفعيل الإشعارات";
+"Daily Reminder" = "تذكير يومي";
+"New Achievement" = "إنجاز جديد";
+"Level Up" = "ترقية المستوى";
+"Special Event" = "حدث خاص";
+"Notification Settings" = "إعدادات الإشعارات";
+"Push Notifications" = "إشعارات فورية";
+"Email Notifications" = "إشعارات البريد الإلكتروني";
+"Notification Preferences" = "تفضيلات الإشعارات";
+
+/* Tutorial */
+"Welcome to Block Smash!" = "مرحباً بك في بلوك س mash!";
+"Tap to Start" = "انقر للبدء";
+"Drag blocks to match" = "اسحب المكعبات للمطابقة";
+"Match 3 or more" = "طابق 3 أو أكثر";
+"Clear blocks to score" = "امسح المكعبات للنتيجة";
+"Complete levels" = "أكمل المستويات";
+"Earn achievements" = "اكسب الإنجازات";
+"Skip Tutorial" = "تخطي التعليمات";
+"Next" = "التالي";
+"Previous" = "السابق";
+"Got it!" = "فهمت!"; 

@@ -1,0 +1,16 @@
+/* Settings View */
+"Game Settings" = "ゲーム設定";
+"System Theme" = "システムテーマ";
+"Light" = "ライト";
+"Dark" = "ダーク";
+"Auto" = "自動";
+"Custom Theme" = "カスタムテーマ";
+"Locked" = "ロック";
+"Target FPS" = "目標FPS";
+"Show Tutorial" = "チュートリアルを表示";
+"Auto Save" = "自動保存";
+"Gameplay Settings" = "ゲームプレイ設定";
+"Placement Precision" = "配置精度";
+"Block Drag Position" = "ブロックドラッグ位置";
+"Lower = More Precise" = "低い = より正確";
+"Reset" = "リセット"; 

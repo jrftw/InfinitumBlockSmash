@@ -1,0 +1,16 @@
+/* Settings View */
+"Game Settings" = "Paramètres du jeu";
+"System Theme" = "Thème système";
+"Light" = "Clair";
+"Dark" = "Sombre";
+"Auto" = "Auto";
+"Custom Theme" = "Thème personnalisé";
+"Locked" = "Verrouillé";
+"Target FPS" = "FPS cible";
+"Show Tutorial" = "Afficher le tutoriel";
+"Auto Save" = "Sauvegarde automatique";
+"Gameplay Settings" = "Paramètres de jeu";
+"Placement Precision" = "Précision de placement";
+"Block Drag Position" = "Position de glissement du bloc";
+"Lower = More Precise" = "Plus bas = Plus précis";
+"Reset" = "Réinitialiser"; 

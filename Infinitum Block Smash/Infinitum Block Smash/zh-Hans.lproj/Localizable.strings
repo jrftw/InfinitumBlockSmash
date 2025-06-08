@@ -1,0 +1,16 @@
+/* Settings View */
+"Game Settings" = "游戏设置";
+"System Theme" = "系统主题";
+"Light" = "浅色";
+"Dark" = "深色";
+"Auto" = "自动";
+"Custom Theme" = "自定义主题";
+"Locked" = "已锁定";
+"Target FPS" = "目标帧率";
+"Show Tutorial" = "显示教程";
+"Auto Save" = "自动保存";
+"Gameplay Settings" = "游戏设置";
+"Placement Precision" = "放置精度";
+"Block Drag Position" = "方块拖动位置";
+"Lower = More Precise" = "越低越精确";
+"Reset" = "重置"; 

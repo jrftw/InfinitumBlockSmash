@@ -36,6 +36,22 @@ private struct GameSettingsSection: View {
     @StateObject private var subscriptionManager = SubscriptionManager.shared
     @State private var hasEliteAccess = false
     @State private var unlockedThemes: Set<String> = []
+    @AppStorage("selectedLanguage") private var selectedLanguage = Locale.current.languageCode ?? "en"
+    
+    private let availableLanguages = [
+        ("en", "English"),
+        ("es", "Español"),
+        ("zh-Hans", "简体中文"),
+        ("hi", "हिन्दी"),
+        ("ar", "العربية"),
+        ("bn", "বাংলা"),
+        ("pt", "Português"),
+        ("ru", "Русский"),
+        ("ja", "日本語"),
+        ("pa", "ਪੰਜਾਬੀ"),
+        ("fr", "Français"),
+        ("de", "Deutsch")
+    ]
     
     private var fpsBinding: Binding<Int> {
         Binding(
@@ -55,12 +71,40 @@ private struct GameSettingsSection: View {
     }
     
     var body: some View {
-        Section(header: Text("Game Settings")) {
+        Section(header: Text(NSLocalizedString("Game Settings", comment: "Settings section header"))) {
+            // Language Picker
+            Picker(NSLocalizedString("Language", comment: "Language picker label"), selection: $selectedLanguage) {
+                ForEach(availableLanguages, id: \.0) { code, name in
+                    Text(name).tag(code)
+                }
+            }
+            .onChange(of: selectedLanguage) { newValue in
+                // Update the app's language
+                UserDefaults.standard.set([newValue], forKey: "AppleLanguages")
+                UserDefaults.standard.synchronize()
+                
+                // Show alert to restart app
+                let alert = UIAlertController(
+                    title: NSLocalizedString("Language Changed", comment: "Language change alert title"),
+                    message: NSLocalizedString("Please restart the app for the language change to take effect.", comment: "Language change alert message"),
+                    preferredStyle: .alert
+                )
+                alert.addAction(UIAlertAction(
+                    title: NSLocalizedString("OK", comment: "OK button"),
+                    style: .default
+                ))
+                
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let viewController = windowScene.windows.first?.rootViewController {
+                    viewController.present(alert, animated: true)
+                }
+            }
+            
             // System Theme Picker
-            Picker("System Theme", selection: $theme) {
-                Text("Light").tag("light")
-                Text("Dark").tag("dark")
-                Text("Auto").tag("auto")
+            Picker(NSLocalizedString("System Theme", comment: "Theme picker label"), selection: $theme) {
+                Text(NSLocalizedString("Light", comment: "Light theme option")).tag("light")
+                Text(NSLocalizedString("Dark", comment: "Dark theme option")).tag("dark")
+                Text(NSLocalizedString("Auto", comment: "Auto theme option")).tag("auto")
             }
             .onChange(of: theme) { newValue in
                 if ["light", "dark", "auto"].contains(newValue) {
@@ -70,13 +114,13 @@ private struct GameSettingsSection: View {
             }
             
             // Custom Theme Picker
-            Picker("Custom Theme", selection: $theme) {
+            Picker(NSLocalizedString("Custom Theme", comment: "Custom theme picker label"), selection: $theme) {
                 ForEach(Array(themeManager.getAvailableThemes().keys.sorted().filter { !["system", "light", "dark", "auto"].contains($0) }), id: \.self) { themeKey in
                     if let theme = themeManager.getAvailableThemes()[themeKey] {
                         HStack {
                             Text(theme.name)
                             if !isThemeUnlocked(themeKey) {
-                                Text("Locked")
+                                Text(NSLocalizedString("Locked", comment: "Locked theme indicator"))
                                     .font(.caption)
                                     .foregroundColor(.red)
                             }
@@ -99,15 +143,15 @@ private struct GameSettingsSection: View {
                 }
             }
             
-            Picker("Target FPS", selection: fpsBinding) {
+            Picker(NSLocalizedString("Target FPS", comment: "FPS picker label"), selection: fpsBinding) {
                 ForEach(fpsManager.availableFPSOptions, id: \.self) { fps in
                     Text(fpsManager.getFPSDisplayName(for: fps))
                         .tag(fps)
                 }
             }
             
-            Toggle("Show Tutorial", isOn: $showTutorial)
-            Toggle("Auto Save", isOn: $autoSave)
+            Toggle(NSLocalizedString("Show Tutorial", comment: "Tutorial toggle label"), isOn: $showTutorial)
+            Toggle(NSLocalizedString("Auto Save", comment: "Auto save toggle label"), isOn: $autoSave)
         }
         .task {
             // Load initial state
@@ -132,7 +176,7 @@ private struct GameplaySettingsSection: View {
     @Binding var showingBlockDragInfo: Bool
     
     var body: some View {
-        Section(header: Text("Gameplay Settings")) {
+        Section(header: Text(NSLocalizedString("Gameplay Settings", comment: "Gameplay settings section header"))) {
             PlacementPrecisionView(
                 placementPrecision: $placementPrecision,
                 showingInfo: $showingPlacementPrecisionInfo
@@ -153,7 +197,7 @@ private struct PlacementPrecisionView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Placement Precision")
+                Text(NSLocalizedString("Placement Precision", comment: "Placement precision label"))
                 Button(action: { showingInfo = true }) {
                     Image(systemName: "info.circle")
                         .foregroundColor(.secondary)
@@ -169,11 +213,11 @@ private struct PlacementPrecisionView: View {
                 Image(systemName: "hand.tap.fill")
             }
             HStack {
-                Text("Lower = More Precise")
+                Text(NSLocalizedString("Lower = More Precise", comment: "Placement precision description"))
                     .font(.caption)
                     .foregroundColor(.secondary)
                 Spacer()
-                Button("Reset") {
+                Button(NSLocalizedString("Reset", comment: "Reset button label")) {
                     placementPrecision = 0.15
                 }
                 .font(.caption)
@@ -190,7 +234,7 @@ private struct BlockDragView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Block Drag Position")
+                Text(NSLocalizedString("Block Drag Position", comment: "Block drag position label"))
                 Button(action: { showingInfo = true }) {
                     Image(systemName: "info.circle")
                         .foregroundColor(.secondary)
@@ -206,11 +250,11 @@ private struct BlockDragView: View {
                 Image(systemName: "hand.point.up.fill")
             }
             HStack {
-                Text("Higher = Block Above Finger")
+                Text(NSLocalizedString("Higher = Block Above Finger", comment: "Block drag position description"))
                     .font(.caption)
                     .foregroundColor(.secondary)
                 Spacer()
-                Button("Reset") {
+                Button(NSLocalizedString("Reset", comment: "Reset button label")) {
                     blockDragOffset = 0.4
                 }
                 .font(.caption)

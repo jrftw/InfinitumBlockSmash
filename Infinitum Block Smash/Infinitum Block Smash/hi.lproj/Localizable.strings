@@ -1,0 +1,200 @@
+/* Common */
+"OK" = "ठीक है";
+"Cancel" = "रद्द करें";
+"Save" = "सहेजें";
+"Delete" = "हटाएं";
+"Edit" = "संपादित करें";
+"Done" = "हो गया";
+"Loading..." = "लोड हो रहा है...";
+"Error" = "त्रुटि";
+"Success" = "सफल";
+"Warning" = "चेतावनी";
+"Info" = "जानकारी";
+
+/* Language Selection */
+"Language" = "भाषा";
+"Language Changed" = "भाषा बदली गई";
+"Please restart the app for the language change to take effect." = "भाषा परिवर्तन को प्रभावी बनाने के लिए कृपया ऐप को पुनः आरंभ करें।";
+
+/* Settings View */
+"Game Settings" = "खेल सेटिंग्स";
+"System Theme" = "सिस्टम थीम";
+"Light" = "लाइट";
+"Dark" = "डार्क";
+"Auto" = "ऑटो";
+"Custom Theme" = "कस्टम थीम";
+"Locked" = "लॉक किया गया";
+"Target FPS" = "लक्ष्य FPS";
+"Show Tutorial" = "ट्यूटोरियल दिखाएं";
+"Auto Save" = "ऑटो सेव";
+"Gameplay Settings" = "गेमप्ले सेटिंग्स";
+"Placement Precision" = "प्लेसमेंट सटीकता";
+"Block Drag Position" = "ब्लॉक ड्रैग पोजीशन";
+"Lower = More Precise" = "कम = अधिक सटीक";
+"Reset" = "रीसेट";
+"Sound Effects" = "साउंड इफेक्ट्स";
+"Music" = "संगीत";
+"Vibration" = "वाइब्रेशन";
+"Notifications" = "सूचनाएं";
+"Privacy" = "गोपनीयता";
+"Terms of Service" = "सेवा की शर्तें";
+"About" = "जानकारी";
+"Version" = "संस्करण";
+"Contact Support" = "सहायता से संपर्क करें";
+"Rate App" = "ऐप रेट करें";
+"Share App" = "ऐप शेयर करें";
+
+/* Game View */
+"Score" = "स्कोर";
+"Level" = "स्तर";
+"Undo Last Move" = "अंतिम चाल वापस लें";
+"Watch Ad for Undo" = "वापस लेने के लिए विज्ञापन देखें";
+"Undos: %d" = "वापस लेना: %d";
+"Need: %d" = "आवश्यक: %d";
+"Level High: %d" = "स्तर उच्च: %d";
+"All-Time High: %d" = "सर्वकालिक उच्च: %d";
+"Pause" = "विराम";
+"Resume" = "जारी रखें";
+"Restart" = "पुनः आरंभ करें";
+"Quit" = "छोड़ें";
+"Next Level" = "अगला स्तर";
+"Level Complete!" = "स्तर पूरा हुआ!";
+"New High Score!" = "नया उच्च स्कोर!";
+"Combo: %dx" = "कॉम्बो: %dx";
+"Perfect!" = "उत्तम!";
+"Great!" = "शानदार!";
+"Good!" = "अच्छा!";
+
+/* Game Over */
+"Game Over" = "खेल समाप्त";
+"Final Score" = "अंतिम स्कोर";
+"Level Reached" = "पहुंचा गया स्तर";
+"Continue" = "जारी रखें";
+"Try Again" = "पुनः प्रयास करें";
+"Main Menu" = "मुख्य मेनू";
+"Share Score" = "स्कोर शेयर करें";
+"View Leaderboard" = "लीडरबोर्ड देखें";
+"New Record!" = "नया रिकॉर्ड!";
+"Best Score: %d" = "सर्वश्रेष्ठ स्कोर: %d";
+"Time Played: %@" = "खेला गया समय: %@";
+
+/* Achievements */
+"Achievements" = "उपलब्धियां";
+"Total Points" = "कुल अंक";
+"Leaderboard" = "लीडरबोर्ड";
+"All" = "सभी";
+"Score" = "स्कोर";
+"Level" = "स्तर";
+"Clearing" = "साफ़ करना";
+"Combo" = "कॉम्बो";
+"Special" = "विशेष";
+"Daily" = "दैनिक";
+"Achievement Unlocked!" = "उपलब्धि अनलॉक हुई!";
+"%d pts" = "%d अंक";
+"Progress: %d/%d (%d%%)" = "प्रगति: %d/%d (%d%%)";
+"Locked Achievement" = "लॉक की गई उपलब्धि";
+"Complete to unlock" = "अनलॉक करने के लिए पूरा करें";
+"View Details" = "विवरण देखें";
+"Recent Achievements" = "हाल की उपलब्धियां";
+"Achievement Progress" = "उपलब्धि प्रगति";
+
+/* Store & Subscriptions */
+"Store" = "स्टोर";
+"Subscriptions" = "सदस्यताएं";
+"Premium" = "प्रीमियम";
+"Elite" = "एलिट";
+"Monthly" = "मासिक";
+"Yearly" = "वार्षिक";
+"Best Value" = "सर्वोत्तम मूल्य";
+"Subscribe" = "सदस्यता लें";
+"Restore Purchases" = "खरीदारी पुनर्स्थापित करें";
+"Terms & Conditions" = "नियम और शर्तें";
+"Privacy Policy" = "गोपनीयता नीति";
+"Subscription Benefits" = "सदस्यता लाभ";
+"Current Plan" = "वर्तमान योजना";
+"Expires: %@" = "समाप्ति: %@";
+"Active" = "सक्रिय";
+"Expired" = "समाप्त";
+"Trial" = "ट्रायल";
+
+/* Authentication */
+"Sign In" = "साइन इन करें";
+"Sign Up" = "साइन अप करें";
+"Sign Out" = "साइन आउट करें";
+"Email" = "ईमेल";
+"Password" = "पासवर्ड";
+"Forgot Password?" = "पासवर्ड भूल गए?";
+"Reset Password" = "पासवर्ड रीसेट करें";
+"Username" = "उपयोगकर्ता नाम";
+"Confirm Password" = "पासवर्ड की पुष्टि करें";
+"Create Account" = "खाता बनाएं";
+"Already have an account?" = "पहले से खाता है?";
+"Don't have an account?" = "खाता नहीं है?";
+"Continue with Apple" = "Apple के साथ जारी रखें";
+"Continue with Google" = "Google के साथ जारी रखें";
+"Continue as Guest" = "अतिथि के रूप में जारी रखें";
+
+/* Date/Time Formatting */
+"Today" = "आज";
+"Yesterday" = "कल";
+"Last Week" = "पिछला सप्ताह";
+"Last Month" = "पिछला महीना";
+"Just Now" = "अभी";
+"%d minutes ago" = "%d मिनट पहले";
+"%d hours ago" = "%d घंटे पहले";
+"%d days ago" = "%d दिन पहले";
+"%d weeks ago" = "%d सप्ताह पहले";
+"%d months ago" = "%d महीने पहले";
+"%d years ago" = "%d वर्ष पहले";
+"Date: %@" = "तारीख: %@";
+"Time: %@" = "समय: %@";
+
+/* Pluralization */
+"%d point" = "%d अंक";
+"%d points" = "%d अंक";
+"%d level" = "%d स्तर";
+"%d levels" = "%d स्तर";
+"%d undo" = "%d वापस लेना";
+"%d undos" = "%d वापस लेना";
+"%d minute" = "%d मिनट";
+"%d minutes" = "%d मिनट";
+"%d hour" = "%d घंटा";
+"%d hours" = "%d घंटे";
+"%d day" = "%d दिन";
+"%d days" = "%d दिन";
+"%d week" = "%d सप्ताह";
+"%d weeks" = "%d सप्ताह";
+"%d month" = "%d महीना";
+"%d months" = "%d महीने";
+"%d year" = "%d वर्ष";
+"%d years" = "%d वर्ष";
+"%d achievement" = "%d उपलब्धि";
+"%d achievements" = "%d उपलब्धियां";
+"%d player" = "%d खिलाड़ी";
+"%d players" = "%d खिलाड़ी";
+"%d game" = "%d खेल";
+"%d games" = "%d खेल";
+
+/* Notifications */
+"Enable Notifications" = "सूचनाएं सक्षम करें";
+"Daily Reminder" = "दैनिक अनुस्मारक";
+"New Achievement" = "नई उपलब्धि";
+"Level Up" = "स्तर ऊपर";
+"Special Event" = "विशेष कार्यक्रम";
+"Notification Settings" = "सूचना सेटिंग्स";
+"Push Notifications" = "पुश सूचनाएं";
+"Email Notifications" = "ईमेल सूचनाएं";
+"Notification Preferences" = "सूचना प्राथमिकताएं";
+
+/* Tutorial */
+"Welcome to Block Smash!" = "ब्लॉक स्मैश में आपका स्वागत है!";
+"Tap to Start" = "शुरू करने के लिए टैप करें";
+"Drag blocks to match" = "मिलान के लिए ब्लॉक खींचें";
+"Match 3 or more" = "3 या अधिक मिलाएं";
+"Clear blocks to score" = "स्कोर के लिए ब्लॉक साफ़ करें";
+"Complete levels" = "स्तर पूरे करें";
+"Earn achievements" = "उपलब्धियां प्राप्त करें";
+"Skip Tutorial" = "ट्यूटोरियल छोड़ें";
+"Next" = "अगला";
+"Previous" = "पिछला";
+"Got it!" = "समझ गया!"; 

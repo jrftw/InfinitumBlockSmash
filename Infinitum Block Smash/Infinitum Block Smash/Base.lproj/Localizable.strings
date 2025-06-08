@@ -1,0 +1,200 @@
+/* Common */
+"OK" = "OK";
+"Cancel" = "Cancel";
+"Save" = "Save";
+"Delete" = "Delete";
+"Edit" = "Edit";
+"Done" = "Done";
+"Loading..." = "Loading...";
+"Error" = "Error";
+"Success" = "Success";
+"Warning" = "Warning";
+"Info" = "Info";
+
+/* Language Selection */
+"Language" = "Language";
+"Language Changed" = "Language Changed";
+"Please restart the app for the language change to take effect." = "Please restart the app for the language change to take effect.";
+
+/* Settings View */
+"Game Settings" = "Game Settings";
+"System Theme" = "System Theme";
+"Light" = "Light";
+"Dark" = "Dark";
+"Auto" = "Auto";
+"Custom Theme" = "Custom Theme";
+"Locked" = "Locked";
+"Target FPS" = "Target FPS";
+"Show Tutorial" = "Show Tutorial";
+"Auto Save" = "Auto Save";
+"Gameplay Settings" = "Gameplay Settings";
+"Placement Precision" = "Placement Precision";
+"Block Drag Position" = "Block Drag Position";
+"Lower = More Precise" = "Lower = More Precise";
+"Reset" = "Reset";
+"Sound Effects" = "Sound Effects";
+"Music" = "Music";
+"Vibration" = "Vibration";
+"Notifications" = "Notifications";
+"Privacy" = "Privacy";
+"Terms of Service" = "Terms of Service";
+"About" = "About";
+"Version" = "Version";
+"Contact Support" = "Contact Support";
+"Rate App" = "Rate App";
+"Share App" = "Share App";
+
+/* Game View */
+"Score" = "Score";
+"Level" = "Level";
+"Undo Last Move" = "Undo Last Move";
+"Watch Ad for Undo" = "Watch Ad for Undo";
+"Undos: %d" = "Undos: %d";
+"Need: %d" = "Need: %d";
+"Level High: %d" = "Level High: %d";
+"All-Time High: %d" = "All-Time High: %d";
+"Pause" = "Pause";
+"Resume" = "Resume";
+"Restart" = "Restart";
+"Quit" = "Quit";
+"Next Level" = "Next Level";
+"Level Complete!" = "Level Complete!";
+"New High Score!" = "New High Score!";
+"Combo: %dx" = "Combo: %dx";
+"Perfect!" = "Perfect!";
+"Great!" = "Great!";
+"Good!" = "Good!";
+
+/* Game Over */
+"Game Over" = "Game Over";
+"Final Score" = "Final Score";
+"Level Reached" = "Level Reached";
+"Continue" = "Continue";
+"Try Again" = "Try Again";
+"Main Menu" = "Main Menu";
+"Share Score" = "Share Score";
+"View Leaderboard" = "View Leaderboard";
+"New Record!" = "New Record!";
+"Best Score: %d" = "Best Score: %d";
+"Time Played: %@" = "Time Played: %@";
+
+/* Achievements */
+"Achievements" = "Achievements";
+"Total Points" = "Total Points";
+"Leaderboard" = "Leaderboard";
+"All" = "All";
+"Score" = "Score";
+"Level" = "Level";
+"Clearing" = "Clearing";
+"Combo" = "Combo";
+"Special" = "Special";
+"Daily" = "Daily";
+"Achievement Unlocked!" = "Achievement Unlocked!";
+"%d pts" = "%d pts";
+"Progress: %d/%d (%d%%)" = "Progress: %d/%d (%d%%)";
+"Locked Achievement" = "Locked Achievement";
+"Complete to unlock" = "Complete to unlock";
+"View Details" = "View Details";
+"Recent Achievements" = "Recent Achievements";
+"Achievement Progress" = "Achievement Progress";
+
+/* Store & Subscriptions */
+"Store" = "Store";
+"Subscriptions" = "Subscriptions";
+"Premium" = "Premium";
+"Elite" = "Elite";
+"Monthly" = "Monthly";
+"Yearly" = "Yearly";
+"Best Value" = "Best Value";
+"Subscribe" = "Subscribe";
+"Restore Purchases" = "Restore Purchases";
+"Terms & Conditions" = "Terms & Conditions";
+"Privacy Policy" = "Privacy Policy";
+"Subscription Benefits" = "Subscription Benefits";
+"Current Plan" = "Current Plan";
+"Expires: %@" = "Expires: %@";
+"Active" = "Active";
+"Expired" = "Expired";
+"Trial" = "Trial";
+
+/* Authentication */
+"Sign In" = "Sign In";
+"Sign Up" = "Sign Up";
+"Sign Out" = "Sign Out";
+"Email" = "Email";
+"Password" = "Password";
+"Forgot Password?" = "Forgot Password?";
+"Reset Password" = "Reset Password";
+"Username" = "Username";
+"Confirm Password" = "Confirm Password";
+"Create Account" = "Create Account";
+"Already have an account?" = "Already have an account?";
+"Don't have an account?" = "Don't have an account?";
+"Continue with Apple" = "Continue with Apple";
+"Continue with Google" = "Continue with Google";
+"Continue as Guest" = "Continue as Guest";
+
+/* Date/Time Formatting */
+"Today" = "Today";
+"Yesterday" = "Yesterday";
+"Last Week" = "Last Week";
+"Last Month" = "Last Month";
+"Just Now" = "Just Now";
+"%d minutes ago" = "%d minutes ago";
+"%d hours ago" = "%d hours ago";
+"%d days ago" = "%d days ago";
+"%d weeks ago" = "%d weeks ago";
+"%d months ago" = "%d months ago";
+"%d years ago" = "%d years ago";
+"Date: %@" = "Date: %@";
+"Time: %@" = "Time: %@";
+
+/* Pluralization */
+"%d point" = "%d point";
+"%d points" = "%d points";
+"%d level" = "%d level";
+"%d levels" = "%d levels";
+"%d undo" = "%d undo";
+"%d undos" = "%d undos";
+"%d minute" = "%d minute";
+"%d minutes" = "%d minutes";
+"%d hour" = "%d hour";
+"%d hours" = "%d hours";
+"%d day" = "%d day";
+"%d days" = "%d days";
+"%d week" = "%d week";
+"%d weeks" = "%d weeks";
+"%d month" = "%d month";
+"%d months" = "%d months";
+"%d year" = "%d year";
+"%d years" = "%d years";
+"%d achievement" = "%d achievement";
+"%d achievements" = "%d achievements";
+"%d player" = "%d player";
+"%d players" = "%d players";
+"%d game" = "%d game";
+"%d games" = "%d games";
+
+/* Notifications */
+"Enable Notifications" = "Enable Notifications";
+"Daily Reminder" = "Daily Reminder";
+"New Achievement" = "New Achievement";
+"Level Up" = "Level Up";
+"Special Event" = "Special Event";
+"Notification Settings" = "Notification Settings";
+"Push Notifications" = "Push Notifications";
+"Email Notifications" = "Email Notifications";
+"Notification Preferences" = "Notification Preferences";
+
+/* Tutorial */
+"Welcome to Block Smash!" = "Welcome to Block Smash!";
+"Tap to Start" = "Tap to Start";
+"Drag blocks to match" = "Drag blocks to match";
+"Match 3 or more" = "Match 3 or more";
+"Clear blocks to score" = "Clear blocks to score";
+"Complete levels" = "Complete levels";
+"Earn achievements" = "Earn achievements";
+"Skip Tutorial" = "Skip Tutorial";
+"Next" = "Next";
+"Previous" = "Previous";
+"Got it!" = "Got it!"; 
