@@ -7,10 +7,10 @@ class ForceLogout {
     private let lastAppVersionKey = "lastAppVersion"
     
     private init() {
-        // Enable force logout by default for first launch of version 1.0.2 only
+        // Enable force logout by default for first launch of version 1.0.2 only - Don't change unless I specify to.
         let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
         let lastVersion = UserDefaults.standard.string(forKey: lastAppVersionKey)
-        if currentVersion == "1.0.2" && lastVersion != "1.0.2" {
+        if currentVersion == "1.0.2" && lastVersion != "1.0.1" {
             UserDefaults.standard.set(true, forKey: forceLogoutKey)
         }
     }
