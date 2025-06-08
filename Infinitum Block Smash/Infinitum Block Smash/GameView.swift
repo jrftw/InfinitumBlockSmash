@@ -34,90 +34,159 @@ struct GameView: View {
     var body: some View {
         ZStack {
             GameSceneProvider(gameState: gameState)
+            mainGameView
+            overlays
+            scoreAnimator
+            bannerAdView
+        }
+        .sheet(isPresented: $showingSettings) {
+            SettingsView(gameState: gameState, showingTutorial: $showingTutorial)
+        }
+        .sheet(isPresented: $showingAchievements) {
+            AchievementsView(achievementsManager: gameState.achievementsManager)
+        }
+        .sheet(isPresented: $showingTutorial) {
+            TutorialModal(showingTutorial: $showingTutorial, showTutorial: $showTutorial)
+        }
+        .onAppear {
+            if showTutorial {
+                showingTutorial = true
+            }
+        }
+        .onChange(of: gameState.levelComplete) { isComplete in
+            if isComplete {
+                Task {
+                    await adManager.showRewardedInterstitial(onReward: {
+                        // Don't automatically reset levelComplete - wait for user interaction
+                    })
+                }
+            }
+        }
+        .onChange(of: gameState.score) { _ in
+            // Check top three status when score changes
+            Task {
+                await adManager.checkTopThreeStatus()
+            }
+        }
+        .onDisappear {
+            Task {
+                await gameState.cleanup()
+            }
+        }
+    }
+    
+    private var mainGameView: some View {
+        VStack(spacing: 0) {
+            GameTopBar(showingSettings: $showingSettings, showingAchievements: $showingAchievements, isPaused: $isPaused, gameState: gameState)
+            scoreLevelBar
+            if showStatsOverlay && (showFPS || showMemory) {
+                StatsOverlayView(gameState: gameState)
+            }
+            Spacer()
+        }
+    }
+    
+    private var scoreLevelBar: some View {
+        ZStack(alignment: .bottom) {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Color(.sRGB, red: 32/255, green: 36/255, blue: 48/255, opacity: 0.92))
             VStack(spacing: 0) {
-                GameTopBar(showingSettings: $showingSettings, showingAchievements: $showingAchievements, isPaused: $isPaused, gameState: gameState)
-                // Custom Score/Level/Undo Bar
-                ZStack(alignment: .bottom) {
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .fill(Color(.sRGB, red: 32/255, green: 36/255, blue: 48/255, opacity: 0.92))
-                    VStack(spacing: 0) {
-                        HStack(alignment: .center) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Score")
-                                    .font(.caption)
-                                    .foregroundColor(.white.opacity(0.9))
-                                Text("\(gameState.score)")
-                                    .font(.system(size: 36, weight: .bold, design: .rounded))
-                                    .foregroundColor(.white)
-                            }
-                            .accessibilityElement(children: .combine)
-                            .accessibilityLabel("Score: \(gameState.score)")
-                            
-                            Spacer()
-                            
-                            VStack(spacing: 2) {
-                                Button(action: { gameState.undo() }) {
-                                    Text("Undo Last Move")
-                                        .font(.headline)
-                                        .foregroundColor(gameState.canUndo ? Color(#colorLiteral(red: 0.2, green: 0.5, blue: 1, alpha: 1)) : Color.gray)
-                                }
-                                .disabled(!gameState.canUndo)
-                                .buttonStyle(PlainButtonStyle())
-                                .accessibilityLabel("Undo Last Move")
-                                .accessibilityHint(gameState.canUndo ? "Tap to undo your last move" : "Undo is not available")
-                                
-                                Text("Need: \(gameState.calculateRequiredScore() - gameState.score)")
-                                    .font(.caption2)
-                                    .foregroundColor(.white.opacity(0.9))
-                            }
-                            
-                            Spacer()
-                            
-                            VStack(alignment: .trailing, spacing: 2) {
-                                Text("Level")
-                                    .font(.caption)
-                                    .foregroundColor(.white.opacity(0.9))
-                                Text("\(gameState.level)")
-                                    .font(.system(size: 36, weight: .bold, design: .rounded))
-                                    .foregroundColor(.yellow)
-                            }
-                            .accessibilityElement(children: .combine)
-                            .accessibilityLabel("Level: \(gameState.level)")
-                        }
-                        .padding(.horizontal)
-                        .padding(.top, 8)
-                        .padding(.bottom, 4)
-                        
-                        Spacer(minLength: 0)
-                        
-                        HStack {
-                            Text("Level High: \(UserDefaults.standard.integer(forKey: "highScore_level_\(gameState.level)"))")
-                                .font(.caption2)
-                                .foregroundColor(Color.blue.opacity(0.9))
-                                .padding(.leading, 12)
-                            Spacer()
-                            Text("All-Time High: \(gameState.highScore)")
-                                .font(.caption2)
-                                .foregroundColor(Color.orange.opacity(0.9))
-                                .padding(.trailing, 12)
-                        }
-                        .padding(.bottom, 6)
-                        .accessibilityElement(children: .combine)
-                        .accessibilityLabel("Level High Score: \(UserDefaults.standard.integer(forKey: "highScore_level_\(gameState.level)")) and All-Time High Score: \(gameState.highScore)")
-                    }
+                scoreLevelContent
+                Spacer(minLength: 0)
+                highScoresView
+            }
+        }
+        .frame(height: 88)
+        .padding(.horizontal, 8)
+        .padding(.top, 8)
+    }
+    
+    private var scoreLevelContent: some View {
+        HStack(alignment: .center) {
+            scoreView
+            Spacer()
+            undoButtonView
+            Spacer()
+            levelView
+        }
+        .padding(.horizontal)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+    }
+    
+    private var scoreView: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Score")
+                .font(.caption)
+                .foregroundColor(.white.opacity(0.9))
+            Text("\(gameState.score)")
+                .font(.system(size: 36, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Score: \(gameState.score)")
+    }
+    
+    private var undoButtonView: some View {
+        VStack(spacing: 2) {
+            Button(action: {
+                Task {
+                    await gameState.undo()
                 }
-                .frame(height: 88)
-                .padding(.horizontal, 8)
-                .padding(.top, 8)
-                
-                if showStatsOverlay && (showFPS || showMemory) {
-                    StatsOverlayView(gameState: gameState)
-                }
-                
-                Spacer()
+            }) {
+                Text(gameState.canUndo ? "Undo Last Move" : "Watch Ad for Undo")
+                    .font(.headline)
+                    .foregroundColor(gameState.canUndo ? Color(#colorLiteral(red: 0.2, green: 0.5, blue: 1, alpha: 1)) : Color.gray)
+            }
+            .disabled(!gameState.canUndo && !gameState.canAdUndo)
+            .buttonStyle(PlainButtonStyle())
+            .accessibilityLabel(gameState.canUndo ? "Undo Last Move" : "Watch Ad for Undo")
+            .accessibilityHint(gameState.canUndo ? "Tap to undo your last move" : "Watch an ad to get more undos")
+            
+            if !gameState.canUndo && gameState.canAdUndo {
+                Text("Undos: \(gameState.adUndoCount)")
+                    .font(.caption2)
+                    .foregroundColor(.white.opacity(0.9))
             }
             
-            // Overlays and modals
+            Text("Need: \(gameState.calculateRequiredScore() - gameState.score)")
+                .font(.caption2)
+                .foregroundColor(.white.opacity(0.9))
+        }
+    }
+    
+    private var levelView: some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            Text("Level")
+                .font(.caption)
+                .foregroundColor(.white.opacity(0.9))
+            Text("\(gameState.level)")
+                .font(.system(size: 36, weight: .bold, design: .rounded))
+                .foregroundColor(.yellow)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Level: \(gameState.level)")
+    }
+    
+    private var highScoresView: some View {
+        HStack {
+            Text("Level High: \(UserDefaults.standard.integer(forKey: "highScore_level_\(gameState.level)"))")
+                .font(.caption2)
+                .foregroundColor(Color.blue.opacity(0.9))
+                .padding(.leading, 12)
+            Spacer()
+            Text("All-Time High: \(gameState.highScore)")
+                .font(.caption2)
+                .foregroundColor(Color.orange.opacity(0.9))
+                .padding(.trailing, 12)
+        }
+        .padding(.bottom, 6)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Level High Score: \(UserDefaults.standard.integer(forKey: "highScore_level_\(gameState.level)")) and All-Time High Score: \(gameState.highScore)")
+    }
+    
+    private var overlays: some View {
+        Group {
             if gameState.showingAchievementNotification, let achievement = gameState.currentAchievement {
                 AchievementNotificationOverlay(
                     showing: .constant(true),
@@ -182,18 +251,6 @@ struct GameView: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Pause Menu")
             
-            // Score animation container
-            scoreAnimator
-            
-            VStack {
-                Spacer()
-                BannerAdView()
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 50)
-                    .background(Color.black.opacity(0.1))
-            }
-            
-            // Overlay views
             if showingTutorial {
                 TutorialModal(showingTutorial: $showingTutorial, showTutorial: $showTutorial)
             }
@@ -206,39 +263,15 @@ struct GameView: View {
                 StatsView(gameState: gameState)
             }
         }
-        .sheet(isPresented: $showingSettings) {
-            SettingsView(gameState: gameState, showingTutorial: $showingTutorial)
-        }
-        .sheet(isPresented: $showingAchievements) {
-            AchievementsView(achievementsManager: gameState.achievementsManager)
-        }
-        .sheet(isPresented: $showingTutorial) {
-            TutorialModal(showingTutorial: $showingTutorial, showTutorial: $showTutorial)
-        }
-        .onAppear {
-            if showTutorial {
-                showingTutorial = true
-            }
-        }
-        .onChange(of: gameState.levelComplete) { isComplete in
-            if isComplete {
-                Task {
-                    await adManager.showRewardedInterstitial(onReward: {
-                        // Don't automatically reset levelComplete - wait for user interaction
-                    })
-                }
-            }
-        }
-        .onChange(of: gameState.score) { _ in
-            // Check top three status when score changes
-            Task {
-                await adManager.checkTopThreeStatus()
-            }
-        }
-        .onDisappear {
-            Task {
-                await gameState.cleanup()
-            }
+    }
+    
+    private var bannerAdView: some View {
+        VStack {
+            Spacer()
+            BannerAdView()
+                .frame(maxWidth: .infinity)
+                .frame(height: 50)
+                .background(Color.black.opacity(0.1))
         }
     }
     

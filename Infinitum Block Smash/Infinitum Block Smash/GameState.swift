@@ -128,6 +128,14 @@ final class GameState: ObservableObject {
     private let memoryCleanupInterval: TimeInterval = 60.0 // Cleanup every minute
     private var cachedData: [String: Any] = [:]
     
+    // Add undo state tracking
+    private var undoStack = GameMoveStack(maxSize: 10)
+    private var unlimitedUndos: Bool = false
+    @Published var purchasedUndos: Int = 0
+    
+    // Add constant for ad-based undos
+    private let undosPerAd = 1
+    
     // MARK: - Initialization
     init() {
         // Run data migration if needed
@@ -209,7 +217,7 @@ final class GameState: ObservableObject {
         isGameOver = false
         levelComplete = false
         canUndo = false
-        adUndoCount = 0
+        adUndoCount = 3
         blocksPlaced = 0
         linesCleared = 0
         currentChain = 0
@@ -217,6 +225,14 @@ final class GameState: ObservableObject {
         usedShapes.removeAll(keepingCapacity: true)
         isPerfectLevel = true
         gameStartTime = Date()
+        
+        // Reset undo state
+        undoStack.clear()
+        
+        // Check subscription status for unlimited undos
+        Task {
+            await checkUndoAvailability()
+        }
     }
     
     private func setupSubscriptions() {
@@ -384,35 +400,77 @@ final class GameState: ObservableObject {
     }
     
     // Call this before placing a block
-    private func saveStateForUndo() {
-        previousGrid = grid.map { $0.map { $0 } }
-        previousTray = tray.map { $0 }
-        previousScore = score
-        previousLevel = level
+    private func saveStateForUndo(block: Block, position: (row: Int, col: Int)) {
+        let move = GameMove(
+            block: block,
+            position: position,
+            previousGrid: grid.map { $0.map { $0 } },
+            previousTray: tray.map { $0 },
+            previousScore: score,
+            previousLevel: level,
+            previousBlocksPlaced: blocksPlaced,
+            previousLinesCleared: linesCleared,
+            previousCurrentChain: currentChain,
+            previousUsedColors: usedColors,
+            previousUsedShapes: usedShapes,
+            previousIsPerfectLevel: isPerfectLevel
+        )
+        undoStack.push(move)
         canUndo = true
     }
 
-    func undo() {
+    func undo() async {
         guard canUndo else { return }
         
-        Task { @MainActor in
-            let hasUnlimitedUndos = await subscriptionManager.hasFeature(.unlimitedUndos)
-            if !hasUnlimitedUndos {
-                undoCount += 1
-            }
-            
-            guard let previousGrid = previousGrid,
-                  let previousTray = previousTray else {
+        // Check if we can use an undo
+        if !unlimitedUndos {
+            if subscriptionManager.purchasedUndos > 0 {
+                subscriptionManager.purchasedUndos -= 1
+                purchasedUndos = subscriptionManager.purchasedUndos
+            } else if adUndoCount > 0 {
+                adUndoCount -= 1
+            } else {
                 return
             }
-            
-            grid = previousGrid
-            tray = previousTray
-            score = previousScore
-            level = previousLevel
-            canUndo = false
-            delegate?.gameStateDidUpdate()
         }
+        
+        // Get the last move from the stack
+        guard let lastMove = undoStack.pop() else { return }
+        
+        print("[Undo] Restoring previous game state:")
+        print("[Undo] Score: \(score) -> \(lastMove.previousScore)")
+        print("[Undo] Level: \(level) -> \(lastMove.previousLevel)")
+        print("[Undo] Blocks Placed: \(blocksPlaced) -> \(lastMove.previousBlocksPlaced)")
+        print("[Undo] Lines Cleared: \(linesCleared) -> \(lastMove.previousLinesCleared)")
+        print("[Undo] Current Chain: \(currentChain) -> \(lastMove.previousCurrentChain)")
+        
+        // Restore the previous state
+        grid = lastMove.previousGrid
+        tray = lastMove.previousTray
+        score = lastMove.previousScore
+        level = lastMove.previousLevel
+        blocksPlaced = lastMove.previousBlocksPlaced
+        linesCleared = lastMove.previousLinesCleared
+        currentChain = lastMove.previousCurrentChain
+        usedColors = lastMove.previousUsedColors
+        usedShapes = lastMove.previousUsedShapes
+        isPerfectLevel = lastMove.previousIsPerfectLevel
+        
+        // Update undo availability
+        canUndo = !undoStack.isEmpty
+        
+        // Update undo count
+        undoCount += 1
+        
+        // Update undo achievements
+        achievementsManager.updateAchievement(id: "undo_5", value: undoCount)
+        achievementsManager.updateAchievement(id: "undo_20", value: undoCount)
+        
+        // Notify delegate
+        delegate?.gameStateDidUpdate()
+        
+        // Reset ad manager state for new game if needed
+        await AdManager.shared.resetGameState()
     }
     
     private func performUndo() {
@@ -473,25 +531,87 @@ final class GameState: ObservableObject {
             }
         }
         
-        // Save state for undo before making changes
-        saveStateForUndo()
+        // Save state for undo before making any changes
+        saveStateForUndo(block: block, position: (row: row, col: col))
         
-        // Use placeBlock to handle scoring and placement
-        placeBlock(block, at: position)
+        // Track the positions of the current shape
+        var currentShapePositions = Set<String>()
         
-        // Remove block from tray
+        // Place the block
+        for (dx, dy) in block.shape.cells {
+            let x = col + dx
+            let y = row + dy
+            grid[y][x] = block.color
+            currentShapePositions.insert("\(x),\(y)")
+        }
+        
+        // Remove the block from the tray
         if let index = tray.firstIndex(where: { $0.id == block.id }) {
             tray.remove(at: index)
         }
         
-        // Check for matches
+        // Update game state
+        blocksPlaced += 1
+        usedColors.insert(block.color)
+        usedShapes.insert(block.shape)
+        
+        // Check for touching blocks and award points
+        var totalTouchingPoints = 0
+        var hasAnyTouches = false
+        
+        for (dx, dy) in block.shape.cells {
+            let x = col + dx
+            let y = row + dy
+            let touchingCount = countTouchingBlocks(at: (x, y), excluding: currentShapePositions)
+            if touchingCount > 0 {
+                hasAnyTouches = true
+                totalTouchingPoints += touchingCount
+                // Add base points for each touch
+                addScore(touchingCount, at: CGPoint(x: CGFloat(x) * GameConstants.blockSize, y: CGFloat(y) * GameConstants.blockSize))
+                print("[Touch] Block at (\(x),\(y)) touches \(touchingCount) blocks. +\(touchingCount) points!")
+            }
+        }
+        
+        // Award bonus points for multiple touches
+        if hasAnyTouches && totalTouchingPoints >= 3 {
+            let bonusPoints = totalTouchingPoints * 2
+            addScore(bonusPoints, at: CGPoint(x: frameSize.width/2, y: frameSize.height/2))
+            print("[Bonus] Multiple touches! +\(bonusPoints) bonus points!")
+        }
+        
+        // Check for matches and patterns
         checkMatches()
         
-        // Check for game over after placement
+        // Refill tray if needed
+        if tray.count < requiredShapesToFit {
+            refillTray()
+        }
+        
+        // Check for game over
         checkGameOver()
         
+        // Notify delegate
         delegate?.gameStateDidUpdate()
+        
         return true
+    }
+    
+    private func countTouchingBlocks(at position: (x: Int, y: Int), excluding currentShapePositions: Set<String>) -> Int {
+        var count = 0
+        let directions = [(-1,0), (1,0), (0,-1), (0,1)]
+        
+        for (dx, dy) in directions {
+            let nx = position.x + dx
+            let ny = position.y + dy
+            
+            if nx >= 0 && nx < GameConstants.gridSize && ny >= 0 && ny < GameConstants.gridSize {
+                if grid[ny][nx] != nil && !currentShapePositions.contains("\(nx),\(ny)") {
+                    count += 1
+                }
+            }
+        }
+        
+        return count
     }
     
     private func anyTrayBlockFits() -> Bool {
@@ -515,82 +635,6 @@ final class GameState: ObservableObject {
             }
         }
         return true
-    }
-    
-    private func countTouchingBlocks(at x: Int, y: Int, excluding currentShapePositions: Set<String>) -> Int {
-        var touchingCount = 0
-        let directions = [(0, 1), (1, 0), (0, -1), (-1, 0)] // up, right, down, left
-        
-        for (dx, dy) in directions {
-            let newX = x + dx
-            let newY = y + dy
-            
-            // Only count if the adjacent position is within grid bounds AND contains a block
-            // AND is not part of the current shape
-            if newX >= 0 && newX < GameConstants.gridSize && 
-               newY >= 0 && newY < GameConstants.gridSize && 
-               grid[newY][newX] != nil &&
-               !currentShapePositions.contains("\(newX),\(newY)") {
-                touchingCount += 1
-            }
-        }
-        return touchingCount
-    }
-
-    private func placeBlock(_ block: Block, at anchor: CGPoint) {
-        // Track the positions of the current shape
-        var currentShapePositions = Set<String>()
-        
-        // First place the block
-        for (dx, dy) in block.shape.cells {
-            let x = Int(anchor.x) + dx
-            let y = Int(anchor.y) + dy
-            if x >= 0 && x < GameConstants.gridSize && y >= 0 && y < GameConstants.gridSize {
-                grid[y][x] = block.color
-                currentShapePositions.insert("\(x),\(y)")
-            }
-        }
-        
-        // Then check for touches after placing
-        var totalTouchingPoints = 0
-        var hasAnyTouches = false
-        
-        for (dx, dy) in block.shape.cells {
-            let x = Int(anchor.x) + dx
-            let y = Int(anchor.y) + dy
-            if x >= 0 && x < GameConstants.gridSize && y >= 0 && y < GameConstants.gridSize {
-                let touchingCount = countTouchingBlocks(at: x, y: y, excluding: currentShapePositions)
-                if touchingCount > 0 {
-                    hasAnyTouches = true
-                    totalTouchingPoints += touchingCount
-                    let position = CGPoint(x: CGFloat(x) * GameConstants.blockSize, y: CGFloat(y) * GameConstants.blockSize)
-                    addScore(touchingCount, at: position)
-                    print("[Touch] Block at (\(x),\(y)) touches \(touchingCount) blocks. +\(touchingCount) points!")
-                }
-            }
-        }
-        
-        // Award bonus if the block touched other blocks
-        if hasAnyTouches && totalTouchingPoints >= 3 {
-            let bonusPoints = totalTouchingPoints * 2
-            addScore(bonusPoints, at: CGPoint(x: frameSize.width/2, y: frameSize.height/2))
-            print("[Bonus] Multiple touches! +\(bonusPoints) bonus points!")
-        }
-        
-        blocksPlaced += 1
-        usedColors.insert(block.color)
-        usedShapes.insert(block.shape)
-        
-        // Check for color and shape achievements
-        if usedColors.count == BlockColor.allCases.count {
-            achievementsManager.increment(id: "color_master")
-        }
-        if usedShapes.count == BlockShape.allCases.count {
-            achievementsManager.increment(id: "shape_master")
-        }
-        
-        isPerfectLevel = false
-        checkAchievements()
     }
     
     private func checkDiagonalPattern() -> [(Int, Int)]? {
@@ -1295,7 +1339,13 @@ final class GameState: ObservableObject {
                 self.totalPlayTime = progress.totalPlayTime
                 self.highScore = progress.highScore
                 self.highestLevel = progress.highestLevel
-                self.grid = progress.grid
+                
+                // Convert serialized grid back to BlockColor array
+                self.grid = progress.grid.map { row in
+                    row.map { colorString in
+                        colorString == "nil" ? nil : BlockColor(rawValue: colorString)
+                    }
+                }
                 self.tray = progress.tray
                 
                 // Load FPS from UserDefaults
@@ -1461,6 +1511,13 @@ final class GameState: ObservableObject {
     
     func saveProgress() async throws {
         do {
+            // Convert grid to a format Firebase can handle
+            let serializedGrid = grid.map { row in
+                row.map { color in
+                    color?.rawValue ?? "nil"
+                }
+            }
+            
             let progress = GameProgress(
                 score: score,
                 level: level,
@@ -1471,7 +1528,7 @@ final class GameState: ObservableObject {
                 totalPlayTime: totalPlayTime,
                 highScore: highScore,
                 highestLevel: highestLevel,
-                grid: grid,
+                grid: serializedGrid,
                 tray: tray
             )
             
@@ -1490,7 +1547,7 @@ final class GameState: ObservableObject {
                     "highScore": progress.highScore,
                     "highestLevel": progress.highestLevel,
                     "targetFPS": targetFPS,
-                    "grid": grid.map { row in row.map { $0?.rawValue ?? "nil" } },
+                    "grid": serializedGrid,
                     "tray": tray.map { block in
                         [
                             "color": block.color.rawValue,
@@ -1508,9 +1565,7 @@ final class GameState: ObservableObject {
             }
         } catch {
             // Notify failure
-            await MainActor.run {
-                NotificationCenter.default.post(name: .gameStateSaveFailed, object: error)
-            }
+            NotificationCenter.default.post(name: .gameStateSaveFailed, object: error)
             throw GameError.saveFailed(error)
         }
     }
@@ -1613,7 +1668,7 @@ final class GameState: ObservableObject {
                         for (dx, dy) in block.shape.cells {
                             let x = col + dx
                             let y = row + dy
-                            touchingCount += countTouchingBlocks(at: x, y: y, excluding: currentShapePositions)
+                            touchingCount += countTouchingBlocks(at: (x, y), excluding: currentShapePositions)
                         }
                         
                         // If this placement touches at least one block, it's a good hint
@@ -1729,7 +1784,7 @@ final class GameState: ObservableObject {
         print("[GameState] Performing memory cleanup")
         
         // Clear undo history if it's too large or old
-        if let move = lastMove, move.timestamp.timeIntervalSinceNow < -180 { // Reduced from 300 to 180 seconds
+        if let move = lastMove, let timestamp = move.timestamp, timestamp.timeIntervalSinceNow < -180 { // Reduced from 300 to 180 seconds
             previousGrid = nil
             previousTray = nil
             lastMove = nil
@@ -1798,6 +1853,53 @@ final class GameState: ObservableObject {
         Task {
             await cleanupMemory()
         }
+    }
+    
+    private func checkUndoAvailability() async {
+        // Check if user has unlimited undos from subscription or Remove Ads purchase
+        let hasEliteSubscription = await subscriptionManager.hasFeature(.unlimitedUndos)
+        let hasRemovedAds = await subscriptionManager.hasFeature(.noAds)
+        unlimitedUndos = hasEliteSubscription || hasRemovedAds
+        
+        // Get purchased undos
+        purchasedUndos = subscriptionManager.purchasedUndos
+        
+        // Update canUndo state
+        await MainActor.run {
+            canUndo = !undoStack.isEmpty && (unlimitedUndos || adUndoCount > 0 || purchasedUndos > 0)
+        }
+    }
+    
+    func addMoveToUndoStack(_ move: GameMove) {
+        // Add move to stack
+        undoStack.push(move)
+        
+        // Update undo availability
+        Task {
+            await checkUndoAvailability()
+        }
+    }
+    
+    // Update the move method to track moves for undo
+    func move(_ block: Block, to position: (row: Int, col: Int)) {
+        // Save current state for undo
+        let move = GameMove(
+            block: block,
+            position: position,
+            previousGrid: grid,
+            previousTray: tray,
+            previousScore: score,
+            previousLevel: level,
+            previousBlocksPlaced: blocksPlaced,
+            previousLinesCleared: linesCleared,
+            previousCurrentChain: currentChain,
+            previousUsedColors: usedColors,
+            previousUsedShapes: usedShapes,
+            previousIsPerfectLevel: isPerfectLevel
+        )
+        
+        // Add to undo stack
+        addMoveToUndoStack(move)
     }
 }
 

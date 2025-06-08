@@ -40,9 +40,19 @@
           },
           "highestLevel": {
             ".validate": "newData.isNumber() && newData.val() >= 1"
+          },
+          "lastSaveTime": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
           }
+        },
+        "achievements": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": "auth != null && auth.uid === $uid"
         }
-      }
+      },
+      ".read": "auth != null",
+      ".write": "auth != null",
+      ".indexOn": ["lastLogin", "lastActive"]
     },
     "online_users": {
       ".read": true,
@@ -89,6 +99,11 @@
         ".read": "auth != null && auth.uid === $uid",
         ".write": "auth != null && auth.uid === $uid"
       }
+    },
+    "leaderboard": {
+      ".read": true,
+      ".write": "auth != null",
+      ".indexOn": ["score", "timestamp"]
     }
   }
 } 

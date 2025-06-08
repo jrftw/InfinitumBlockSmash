@@ -55,7 +55,7 @@ struct ContentView: View {
                             .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 2)
                         
                         HStack(spacing: 16) {
-                            Text("\(onlineUsersCount) online")
+                            Text(onlineUsersCountText)
                                 .font(.system(size: 14, weight: .medium, design: .rounded))
                                 .foregroundColor(.white.opacity(0.8))
                                 .shadow(color: .black.opacity(0.2), radius: 1, x: 0, y: 1)
@@ -64,7 +64,7 @@ struct ContentView: View {
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundColor(.white.opacity(0.6))
                             
-                            Text("\(dailyPlayersCount) today")
+                            Text(dailyPlayersCountText)
                                 .font(.system(size: 14, weight: .medium, design: .rounded))
                                 .foregroundColor(.white.opacity(0.8))
                                 .shadow(color: .black.opacity(0.2), radius: 1, x: 0, y: 1)
@@ -205,9 +205,7 @@ struct ContentView: View {
     
     private func setupOnlineUsersTracking() {
         // Set initial count
-        Task { @MainActor in
-            onlineUsersCount = FirebaseManager.shared.getOnlineUsersCount()
-        }
+        updateOnlineUsersCount()
 
         // Observe changes
         NotificationCenter.default.addObserver(
@@ -215,17 +213,13 @@ struct ContentView: View {
             object: nil,
             queue: .main
         ) { _ in
-            Task { @MainActor in
-                onlineUsersCount = FirebaseManager.shared.getOnlineUsersCount()
-            }
+            updateOnlineUsersCount()
         }
     }
     
     private func setupDailyPlayersTracking() {
         // Set initial count
-        Task { @MainActor in
-            dailyPlayersCount = FirebaseManager.shared.getDailyPlayersCount()
-        }
+        updateDailyPlayersCount()
 
         // Observe changes
         NotificationCenter.default.addObserver(
@@ -233,14 +227,42 @@ struct ContentView: View {
             object: nil,
             queue: .main
         ) { _ in
-            Task { @MainActor in
-                dailyPlayersCount = FirebaseManager.shared.getDailyPlayersCount()
-            }
+            updateDailyPlayersCount()
         }
     }
     
     private func cleanup() {
         NotificationCenter.default.removeObserver(self)
+    }
+    
+    private func updateOnlineUsersCount() {
+        Task { @MainActor in
+            do {
+                onlineUsersCount = try await FirebaseManager.shared.getOnlineUsersCount()
+            } catch {
+                print("Error getting online users count: \(error)")
+                onlineUsersCount = 0
+            }
+        }
+    }
+    
+    private func updateDailyPlayersCount() {
+        Task { @MainActor in
+            do {
+                dailyPlayersCount = try await FirebaseManager.shared.getDailyPlayersCount()
+            } catch {
+                print("Error getting daily players count: \(error)")
+                dailyPlayersCount = 0
+            }
+        }
+    }
+    
+    private var onlineUsersCountText: String {
+        "\(onlineUsersCount) players online"
+    }
+    
+    private var dailyPlayersCountText: String {
+        "\(dailyPlayersCount) players today"
     }
 }
 

@@ -147,14 +147,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         
         // Perform background work
         Task {
-            do {
-                // Attempt to sync data in background
-                try await FirebaseManager.shared.syncDataInBackground()
-                task.setTaskCompleted(success: true)
-            } catch {
-                print("[Background Refresh] Error syncing data: \(error.localizedDescription)")
-                task.setTaskCompleted(success: false)
-            }
+            await handleAppRefresh()
+            task.setTaskCompleted(success: true)
         }
     }
     
@@ -166,6 +160,14 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             try BGTaskScheduler.shared.submit(request)
         } catch {
             print("Could not schedule app refresh: \(error)")
+        }
+    }
+    
+    func handleAppRefresh() async {
+        do {
+            try await FirebaseManager.shared.syncDataInBackground()
+        } catch {
+            print("Error syncing data in background: \(error)")
         }
     }
     
@@ -342,17 +344,24 @@ struct HomeView: View {
             }
         }
         .onAppear {
-            Task { @MainActor in
-                onlineUsersCount = FirebaseManager.shared.getOnlineUsersCount()
-            }
+            updateOnlineUsersCount()
             NotificationCenter.default.addObserver(
                 forName: .onlineUsersCountDidChange,
                 object: nil,
                 queue: .main
             ) { _ in
-                Task { @MainActor in
-                    onlineUsersCount = FirebaseManager.shared.getOnlineUsersCount()
-                }
+                updateOnlineUsersCount()
+            }
+        }
+    }
+    
+    private func updateOnlineUsersCount() {
+        Task { @MainActor in
+            do {
+                onlineUsersCount = try await FirebaseManager.shared.getOnlineUsersCount()
+            } catch {
+                print("Error getting online users count: \(error)")
+                onlineUsersCount = 0
             }
         }
     }

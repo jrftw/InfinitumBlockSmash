@@ -49,6 +49,34 @@ class AdManager: NSObject, ObservableObject {
     @Published var isAdLoading = false
     @Published var adLoadFailed = false
     
+    // Add new state tracking properties
+    @Published private(set) var adState: AdState = .idle
+    @Published private(set) var lastAdShownTime: Date?
+    @Published private(set) var adLoadAttempts: Int = 0
+    @Published private(set) var adError: AdError?
+    @Published private(set) var adsWatchedThisGame: Int = 0
+    
+    // Add ad frequency control
+    private let minimumTimeBetweenAds: TimeInterval = 60 // 1 minute
+    private let maximumAdsPerGame: Int = 5
+    private let maximumAdLoadAttempts: Int = 3
+    
+    enum AdState {
+        case idle
+        case loading
+        case ready
+        case showing
+        case error
+    }
+    
+    enum AdError: Error {
+        case loadFailed
+        case tooManyAttempts
+        case tooFrequent
+        case noAdsAvailable
+        case userHasNoAds
+    }
+    
     private let subscriptionManager = SubscriptionManager.shared
     private let bannerAdUnitID = "ca-app-pub-3940256099942544/2934735716" // Test ID
     private let interstitialAdUnitID = "ca-app-pub-3940256099942544/4411468910" // Test ID
@@ -87,11 +115,31 @@ class AdManager: NSObject, ObservableObject {
         // Check if user has purchased the no-ads feature
         let hasNoAdsFeature = await subscriptionManager.hasFeature(.noAds)
         if hasNoAdsFeature {
+            adError = .userHasNoAds
             return false
         }
         
         // Check if user has referral-based ad-free time
-        return !ReferralManager.shared.hasAdFreeTime()
+        if ReferralManager.shared.hasAdFreeTime() {
+            return false
+        }
+        
+        // Check ad frequency
+        if let lastAdTime = lastAdShownTime {
+            let timeSinceLastAd = Date().timeIntervalSince(lastAdTime)
+            if timeSinceLastAd < minimumTimeBetweenAds {
+                adError = .tooFrequent
+                return false
+            }
+        }
+        
+        // Check maximum ads per game
+        if adsWatchedThisGame >= maximumAdsPerGame {
+            adError = .tooManyAttempts
+            return false
+        }
+        
+        return true
     }
     
     // MARK: - Banner Ads
@@ -116,8 +164,21 @@ class AdManager: NSObject, ObservableObject {
     // MARK: - Interstitial Ads
     
     func loadInterstitial() async {
+        adState = .loading
+        adError = nil
+        
         // Don't load ads if user has purchased no-ads
-        guard await shouldShowAds() else { return }
+        guard await shouldShowAds() else {
+            adState = .idle
+            return
+        }
+        
+        // Check load attempts
+        if adLoadAttempts >= maximumAdLoadAttempts {
+            adState = .error
+            adError = .tooManyAttempts
+            return
+        }
         
         // Clean up existing interstitial if any
         interstitialAd = nil
@@ -126,9 +187,13 @@ class AdManager: NSObject, ObservableObject {
             let request = Request()
             interstitialAd = try await InterstitialAd.load(with: interstitialAdUnitID, request: request)
             interstitialAd?.fullScreenContentDelegate = self
+            adState = .ready
+            adLoadAttempts = 0
         } catch {
             print("Failed to load interstitial ad with error: \(error.localizedDescription)")
-            adLoadFailed = true
+            adState = .error
+            adError = .loadFailed
+            adLoadAttempts += 1
         }
     }
     
@@ -143,7 +208,10 @@ class AdManager: NSObject, ObservableObject {
         guard shouldShow else { return }
         
         if let ad = interstitialAd {
+            adState = .showing
             ad.present(from: root)
+            lastAdShownTime = Date()
+            adsWatchedThisGame += 1
         } else {
             await loadInterstitial()
         }
@@ -196,6 +264,15 @@ class AdManager: NSObject, ObservableObject {
         interstitialAd = nil
         rewardedInterstitialAd = nil
     }
+    
+    func resetGameState() async {
+        await MainActor.run {
+            adsWatchedThisGame = 0
+            adLoadAttempts = 0
+            adState = .idle
+            adError = nil
+        }
+    }
 }
 
 // MARK: - FullScreenContentDelegate
@@ -204,6 +281,7 @@ extension AdManager: FullScreenContentDelegate {
     func adDidDismissFullScreenContent(_ ad: FullScreenPresentingAd) {
         Task { @MainActor in
             adDidDismiss = true
+            adState = .idle
             // Reload the ad for next time
             if ad is InterstitialAd {
                 await loadInterstitial()
@@ -216,6 +294,8 @@ extension AdManager: FullScreenContentDelegate {
     func ad(_ ad: FullScreenPresentingAd, didFailToPresentFullScreenContentWithError error: Error) {
         Task { @MainActor in
             print("Ad failed to present with error: \(error.localizedDescription)")
+            adState = .error
+            adError = .loadFailed
             adLoadFailed = true
             // Reload the ad for next time
             if ad is InterstitialAd {

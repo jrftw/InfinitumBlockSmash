@@ -1,6 +1,7 @@
 import Foundation
 import FirebaseFirestore
 import FirebaseAuth
+import FirebaseStorage
 import Combine
 import Network
 import SwiftUI
@@ -8,6 +9,8 @@ import FirebaseDatabase
 import FirebaseAppCheck
 import FirebaseCore
 import FirebaseCrashlytics
+import AuthenticationServices
+import CryptoKit
 
 // Network monitoring class
 final class NetworkMonitor {
@@ -40,333 +43,517 @@ enum FirebaseError: Error {
     case offlineMode
     case retryLimitExceeded
     case permissionDenied
+    case invalidCredential
 }
 
 @MainActor
-final class FirebaseManager {
+class FirebaseManager: ObservableObject {
     static let shared = FirebaseManager()
+    
+    @Published private(set) var isAuthenticated = false
+    @Published private(set) var currentUser: User?
+    @Published private(set) var username: String?
+    @Published private(set) var deviceId: String?
+    @Published private(set) var isGuest = false
+    @Published private(set) var isSyncing = false
+    @Published private(set) var lastSyncDate: Date?
+    @Published private(set) var syncError: String?
+    @Published private(set) var referralCode: String?
+    @Published private(set) var referredBy: String?
+    @Published private(set) var purchasedHints: Int = 0
+    @Published var purchasedUndos: Int = 0
+    
+    private let auth = Auth.auth()
     private let db = Firestore.firestore()
-    private var cancellables = Set<AnyCancellable>()
-    private let maxRetries = 3
-    private let retryDelay: TimeInterval = 2.0
-    private var lastError: Error?
-    
-    // Free tier limits
-    private let maxBatchSize = 500 // Firestore free tier limit
-    private let maxDocumentSize = 1 * 1024 * 1024 // 1MB limit
-    private let maxDailyWrites = 20000 // Free tier limit
-    private var dailyWriteCount = 0
-    private var lastWriteCountReset = Date()
-    private var onlineUsersRef: DatabaseReference?
-    private var onlineUsersCount = 0
-    private var onlineUsersObserver: DatabaseHandle?
-    private var dailyStatsRef: DatabaseReference?
-    private var dailyPlayersCount = 0
-    private var dailyStatsObserver: DatabaseHandle?
-    
-    // Cache keys
-    private enum CacheKey {
-        static let gameProgress = "gameProgress"
-        static let leaderboard = "leaderboard"
-        static let userData = "userData"
-        static let lastSyncTime = "lastSyncTime"
-        static let offlineChanges = "offlineChanges"
-    }
-    
-    // Add caching
-    private var lastSaveTime: Date?
+    private let storage = Storage.storage()
+    private var authStateListener: AuthStateDidChangeListenerHandle?
     private var cachedProgress: GameProgress?
-    private let minimumSaveInterval: TimeInterval = 90 // Only save every 90 seconds
-    private let userDefaults = UserDefaults.standard
-    private let lastSaveTimeKey = "lastFirebaseSaveTime"
-    private let lastBackgroundSyncKey = "lastBackgroundSyncTime"
-    private var offlineChanges: [String: Any] = [:]
-    private let offlineQueue = DispatchQueue(label: "com.infinitum.blocksmash.offlinequeue")
+    private var lastActiveUpdateTimer: Timer?
     
-    private static var isConfigured = false
-    
-    private func setupFirebase() {
-        // Skip if already configured
-        guard !Self.isConfigured else { return }
-        
-        // Get Firestore instance
-        let db = Firestore.firestore()
-        
-        // Configure Firestore settings
-        let settings = FirestoreSettings()
-        #if swift(>=5.5)
-        if #available(iOS 15.0, *) {
-            settings.cacheSettings = PersistentCacheSettings(sizeBytes: NSNumber(value: FirestoreCacheSizeUnlimited))
-        } else {
-            // Fallback for older iOS versions
-            settings.isPersistenceEnabled = true
-            settings.cacheSizeBytes = FirestoreCacheSizeUnlimited
-        }
-        #else
-        // Fallback for older Swift versions
-        settings.isPersistenceEnabled = true
-        settings.cacheSizeBytes = FirestoreCacheSizeUnlimited
-        #endif
-        
-        // Set Firestore settings
-        db.settings = settings
-        
-        // Enable offline persistence
-        db.enableNetwork { error in
-            if let error = error {
-                print("[Firebase] Error enabling network: \(error.localizedDescription)")
-            }
-        }
-        
-        // Load offline changes
-        loadOfflineChanges()
-        
-        // Set up Crashlytics user identifier if user is logged in
-        if let userId = Auth.auth().currentUser?.uid {
-            Crashlytics.crashlytics().setUserID(userId)
-        }
-        
-        Self.isConfigured = true
+    private init() {
+        setupAuthStateListener()
+        loadDeviceId()
+        startLastActiveUpdates()
     }
     
-    private func verifyPermissions() async throws {
-        guard let userId = Auth.auth().currentUser?.uid else {
-            throw FirebaseError.notAuthenticated
+    deinit {
+        lastActiveUpdateTimer?.invalidate()
+    }
+    
+    private func startLastActiveUpdates() {
+        // Update lastActive every 2 minutes
+        lastActiveUpdateTimer = Timer.scheduledTimer(withTimeInterval: 120, repeats: true) { [weak self] _ in
+            Task {
+                await self?.updateLastActive()
+            }
         }
-        
-        let db = Firestore.firestore()
-        
-        // Try to read user document to verify permissions
+        // Initial update
+        Task {
+            await updateLastActive()
+        }
+    }
+    
+    private func updateLastActive() async {
+        guard let userId = currentUser?.uid else { return }
         do {
-            let _ = try await db.collection("users").document(userId).getDocument()
+            try await db.collection("users").document(userId).updateData([
+                "lastActive": FieldValue.serverTimestamp()
+            ])
         } catch {
-            print("[Firebase] Permission verification failed: \(error.localizedDescription)")
-            throw FirebaseError.permissionDenied
+            print("Error updating lastActive: \(error)")
         }
     }
     
-    private func setupOnlineUsersTracking() {
-        guard Auth.auth().currentUser != nil else { return }
-        
-        // Get reference to online users
-        onlineUsersRef = Database.database().reference().child("online_users")
-        
-        // Set user as online
-        onlineUsersRef?.child(Auth.auth().currentUser!.uid).setValue(true)
-        
-        // Remove user when they go offline
-        onlineUsersRef?.child(Auth.auth().currentUser!.uid).onDisconnectSetValue(false)
-        
-        // Observe total online users
-        onlineUsersRef?.observe(.value) { [weak self] snapshot in
-            guard let self = self else { return }
-            self.onlineUsersCount = Int(snapshot.childrenCount)
-            NotificationCenter.default.post(name: .onlineUsersCountDidChange, object: nil)
-        }
-    }
+    // MARK: - Authentication
     
-    private func setupDailyStatsTracking() {
-        guard Auth.auth().currentUser != nil else { return }
-        
-        // Get reference to daily stats
-        dailyStatsRef = Database.database().reference().child("daily_stats")
-        
-        // Check if we need to reset the counter
-        dailyStatsRef?.child("last_reset").observeSingleEvent(of: .value) { [weak self] snapshot in
-            if self == nil { return }
-            let lastReset = snapshot.value as? TimeInterval ?? 0
-            let now = Date().timeIntervalSince1970
-            let calendar = Calendar.current
-            
-            // If it's a new day, reset the counter
-            if !calendar.isDateInToday(Date(timeIntervalSince1970: lastReset)) {
-                self?.dailyStatsRef?.updateChildValues([
-                    "players_today": 0,
-                    "last_reset": now
-                ])
-            }
-        }
-        
-        // Increment daily players count
-        dailyStatsRef?.child("players_today").runTransactionBlock { (currentData) -> TransactionResult in
-            var count = currentData.value as? Int ?? 0
-            count += 1
-            currentData.value = count
-            return TransactionResult.success(withValue: currentData)
-        }
-        
-        // Observe daily players count
-        dailyStatsRef?.child("players_today").observe(.value) { snapshot in
-            self.dailyPlayersCount = snapshot.value as? Int ?? 0
-            NotificationCenter.default.post(name: .dailyPlayersCountDidChange, object: nil)
-        }
-    }
-    
-    func getOnlineUsersCount() -> Int {
-        return onlineUsersCount
-    }
-    
-    func getDailyPlayersCount() -> Int {
-        return dailyPlayersCount
-    }
-    
-    // MARK: - Enhanced Caching Methods
-    
-    private func cacheGameProgress(_ progress: GameProgress) {
-        // Cache on disk with compression
-        try? CacheManager.shared.setDiskCache(progress, forKey: CacheKey.gameProgress, compress: true)
-        
-        // Store in memory as a dictionary instead of NSObject
-        let progressDict = progress.dictionary
-        CacheManager.shared.setMemoryCache(progressDict as NSDictionary, forKey: CacheKey.gameProgress)
-    }
-    
-    private func getCachedGameProgress() -> GameProgress? {
-        // Try memory cache first
-        if let cached: NSDictionary = CacheManager.shared.getMemoryCache(forKey: CacheKey.gameProgress),
-           let dict = cached as? [String: Any],
-           let progress = GameProgress(dictionary: dict) {
-            return progress
-        }
-        
-        // Try disk cache
-        if let cached: GameProgress = try? CacheManager.shared.getDiskCache(forKey: CacheKey.gameProgress) {
-            // Update memory cache
-            let progressDict = cached.dictionary
-            CacheManager.shared.setMemoryCache(progressDict as NSDictionary, forKey: CacheKey.gameProgress)
-            return cached
-        }
-        return nil
-    }
-    
-    private func cacheLeaderboard(_ entries: [LeaderboardEntry]) {
-        // Cache in memory with cost based on size
-        let array = entries as NSArray
-        CacheManager.shared.setMemoryCache(array, forKey: CacheKey.leaderboard, cost: entries.count)
-        
-        // Cache on disk with compression
-        try? CacheManager.shared.setDiskCache(entries, forKey: CacheKey.leaderboard, compress: true)
-    }
-    
-    private func getCachedLeaderboard() -> [LeaderboardEntry]? {
-        // Try memory cache first
-        if let cached: NSArray = CacheManager.shared.getMemoryCache(forKey: CacheKey.leaderboard) {
-            return cached as? [LeaderboardEntry]
-        }
-        
-        // Try disk cache
-        if let cached: [LeaderboardEntry] = try? CacheManager.shared.getDiskCache(forKey: CacheKey.leaderboard) {
-            // Update memory cache
-            CacheManager.shared.setMemoryCache(cached as NSArray, forKey: CacheKey.leaderboard, cost: cached.count)
-            return cached
-        }
-        return nil
-    }
-    
-    // MARK: - Offline Support
-    
-    private func loadOfflineChanges() {
-        if let data = userDefaults.data(forKey: CacheKey.offlineChanges),
-           let changes = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            offlineQueue.sync {
-                self.offlineChanges = changes
-            }
-        }
-    }
-    
-    private func saveOfflineChanges() {
-        offlineQueue.sync {
-            if let data = try? JSONSerialization.data(withJSONObject: offlineChanges) {
-                userDefaults.set(data, forKey: CacheKey.offlineChanges)
-            }
-        }
-    }
-    
-    private func addOfflineChange(_ change: [String: Any], forKey key: String) {
-        offlineQueue.sync {
-            offlineChanges[key] = change
-            saveOfflineChanges()
-        }
-    }
-    
-    private func clearOfflineChanges() {
-        offlineQueue.sync {
-            offlineChanges.removeAll()
-            saveOfflineChanges()
-        }
-    }
-    
-    private func syncOfflineChanges() async throws {
-        guard NetworkMonitor.shared.isConnected else { return }
-        
-        // Get a copy of the changes to process
-        let changes = offlineQueue.sync { [offlineChanges] in offlineChanges }
-        guard !changes.isEmpty else { return }
-        
-        for (key, change) in changes {
-            do {
-                try await db.collection("users").document(key).setData(change as! [String: Any], merge: true)
-                _ = offlineQueue.sync {
-                    offlineChanges.removeValue(forKey: key)
+    private func setupAuthStateListener() {
+        authStateListener = auth.addStateDidChangeListener { [weak self] _, user in
+            Task { @MainActor in
+                self?.isAuthenticated = user != nil
+                self?.currentUser = user
+                if let user = user {
+                    await self?.loadUserData(userId: user.uid)
                 }
-            } catch {
-                print("[Firebase] Error syncing offline change: \(error.localizedDescription)")
             }
         }
-        
-        saveOfflineChanges()
     }
     
-    // MARK: - Updated Network Methods
+    func signInAnonymously() async throws {
+        do {
+            let result = try await auth.signInAnonymously()
+            isGuest = true
+            await loadUserData(userId: result.user.uid)
+        } catch {
+            print("Error signing in anonymously: \(error)")
+            throw error
+        }
+    }
     
-    func syncDataInBackground() async throws {
-        guard let userId = Auth.auth().currentUser?.uid else {
-            throw FirebaseError.notAuthenticated
+    private func signInWithApple() async throws {
+        let nonce = randomNonceString()
+        let appleIDProvider = ASAuthorizationAppleIDProvider()
+        let request = appleIDProvider.createRequest()
+        request.requestedScopes = [.fullName, .email]
+        request.nonce = sha256(nonce)
+        
+        let result = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<ASAuthorization, Error>) in
+            let controller = ASAuthorizationController(authorizationRequests: [request])
+            let delegate = SignInWithAppleDelegate(continuation: continuation)
+            controller.delegate = delegate
+            controller.presentationContextProvider = delegate
+            controller.performRequests()
+            // Store delegate to prevent deallocation
+            objc_setAssociatedObject(controller, "delegate", delegate, .OBJC_ASSOCIATION_RETAIN)
         }
         
-        // Check if we should sync based on last sync time
-        let now = Date()
-        if let lastSync = userDefaults.object(forKey: lastBackgroundSyncKey) as? Date,
-           now.timeIntervalSince(lastSync) < 3600 { // Minimum 1 hour between syncs
-            return
+        guard let appleIDCredential = result.credential as? ASAuthorizationAppleIDCredential,
+              let appleIDToken = appleIDCredential.identityToken,
+              let idTokenString = String(data: appleIDToken, encoding: .utf8) else {
+            throw FirebaseError.invalidCredential
         }
         
-        try await retryOperation {
-            // Fetch latest data from Firestore
-            let document = try await self.db.collection("users").document(userId).getDocument()
-            guard let data = document.data() else {
-                throw FirebaseError.invalidData
-            }
+        let credential = OAuthProvider.credential(
+            providerID: AuthProviderID.apple,
+            idToken: idTokenString,
+            rawNonce: nonce
+        )
+        
+        let authResult = try await Auth.auth().signIn(with: credential)
+        currentUser = authResult.user
+        
+        // Create or update user document
+        try await createOrUpdateUserDocument(user: authResult.user)
+    }
+    
+    func signOut() throws {
+        try auth.signOut()
+        isGuest = false
+        currentUser = nil
+        username = nil
+    }
+    
+    // MARK: - User Data
+    
+    private func loadUserData(userId: String) async {
+        do {
+            let docRef = db.collection("users").document(userId)
+            let document = try await docRef.getDocument()
             
-            // Update local cache with latest data
+            if let data = document.data() {
+                await MainActor.run {
+                    self.username = data["displayName"] as? String
+                    self.referralCode = data["referralCode"] as? String
+                    self.referredBy = data["referredBy"] as? String
+                    self.purchasedHints = data["purchasedHints"] as? Int ?? 0
+                    self.purchasedUndos = data["purchasedUndos"] as? Int ?? 0
+                }
+            } else {
+                // Create new user document if it doesn't exist
+                let newUserData: [String: Any] = [
+                    "deviceId": generateDeviceId(),
+                    "referralCode": generateReferralCode(),
+                    "createdAt": FieldValue.serverTimestamp(),
+                    "lastActive": FieldValue.serverTimestamp(),
+                    "userId": userId
+                ]
+                try await docRef.setData(newUserData)
+                
+                // Load the newly created data
+                await loadUserData(userId: userId)
+            }
+        } catch {
+            print("Error loading user data: \(error.localizedDescription)")
+        }
+    }
+    
+    func updateUsername(_ newUsername: String) async throws {
+        guard let userId = currentUser?.uid else { return }
+        
+        // Check if username is already taken
+        let querySnapshot = try await db.collection("users")
+            .whereField("username", isEqualTo: newUsername)
+            .getDocuments()
+        
+        if !querySnapshot.documents.isEmpty {
+            throw NSError(domain: "FirebaseManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Username already taken"])
+        }
+        
+        try await db.collection("users").document(userId).updateData([
+            "username": newUsername
+        ])
+        
+        username = newUsername
+    }
+    
+    // MARK: - Device ID Management
+    
+    private func loadDeviceId() {
+        if let savedDeviceId = UserDefaults.standard.string(forKey: "deviceId") {
+            deviceId = savedDeviceId
+        } else {
+            deviceId = generateDeviceId()
+            UserDefaults.standard.set(deviceId, forKey: "deviceId")
+        }
+    }
+    
+    private func generateDeviceId() -> String {
+        return UUID().uuidString
+    }
+    
+    // MARK: - Data Synchronization
+    
+    func syncUserData() async {
+        guard let userId = currentUser?.uid else { return }
+        
+        isSyncing = true
+        syncError = nil
+        
+        do {
+            // Sync game progress
             let progress = GameProgress(
-                score: data["score"] as? Int ?? 0,
-                level: data["level"] as? Int ?? 1,
-                blocksPlaced: data["blocksPlaced"] as? Int ?? 0,
-                linesCleared: data["linesCleared"] as? Int ?? 0,
-                gamesCompleted: data["gamesCompleted"] as? Int ?? 0,
-                perfectLevels: data["perfectLevels"] as? Int ?? 0,
-                totalPlayTime: data["totalPlayTime"] as? TimeInterval ?? 0,
-                highScore: data["highScore"] as? Int ?? data["score"] as? Int ?? 0,
-                highestLevel: data["highestLevel"] as? Int ?? data["level"] as? Int ?? 1
+                score: UserDefaults.standard.integer(forKey: "score"),
+                level: UserDefaults.standard.integer(forKey: "level"),
+                blocksPlaced: UserDefaults.standard.integer(forKey: "blocksPlaced"),
+                linesCleared: UserDefaults.standard.integer(forKey: "linesCleared"),
+                gamesCompleted: UserDefaults.standard.integer(forKey: "gamesCompleted"),
+                perfectLevels: UserDefaults.standard.integer(forKey: "perfectLevels"),
+                totalPlayTime: UserDefaults.standard.double(forKey: "totalPlayTime"),
+                highScore: UserDefaults.standard.integer(forKey: "highScore"),
+                highestLevel: UserDefaults.standard.integer(forKey: "highestLevel")
             )
             
-            // Update all caches
-            self.cacheGameProgress(progress)
-            self.cachedProgress = progress
-            self.userDefaults.set(now, forKey: self.lastBackgroundSyncKey)
+            try await db.collection("users").document(userId).collection("progress").document("data").setData(progress.dictionary)
             
-            // Update UserDefaults with latest high scores
-            if let highScore = data["highScore"] as? Int {
-                UserDefaults.standard.set(highScore, forKey: "highScore")
+            // Sync settings
+            let settings: [String: Any] = [
+                "soundEnabled": UserDefaults.standard.bool(forKey: "soundEnabled"),
+                "musicEnabled": UserDefaults.standard.bool(forKey: "musicEnabled"),
+                "vibrationEnabled": UserDefaults.standard.bool(forKey: "vibrationEnabled"),
+                "theme": UserDefaults.standard.string(forKey: "theme") ?? "default",
+                "difficulty": UserDefaults.standard.string(forKey: "difficulty") ?? "normal"
+            ]
+            
+            try await db.collection("users").document(userId).collection("settings").document("data").setData(settings)
+            
+            lastSyncDate = Date()
+        } catch {
+            syncError = error.localizedDescription
+            print("Error syncing user data: \(error)")
+        }
+        
+        isSyncing = false
+    }
+    
+    func loadSyncedData() async {
+        guard let userId = currentUser?.uid else { return }
+        
+        do {
+            // Load game progress
+            let progressDoc = try await db.collection("users").document(userId).collection("progress").document("data").getDocument()
+            if let progressData = progressDoc.data() {
+                UserDefaults.standard.set(progressData["score"] as? Int ?? 0, forKey: "score")
+                UserDefaults.standard.set(progressData["level"] as? Int ?? 1, forKey: "level")
+                UserDefaults.standard.set(progressData["blocksPlaced"] as? Int ?? 0, forKey: "blocksPlaced")
+                UserDefaults.standard.set(progressData["linesCleared"] as? Int ?? 0, forKey: "linesCleared")
+                UserDefaults.standard.set(progressData["gamesCompleted"] as? Int ?? 0, forKey: "gamesCompleted")
+                UserDefaults.standard.set(progressData["perfectLevels"] as? Int ?? 0, forKey: "perfectLevels")
+                UserDefaults.standard.set(progressData["totalPlayTime"] as? Double ?? 0, forKey: "totalPlayTime")
+                UserDefaults.standard.set(progressData["highScore"] as? Int ?? 0, forKey: "highScore")
+                UserDefaults.standard.set(progressData["highestLevel"] as? Int ?? 1, forKey: "highestLevel")
+                UserDefaults.standard.synchronize()
             }
-            if let highestLevel = data["highestLevel"] as? Int {
-                UserDefaults.standard.set(highestLevel, forKey: "highestLevel")
+            
+            // Load settings
+            let settingsDoc = try await db.collection("users").document(userId).collection("settings").document("data").getDocument()
+            if let settingsData = settingsDoc.data() {
+                UserDefaults.standard.set(settingsData["soundEnabled"] as? Bool ?? true, forKey: "soundEnabled")
+                UserDefaults.standard.set(settingsData["musicEnabled"] as? Bool ?? true, forKey: "musicEnabled")
+                UserDefaults.standard.set(settingsData["vibrationEnabled"] as? Bool ?? true, forKey: "vibrationEnabled")
+                UserDefaults.standard.set(settingsData["theme"] as? String ?? "default", forKey: "theme")
+                UserDefaults.standard.set(settingsData["difficulty"] as? String ?? "normal", forKey: "difficulty")
+                UserDefaults.standard.synchronize()
             }
+        } catch {
+            print("Error loading synced data: \(error)")
         }
     }
     
-    // Add new method for initial device sync
+    // MARK: - Background Sync
+    
+    func syncDataInBackground() async throws {
+        guard let userId = currentUser?.uid else {
+            throw FirebaseError.notAuthenticated
+        }
+        
+        // Get local data
+        let localProgress = GameProgress(
+            score: UserDefaults.standard.integer(forKey: "score"),
+            level: UserDefaults.standard.integer(forKey: "level"),
+            blocksPlaced: UserDefaults.standard.integer(forKey: "blocksPlaced"),
+            linesCleared: UserDefaults.standard.integer(forKey: "linesCleared"),
+            gamesCompleted: UserDefaults.standard.integer(forKey: "gamesCompleted"),
+            perfectLevels: UserDefaults.standard.integer(forKey: "perfectLevels"),
+            totalPlayTime: UserDefaults.standard.double(forKey: "totalPlayTime"),
+            highScore: UserDefaults.standard.integer(forKey: "highScore"),
+            highestLevel: UserDefaults.standard.integer(forKey: "highestLevel")
+        )
+        
+        // Get cloud data
+        let progressDoc = try await db.collection("users").document(userId).collection("progress").document("data").getDocument()
+        let cloudProgress = progressDoc.data()
+        
+        // Compare timestamps and merge data
+        if let cloudData = cloudProgress,
+           let cloudLastSave = cloudData["lastSaveTime"] as? Timestamp,
+           let localLastSave = UserDefaults.standard.object(forKey: "lastSaveTime") as? Date {
+            
+            if localLastSave > cloudLastSave.dateValue() {
+                // Local data is newer, upload it
+                try await db.collection("users").document(userId).collection("progress").document("data").setData(localProgress.dictionary)
+            } else if cloudLastSave.dateValue() > localLastSave {
+                // Cloud data is newer, update local
+                UserDefaults.standard.set(cloudData["score"] as? Int ?? 0, forKey: "score")
+                UserDefaults.standard.set(cloudData["level"] as? Int ?? 1, forKey: "level")
+                UserDefaults.standard.set(cloudData["blocksPlaced"] as? Int ?? 0, forKey: "blocksPlaced")
+                UserDefaults.standard.set(cloudData["linesCleared"] as? Int ?? 0, forKey: "linesCleared")
+                UserDefaults.standard.set(cloudData["gamesCompleted"] as? Int ?? 0, forKey: "gamesCompleted")
+                UserDefaults.standard.set(cloudData["perfectLevels"] as? Int ?? 0, forKey: "perfectLevels")
+                UserDefaults.standard.set(cloudData["totalPlayTime"] as? Double ?? 0, forKey: "totalPlayTime")
+                UserDefaults.standard.set(cloudData["highScore"] as? Int ?? 0, forKey: "highScore")
+                UserDefaults.standard.set(cloudData["highestLevel"] as? Int ?? 1, forKey: "highestLevel")
+                UserDefaults.standard.synchronize()
+            }
+        } else {
+            // No cloud data, upload local
+            try await db.collection("users").document(userId).collection("progress").document("data").setData(localProgress.dictionary)
+        }
+        
+        // Update last active timestamp
+        try await db.collection("users").document(userId).updateData([
+            "lastActive": FieldValue.serverTimestamp()
+        ])
+        
+        lastSyncDate = Date()
+    }
+    
+    // MARK: - Statistics Methods
+    
+    func getDailyPlayersCount() async throws -> Int {
+        let calendar = Calendar.current
+        let startOfDay = calendar.startOfDay(for: Date())
+        
+        let query = db.collection("users")
+            .whereField("lastLogin", isGreaterThan: startOfDay)
+        
+        let snapshot = try await query.count.getAggregation(source: .server)
+        return Int(truncating: snapshot.count)
+    }
+    
+    func getOnlineUsersCount() async throws -> Int {
+        let fiveMinutesAgo = Timestamp(date: Date().addingTimeInterval(-300))
+        let snapshot = try await db.collection("users")
+            .whereField("lastActive", isGreaterThan: fiveMinutesAgo)
+            .count
+            .getAggregation(source: .server)
+        
+        return Int(truncating: snapshot.count)
+    }
+    
+    // MARK: - Leaderboard
+    
+    func submitScore(_ score: Int, level: Int) async throws {
+        guard let userId = currentUser?.uid,
+              let username = username else { return }
+        
+        try await db.collection("leaderboard").addDocument(data: [
+            "userId": userId,
+            "username": username,
+            "score": score,
+            "level": level,
+            "timestamp": FieldValue.serverTimestamp()
+        ])
+    }
+    
+    func getLeaderboard(limit: Int = 100) async throws -> [LeaderboardEntry] {
+        let snapshot = try await db.collection("leaderboard")
+            .order(by: "score", descending: true)
+            .limit(to: limit)
+            .getDocuments()
+        
+        return snapshot.documents.compactMap { document in
+            let data = document.data()
+            guard let userId = data["userId"] as? String,
+                  let username = data["username"] as? String,
+                  let score = data["score"] as? Int,
+                  let level = data["level"] as? Int,
+                  let timestamp = data["timestamp"] as? Timestamp else {
+                return nil
+            }
+            
+            return LeaderboardEntry(
+                userId: userId,
+                username: username,
+                score: score,
+                level: level,
+                timestamp: timestamp.dateValue()
+            )
+        }
+    }
+    
+    // MARK: - Referral Code Management
+    
+    func applyReferralCode(_ code: String) async throws {
+        guard let currentUserId = currentUser?.uid else { return }
+        
+        // Check if the referral code exists
+        let querySnapshot = try await db.collection("users")
+            .whereField("referralCode", isEqualTo: code)
+            .getDocuments()
+        
+        guard let referrerDoc = querySnapshot.documents.first else {
+            throw NSError(domain: "FirebaseManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid referral code"])
+        }
+        
+        let referrerId = referrerDoc.documentID
+        
+        // Don't allow self-referral
+        guard referrerId != currentUserId else {
+            throw NSError(domain: "FirebaseManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Cannot use your own referral code"])
+        }
+        
+        // Update user's referredBy field
+        try await db.collection("users").document(currentUserId).updateData([
+            "referredBy": referrerId
+        ])
+        
+        referredBy = referrerId
+        
+        // Update referrer's stats
+        try await db.collection("users").document(referrerId).updateData([
+            "referrals": FieldValue.increment(Int64(1))
+        ])
+    }
+    
+    private func generateReferralCode() -> String {
+        // Generate a 6-character alphanumeric code
+        let letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        return String((0..<6).map { _ in letters.randomElement()! })
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func randomNonceString(length: Int = 32) -> String {
+        precondition(length > 0)
+        let charset: [Character] = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+        var result = ""
+        var remainingLength = length
+        
+        while remainingLength > 0 {
+            let randoms: [UInt8] = (0 ..< 16).map { _ in
+                var random: UInt8 = 0
+                let errorCode = SecRandomCopyBytes(kSecRandomDefault, 1, &random)
+                if errorCode != errSecSuccess {
+                    fatalError("Unable to generate nonce. SecRandomCopyBytes failed with OSStatus \(errorCode)")
+                }
+                return random
+            }
+            
+            randoms.forEach { random in
+                if remainingLength == 0 {
+                    return
+                }
+                
+                if random < charset.count {
+                    result.append(charset[Int(random)])
+                    remainingLength -= 1
+                }
+            }
+        }
+        
+        return result
+    }
+    
+    private func sha256(_ input: String) -> String {
+        let inputData = Data(input.utf8)
+        let hashedData = SHA256.hash(data: inputData)
+        let hashString = hashedData.compactMap {
+            String(format: "%02x", $0)
+        }.joined()
+        
+        return hashString
+    }
+    
+    // MARK: - Game Progress Methods
+    
+    func loadGameProgress() async throws -> GameProgress {
+        guard Auth.auth().currentUser != nil else {
+            throw FirebaseError.notAuthenticated
+        }
+        
+        let docRef = db.collection("users").document(Auth.auth().currentUser!.uid)
+        let document = try await docRef.getDocument()
+        
+        guard let data = document.data() else {
+            // Return default progress if no data exists
+            return GameProgress()
+        }
+        
+        guard let progress = GameProgress(dictionary: data) else {
+            throw FirebaseError.invalidData
+        }
+        
+        return progress
+    }
+    
+    func saveGameProgress(_ progress: GameProgress) async throws {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            throw FirebaseError.notAuthenticated
+        }
+        
+        let docRef = db.collection("users").document(userId)
+        try await docRef.setData(progress.dictionary, merge: true)
+    }
+    
     func performInitialDeviceSync() async throws {
         guard let userId = Auth.auth().currentUser?.uid else {
             throw FirebaseError.notAuthenticated
@@ -410,18 +597,28 @@ final class FirebaseManager {
         try await syncAchievements()
     }
     
+    private func getCachedGameProgress() -> GameProgress? {
+        return cachedProgress
+    }
+    
+    private func cacheGameProgress(_ progress: GameProgress) {
+        cachedProgress = progress
+    }
+    
     private func syncAchievements() async throws {
         guard let userId = Auth.auth().currentUser?.uid else {
             throw FirebaseError.notAuthenticated
         }
         
+        let userRef = db.collection("users").document(userId)
+        
         // Get local achievements
-        let localAchievements = try? await db.collection("users").document(userId)
+        let localAchievements = try? await userRef
             .collection("achievements")
             .getDocuments()
         
         // Get cloud achievements
-        let cloudAchievements = try await db.collection("users").document(userId)
+        let cloudAchievements = try await userRef
             .collection("achievements")
             .getDocuments()
         
@@ -435,306 +632,90 @@ final class FirebaseManager {
         
         // Add or update with cloud achievements
         cloudAchievements.documents.forEach { doc in
+            let cloudData = doc.data()
             if let localData = mergedAchievements[doc.documentID],
                let localTimestamp = localData["lastUpdated"] as? Timestamp,
-               let cloudTimestamp = doc.data()["lastUpdated"] as? Timestamp {
+               let cloudTimestamp = cloudData["lastUpdated"] as? Timestamp {
                 // Keep the more recent version
                 if cloudTimestamp.dateValue() > localTimestamp.dateValue() {
-                    mergedAchievements[doc.documentID] = doc.data()
+                    mergedAchievements[doc.documentID] = cloudData
                 }
             } else {
-                mergedAchievements[doc.documentID] = doc.data()
+                mergedAchievements[doc.documentID] = cloudData
             }
         }
         
         // Save merged achievements
         for (id, data) in mergedAchievements {
-            try await db.collection("users").document(userId)
+            try await userRef
                 .collection("achievements")
                 .document(id)
                 .setData(data, merge: true)
         }
+        
+        // Update last sync time
+        try await userRef.updateData([
+            "lastAchievementSync": FieldValue.serverTimestamp()
+        ])
     }
     
-    private func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async throws -> T) async throws -> T {
-        try await withThrowingTaskGroup(of: T.self) { group in
-            group.addTask {
-                try await operation()
-            }
-            
-            group.addTask {
-                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
-                throw FirebaseError.networkError
-            }
-            
-            let result = try await group.next()!
-            group.cancelAll()
-            return result
-        }
+    private func createOrUpdateUserDocument(user: User) async throws {
+        let userId = user.uid
+        let userRef = db.collection("users").document(userId)
+        let userData: [String: Any] = [
+            "email": user.email ?? "",
+            "displayName": user.displayName ?? "",
+            "photoURL": user.photoURL?.absoluteString ?? "",
+            "lastLogin": FieldValue.serverTimestamp(),
+            "lastActive": FieldValue.serverTimestamp(),
+            "createdAt": FieldValue.serverTimestamp(),
+            "userId": userId,
+            "deviceId": generateDeviceId(),
+            "referralCode": generateReferralCode()
+        ]
+        
+        try await userRef.setData(userData, merge: true)
+        
+        // Load user data after creating/updating document
+        await loadUserData(userId: userId)
+    }
+}
+
+// MARK: - Models
+
+extension FirebaseManager {
+    struct LeaderboardEntry: Identifiable {
+        let id = UUID()
+        let userId: String
+        let username: String
+        let score: Int
+        let level: Int
+        let timestamp: Date
+    }
+}
+
+// MARK: - Sign In With Apple Delegate
+
+private class SignInWithAppleDelegate: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
+    private let continuation: CheckedContinuation<ASAuthorization, Error>
+    
+    init(continuation: CheckedContinuation<ASAuthorization, Error>) {
+        self.continuation = continuation
     }
     
-    func saveGameProgress(_ progress: GameProgress) async throws {
-        // Verify permissions first
-        try await verifyPermissions()
-        
-        guard let userId = Auth.auth().currentUser?.uid else {
-            throw FirebaseError.notAuthenticated
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first else {
+            fatalError("No window found")
         }
-        
-        // Always cache locally first
-        self.cacheGameProgress(progress)
-        self.cachedProgress = progress
-        
-        // If offline, just cache and return
-        guard NetworkMonitor.shared.isConnected else {
-            throw FirebaseError.offlineMode
-        }
-        
-        // Check if we should save based on minimum interval
-        let now = Date()
-        if let lastSave = self.lastSaveTime,
-           now.timeIntervalSince(lastSave) < self.minimumSaveInterval {
-            return
-        }
-        
-        // Reset daily write count if it's a new day
-        if Calendar.current.isDateInToday(lastWriteCountReset) == false {
-            dailyWriteCount = 0
-            lastWriteCountReset = now
-        }
-        
-        // Check if we've exceeded daily write limit
-        guard dailyWriteCount < maxDailyWrites else {
-            throw FirebaseError.retryLimitExceeded
-        }
-        
-        var attempt = 0
-        while attempt < self.maxRetries {
-            do {
-                return try await withTimeout(seconds: 10) {
-                    let db = Firestore.firestore()
-                    
-                    // Create a copy of progressData without the server timestamp for size checking
-                    let sizeCheckData: [String: Any] = [
-                        "score": progress.score,
-                        "level": progress.level,
-                        "blocksPlaced": progress.blocksPlaced,
-                        "linesCleared": progress.linesCleared,
-                        "gamesCompleted": progress.gamesCompleted,
-                        "perfectLevels": progress.perfectLevels,
-                        "totalPlayTime": progress.totalPlayTime,
-                        "highScore": progress.highScore,
-                        "highestLevel": progress.highestLevel,
-                        "lastUpdated": Date().timeIntervalSince1970
-                    ]
-                    
-                    // Check document size using the regular timestamp version
-                    let dataSize = try JSONSerialization.data(withJSONObject: sizeCheckData).count
-                    guard dataSize <= self.maxDocumentSize else {
-                        throw FirebaseError.invalidData
-                    }
-                    
-                    // Create the actual Firestore data with server timestamp
-                    let progressData: [String: Any] = [
-                        "score": progress.score,
-                        "level": progress.level,
-                        "blocksPlaced": progress.blocksPlaced,
-                        "linesCleared": progress.linesCleared,
-                        "gamesCompleted": progress.gamesCompleted,
-                        "perfectLevels": progress.perfectLevels,
-                        "totalPlayTime": progress.totalPlayTime,
-                        "highScore": progress.highScore,
-                        "highestLevel": progress.highestLevel,
-                        "lastUpdated": FieldValue.serverTimestamp()
-                    ]
-                    
-                    // Update Firestore
-                    try await db.collection("users").document(userId).setData(progressData, merge: true)
-                    
-                    // Update write count
-                    self.dailyWriteCount += 1
-                    
-                    // Update local cache
-                    self.lastSaveTime = now
-                    self.userDefaults.set(now, forKey: self.lastSaveTimeKey)
-                }
-            } catch {
-                self.lastError = error
-                
-                if !(error is URLError) && !(error is FirebaseError) {
-                    throw error
-                }
-                
-                if attempt < self.maxRetries - 1 {
-                    try await Task.sleep(nanoseconds: UInt64(self.retryDelay * Double(attempt) * 1_000_000_000))
-                }
-                attempt += 1
-            }
-        }
-        
-        throw self.lastError ?? FirebaseError.retryLimitExceeded
+        return window
     }
     
-    func loadGameProgress() async throws -> GameProgress {
-        // Try to get from cache first
-        if let cached = getCachedGameProgress() {
-            return cached
-        }
-        
-        guard let userId = Auth.auth().currentUser?.uid else {
-            throw FirebaseError.notAuthenticated
-        }
-        
-        // If offline, return cached data or throw error
-        guard NetworkMonitor.shared.isConnected else {
-            if let cached = getCachedGameProgress() {
-                return cached
-            }
-            throw FirebaseError.offlineMode
-        }
-        
-        var attempt = 0
-        while attempt < maxRetries {
-            do {
-                return try await withTimeout(seconds: 10) {
-                    let db = Firestore.firestore()
-                    let document = try await db.collection("users").document(userId).getDocument()
-                    
-                    guard let data = document.data() else {
-                        throw FirebaseError.invalidData
-                    }
-                    
-                    let progress = GameProgress(
-                        score: data["score"] as? Int ?? 0,
-                        level: data["level"] as? Int ?? 1,
-                        blocksPlaced: data["blocksPlaced"] as? Int ?? 0,
-                        linesCleared: data["linesCleared"] as? Int ?? 0,
-                        gamesCompleted: data["gamesCompleted"] as? Int ?? 0,
-                        perfectLevels: data["perfectLevels"] as? Int ?? 0,
-                        totalPlayTime: data["totalPlayTime"] as? TimeInterval ?? 0,
-                        highScore: data["highScore"] as? Int ?? data["score"] as? Int ?? 0,
-                        highestLevel: data["highestLevel"] as? Int ?? data["level"] as? Int ?? 1
-                    )
-                    
-                    // Cache the progress
-                    self.cacheGameProgress(progress)
-                    self.cachedProgress = progress
-                    
-                    return progress
-                }
-            } catch {
-                lastError = error
-                
-                if !(error is URLError) && !(error is FirebaseError) {
-                    throw error
-                }
-                
-                if attempt < maxRetries - 1 {
-                    try await Task.sleep(nanoseconds: UInt64(retryDelay * Double(attempt) * 1_000_000_000))
-                }
-                attempt += 1
-            }
-        }
-        
-        // If all retries failed, try to return cached data
-        if let cached = getCachedGameProgress() {
-            return cached
-        }
-        
-        throw lastError ?? FirebaseError.retryLimitExceeded
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        continuation.resume(returning: authorization)
     }
     
-    func getLeaderboard() async throws -> [LeaderboardEntry] {
-        // Try to get from cache first
-        if let cached = getCachedLeaderboard() {
-            return cached
-        }
-        
-        return try await retryOperation {
-            let snapshot = try await self.db.collection("leaderboard")
-                .order(by: "score", descending: true)
-                .limit(to: 100)
-                .getDocuments()
-            
-            let leaderboard = snapshot.documents.compactMap { document -> LeaderboardEntry? in
-                guard let username = document.data()["username"] as? String,
-                      let score = document.data()["score"] as? Int else {
-                    return nil
-                }
-                return LeaderboardEntry(
-                    id: document.documentID,
-                    username: username,
-                    score: score,
-                    timestamp: (document.data()["timestamp"] as? Timestamp)?.dateValue() ?? Date()
-                )
-            }
-            
-            // Cache the leaderboard
-            self.cacheLeaderboard(leaderboard)
-            
-            return leaderboard
-        }
-    }
-    
-    func cleanup() {
-        cancellables.removeAll()
-        NetworkMonitor.shared.stopMonitoring()
-        MemorySystem.shared.clearAllCaches()
-        
-        // Cleanup online users tracking
-        if let userId = Auth.auth().currentUser?.uid {
-            onlineUsersRef?.child(userId).removeValue()
-        }
-        if let observer = onlineUsersObserver {
-            onlineUsersRef?.removeObserver(withHandle: observer)
-        }
-        
-        // Cleanup daily stats tracking
-        if let observer = dailyStatsObserver {
-            dailyStatsRef?.removeObserver(withHandle: observer)
-        }
-    }
-    
-    // Helper method for retrying operations
-    private func retryOperation<T>(_ operation: @escaping () async throws -> T) async throws -> T {
-        var lastError: Error?
-        
-        for attempt in 1...maxRetries {
-            do {
-                // Check network connectivity
-                guard NetworkMonitor.shared.isConnected else {
-                    throw FirebaseError.offlineMode
-                }
-                
-                return try await operation()
-            } catch {
-                lastError = error
-                
-                // Don't retry if it's not a network-related error
-                if !(error is URLError) && !(error is FirebaseError) {
-                    throw error
-                }
-                
-                // Wait before retrying
-                if attempt < maxRetries {
-                    try await Task.sleep(nanoseconds: UInt64(retryDelay * Double(attempt) * 1_000_000_000))
-                }
-            }
-        }
-        
-        throw lastError ?? FirebaseError.retryLimitExceeded
-    }
-    
-    // Initialize FirebaseManager
-    init() {
-        // Load last save time from UserDefaults
-        lastSaveTime = userDefaults.object(forKey: lastSaveTimeKey) as? Date
-        
-        // Setup Firebase first
-        setupFirebase()
-        
-        // Then setup other features
-        setupOnlineUsersTracking()
-        setupDailyStatsTracking()
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        continuation.resume(throwing: error)
     }
 } 

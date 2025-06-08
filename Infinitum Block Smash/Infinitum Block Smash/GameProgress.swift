@@ -8,29 +8,28 @@ struct GameProgress: Codable {
     let linesCleared: Int
     let gamesCompleted: Int
     let perfectLevels: Int
-    let totalPlayTime: TimeInterval
+    let totalPlayTime: Double
     let highScore: Int
     let highestLevel: Int
-    let grid: [[BlockColor?]]
+    let grid: [[String]]
     let tray: [Block]
     let lastSaveTime: Date
     
     init(
-        version: Int = GameDataVersion.currentVersion,
         score: Int = 0,
         level: Int = 1,
         blocksPlaced: Int = 0,
         linesCleared: Int = 0,
         gamesCompleted: Int = 0,
         perfectLevels: Int = 0,
-        totalPlayTime: TimeInterval = 0,
+        totalPlayTime: Double = 0,
         highScore: Int = 0,
         highestLevel: Int = 1,
-        grid: [[BlockColor?]] = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize),
+        grid: Any = Array(repeating: Array(repeating: "nil", count: GameConstants.gridSize), count: GameConstants.gridSize),
         tray: [Block] = [],
         lastSaveTime: Date = Date()
     ) {
-        self.version = version
+        self.version = GameDataVersion.currentVersion
         self.score = score
         self.level = level
         self.blocksPlaced = blocksPlaced
@@ -40,7 +39,20 @@ struct GameProgress: Codable {
         self.totalPlayTime = totalPlayTime
         self.highScore = highScore
         self.highestLevel = highestLevel
-        self.grid = grid
+        
+        // Handle both grid formats
+        if let stringGrid = grid as? [[String]] {
+            self.grid = stringGrid
+        } else if let blockGrid = grid as? [[BlockColor?]] {
+            self.grid = blockGrid.map { row in
+                row.map { color in
+                    color?.rawValue ?? "nil"
+                }
+            }
+        } else {
+            self.grid = Array(repeating: Array(repeating: "nil", count: GameConstants.gridSize), count: GameConstants.gridSize)
+        }
+        
         self.tray = tray
         self.lastSaveTime = lastSaveTime
     }
@@ -48,6 +60,9 @@ struct GameProgress: Codable {
     // MARK: - Dictionary Conversion
     
     var dictionary: [String: Any] {
+        // Flatten the grid into a single array of strings
+        let flattenedGrid = grid.flatMap { $0 }
+        
         return [
             "version": version,
             "score": score,
@@ -59,14 +74,15 @@ struct GameProgress: Codable {
             "totalPlayTime": totalPlayTime,
             "highScore": highScore,
             "highestLevel": highestLevel,
-            "grid": grid.map { row in row.map { $0?.rawValue ?? "nil" } },
+            "gridSize": GameConstants.gridSize,  // Store the size to reconstruct the grid
+            "gridData": flattenedGrid,  // Store as flat array
             "tray": tray.map { block in
                 [
                     "color": block.color.rawValue,
                     "shape": block.shape.rawValue
                 ]
             },
-            "lastSaveTime": lastSaveTime.timeIntervalSince1970
+            "lastSaveTime": lastSaveTime
         ]
     }
     
@@ -81,47 +97,45 @@ struct GameProgress: Codable {
               let linesCleared = dictionary["linesCleared"] as? Int,
               let gamesCompleted = dictionary["gamesCompleted"] as? Int,
               let perfectLevels = dictionary["perfectLevels"] as? Int,
-              let totalPlayTime = dictionary["totalPlayTime"] as? TimeInterval,
+              let totalPlayTime = dictionary["totalPlayTime"] as? Double,
               let highScore = dictionary["highScore"] as? Int,
               let highestLevel = dictionary["highestLevel"] as? Int,
-              let gridData = dictionary["grid"] as? [[String]],
-              let trayData = dictionary["tray"] as? [[String: String]],
-              let lastSaveTimeInterval = dictionary["lastSaveTime"] as? TimeInterval else {
+              let gridSize = dictionary["gridSize"] as? Int,
+              let gridData = dictionary["gridData"] as? [String],
+              let trayData = dictionary["tray"] as? [[String: Any]],
+              let lastSaveTime = dictionary["lastSaveTime"] as? Date else {
             return nil
         }
         
-        // Convert grid data
-        let grid = gridData.map { row in
-            row.map { colorString in
-                colorString == "nil" ? nil : BlockColor(rawValue: colorString)
-            }
-        }
+        self.version = version
+        self.score = score
+        self.level = level
+        self.blocksPlaced = blocksPlaced
+        self.linesCleared = linesCleared
+        self.gamesCompleted = gamesCompleted
+        self.perfectLevels = perfectLevels
+        self.totalPlayTime = totalPlayTime
+        self.highScore = highScore
+        self.highestLevel = highestLevel
         
-        // Convert tray data
-        let tray = trayData.compactMap { blockData -> Block? in
-            guard let colorString = blockData["color"],
-                  let shapeString = blockData["shape"],
+        // Reconstruct the grid from flat array
+        var reconstructedGrid: [[String]] = []
+        for i in 0..<gridSize {
+            let start = i * gridSize
+            let end = start + gridSize
+            reconstructedGrid.append(Array(gridData[start..<end]))
+        }
+        self.grid = reconstructedGrid
+        
+        self.tray = trayData.compactMap { blockData in
+            guard let colorString = blockData["color"] as? String,
+                  let shapeString = blockData["shape"] as? String,
                   let color = BlockColor(rawValue: colorString),
                   let shape = BlockShape(rawValue: shapeString) else {
                 return nil
             }
             return Block(color: color, shape: shape)
         }
-        
-        self.init(
-            version: version,
-            score: score,
-            level: level,
-            blocksPlaced: blocksPlaced,
-            linesCleared: linesCleared,
-            gamesCompleted: gamesCompleted,
-            perfectLevels: perfectLevels,
-            totalPlayTime: totalPlayTime,
-            highScore: highScore,
-            highestLevel: highestLevel,
-            grid: grid,
-            tray: tray,
-            lastSaveTime: Date(timeIntervalSince1970: lastSaveTimeInterval)
-        )
+        self.lastSaveTime = lastSaveTime
     }
 } 

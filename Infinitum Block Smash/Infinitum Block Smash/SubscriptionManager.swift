@@ -12,7 +12,7 @@ class SubscriptionManager: ObservableObject {
     @Published private(set) var purchasedProducts: Set<String> = []
     @Published private(set) var trialEndDate: Date = Date.distantPast
     @Published private(set) var purchasedHints: Int = 0
-    @Published private(set) var purchasedUndos: Int = 0
+    @Published var purchasedUndos: Int = 0
     
     private var updateListenerTask: Task<Void, Error>?
     private let trialUsageKey = "hasUsedTrial"
@@ -265,21 +265,23 @@ class SubscriptionManager: ObservableObject {
         }
         
         switch feature {
-        case .unlimitedUndos:
-            return purchasedProducts.contains("com.infinitum.blocksmash.elite") ||
-                   purchasedProducts.contains("com.infinitum.blocksmash.unlimitedundos")
-        case .hints:
-            return purchasedProducts.contains("com.infinitum.blocksmash.elite") ||
-                   purchasedProducts.contains("com.infinitum.blocksmash.hints")
         case .noAds:
-            return purchasedProducts.contains("com.infinitum.blocksmash.elite") ||
+            return purchasedProducts.contains("com.infinitum.blocksmash.removeads") ||
+                   purchasedProducts.contains { $0.contains("elite") }
+        case .unlimitedUndos:
+            return purchasedProducts.contains { $0.contains("elite") } ||
                    purchasedProducts.contains("com.infinitum.blocksmash.removeads")
+        case .undoPack:
+            return purchasedUndos > 0
+        case .hints:
+            return purchasedProducts.contains { $0.contains("elite") } ||
+                   purchasedProducts.contains("com.infinitum.blocksmash.hints")
         case .customTheme:
             // Check if any theme is purchased or if user has Elite subscription
             return purchasedProducts.contains { $0.starts(with: "com.infinitum.blocksmash.theme.") } ||
-                   purchasedProducts.contains("com.infinitum.blocksmash.elite")
+                   purchasedProducts.contains { $0.contains("elite") }
         case .allThemes:
-            return purchasedProducts.contains("com.infinitum.blocksmash.elite")
+            return purchasedProducts.contains { $0.contains("elite") }
         }
     }
     
@@ -533,12 +535,13 @@ class SubscriptionManager: ObservableObject {
     }
 }
 
-enum SubscriptionFeature {
-    case unlimitedUndos
-    case hints
-    case noAds
-    case customTheme
-    case allThemes
+enum SubscriptionFeature: String {
+    case noAds = "no_ads"
+    case unlimitedUndos = "unlimited_undos"
+    case undoPack = "undo_pack"
+    case hints = "hints"
+    case customTheme = "custom_theme"
+    case allThemes = "all_themes"
 }
 
 enum SubscriptionError: LocalizedError {
