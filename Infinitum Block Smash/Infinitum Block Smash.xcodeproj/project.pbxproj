@@ -374,7 +374,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Infinitum Block Smash/Infinitum Block Smash.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = AD7SJSPX55;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "Infinitum Block Smash/Info.plist";
@@ -407,7 +407,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Infinitum Block Smash/Infinitum Block Smash.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = AD7SJSPX55;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "Infinitum Block Smash/Info.plist";
