@@ -733,10 +733,14 @@ final class GameState: ObservableObject {
         var diagonalPatternsFound = Set<String>() // Track which diagonal patterns we've found
         var achievementsToUpdate: [String: Int] = [:] // Track achievements to update
         
+        // First collect all lines that need to be cleared
+        var rowsToClear: Set<Int> = []
+        var columnsToClear: Set<Int> = []
+        
         // Check rows
         for row in 0..<GameConstants.gridSize {
             if isRowFull(row) {
-                clearRow(row)
+                rowsToClear.insert(row)
                 clearedPositions.append((row, -1))  // -1 indicates entire row
                 linesClearedThisTurn += 1
                 addScore(100, at: CGPoint(x: frameSize.width/2, y: CGFloat(row) * GameConstants.blockSize))
@@ -746,11 +750,20 @@ final class GameState: ObservableObject {
         // Check columns
         for col in 0..<GameConstants.gridSize {
             if isColumnFull(col) {
-                clearColumn(col)
+                columnsToClear.insert(col)
                 clearedPositions.append((-1, col))  // -1 indicates entire column
                 linesClearedThisTurn += 1
                 addScore(100, at: CGPoint(x: CGFloat(col) * GameConstants.blockSize, y: frameSize.height/2))
             }
+        }
+        
+        // Clear all rows and columns at once
+        for row in rowsToClear {
+            clearRow(row)
+        }
+        
+        for col in columnsToClear {
+            clearColumn(col)
         }
         
         // Check for X pattern (10+ blocks in X formation)
