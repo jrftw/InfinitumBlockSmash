@@ -699,6 +699,21 @@ class AchievementsManager: ObservableObject {
         case "undo_20":
             return achievement.progress >= 20
             
+        // High score achievements
+        case "high_score":
+            return score > UserDefaults.standard.integer(forKey: "highScore")
+            
+        // Highest level achievements
+        case "highest_level":
+            return level > UserDefaults.standard.integer(forKey: "highestLevel")
+            
+        // Speed achievements
+        case "quick_clear":
+            return achievement.progress >= 1  // Will be updated by GameState
+            
+        case "speed_master":
+            return achievement.progress >= 1  // Will be updated by GameState
+            
         default:
             return false
         }

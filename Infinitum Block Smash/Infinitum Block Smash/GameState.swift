@@ -857,6 +857,24 @@ final class GameState: ObservableObject {
             print("[Chain] Chain \(currentChain)! +\(chainBonus) bonus points!")
             // Update total lines cleared
             linesCleared += linesClearedThisTurn
+            
+            // Check for quick clear achievement (within 5 seconds of game start)
+            if let startTime = gameStartTime {
+                let timeSinceStart = Date().timeIntervalSince(startTime)
+                if timeSinceStart <= 5.0 {
+                    achievementsManager.increment(id: "quick_clear")
+                }
+            }
+            
+            // Check for speed master achievement (5 lines within 30 seconds)
+            if linesClearedThisTurn >= 5 {
+                if let startTime = gameStartTime {
+                    let timeSinceStart = Date().timeIntervalSince(startTime)
+                    if timeSinceStart <= 30.0 {
+                        achievementsManager.increment(id: "speed_master")
+                    }
+                }
+            }
         } else {
             currentChain = 0
         }
@@ -951,6 +969,9 @@ final class GameState: ObservableObject {
             userDefaults.set(highScore, forKey: scoreKey)
             achievementsManager.updateAchievement(id: "high_score", value: score)
             print("[HighScore] New all-time high score: \(score)")
+            
+            // Update high score achievement
+            achievementsManager.increment(id: "high_score")
         }
         
         // Update level high score
@@ -1036,6 +1057,7 @@ final class GameState: ObservableObject {
         tray = []
         if level > userDefaults.integer(forKey: levelKey) {
             achievementsManager.updateAchievement(id: "highest_level", value: level)
+            achievementsManager.increment(id: "highest_level")
         }
         let availableShapes = BlockShape.availableShapes(for: level)
         print("[Level] Level \(level) - Available shapes: \(availableShapes.map { String(describing: $0) }.joined(separator: ", "))")
