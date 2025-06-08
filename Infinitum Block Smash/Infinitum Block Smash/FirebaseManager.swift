@@ -679,6 +679,102 @@ class FirebaseManager: ObservableObject {
         // Load user data after creating/updating document
         await loadUserData(userId: userId)
     }
+    
+    // MARK: - Analytics Methods
+    
+    func saveAnalyticsData(_ data: [String: Any]) async throws {
+        guard let userId = currentUser?.uid else { return }
+        
+        let analyticsRef = db.collection("users").document(userId).collection("analytics")
+        
+        // Save current analytics data
+        try await analyticsRef.document("current").setData(data)
+        
+        // Save historical data point
+        try await analyticsRef.addDocument(data: [
+            "data": data,
+            "timestamp": FieldValue.serverTimestamp()
+        ])
+    }
+    
+    func loadAnalyticsData(timeRange: TimeRange) async throws -> [String: Any] {
+        guard let userId = currentUser?.uid else { return [:] }
+        
+        let calendar = Calendar.current
+        let now = Date()
+        let startDate: Date
+        
+        switch timeRange {
+        case .day:
+            startDate = calendar.date(byAdding: .day, value: -1, to: now) ?? now
+        case .week:
+            startDate = calendar.date(byAdding: .day, value: -7, to: now) ?? now
+        case .month:
+            startDate = calendar.date(byAdding: .day, value: -30, to: now) ?? now
+        case .allTime:
+            // Use a reasonable past date instead of Date.distantPast
+            startDate = calendar.date(byAdding: .year, value: -1, to: now) ?? now
+        }
+        
+        do {
+            // First check if we have permission to read
+            let userDoc = try await db.collection("users").document(userId).getDocument()
+            guard userDoc.exists else {
+                throw FirebaseError.permissionDenied
+            }
+            
+            // Then try to get analytics data
+            let query = db.collection("users")
+                .document(userId)
+                .collection("analytics")
+                .whereField("timestamp", isGreaterThan: startDate)
+                .order(by: "timestamp", descending: true)
+                .limit(to: 1) // Only get the most recent data
+            
+            let snapshot = try await query.getDocuments()
+            return snapshot.documents.first?.data() ?? [:]
+        } catch let error as NSError {
+            if error.domain == FirestoreErrorDomain {
+                switch error.code {
+                case 7: // Permission denied
+                    throw FirebaseError.permissionDenied
+                case 13: // Resource exhausted
+                    throw FirebaseError.retryLimitExceeded
+                default:
+                    throw error
+                }
+            }
+            throw error
+        }
+    }
+    
+    func getAnalyticsHistory(timeRange: TimeRange) async throws -> [[String: Any]] {
+        guard let userId = currentUser?.uid else { return [] }
+        
+        let calendar = Calendar.current
+        let now = Date()
+        let startDate: Date
+        
+        switch timeRange {
+        case .day:
+            startDate = calendar.date(byAdding: .day, value: -1, to: now) ?? now
+        case .week:
+            startDate = calendar.date(byAdding: .day, value: -7, to: now) ?? now
+        case .month:
+            startDate = calendar.date(byAdding: .day, value: -30, to: now) ?? now
+        case .allTime:
+            startDate = Date.distantPast
+        }
+        
+        let query = db.collection("users")
+            .document(userId)
+            .collection("analytics")
+            .whereField("timestamp", isGreaterThan: startDate)
+            .order(by: "timestamp", descending: true)
+        
+        let snapshot = try await query.getDocuments()
+        return snapshot.documents.compactMap { $0.data()["data"] as? [String: Any] }
+    }
 }
 
 // MARK: - Models

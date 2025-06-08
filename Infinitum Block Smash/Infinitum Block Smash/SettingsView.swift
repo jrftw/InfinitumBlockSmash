@@ -325,6 +325,10 @@ struct SettingsView: View {
     @State private var showingStore = false
     @AppStorage("forceUpdateEnabled") private var forceUpdateEnabled = false
     @AppStorage("autoSyncEnabled") private var autoSyncEnabled = true
+    @State private var showingAnalytics = false
+    @AppStorage("showStatsOverlay") private var showStatsOverlay = false
+    @AppStorage("showFPS") private var showFPS = false
+    @AppStorage("showMemory") private var showMemory = false
     
     private let difficulties = ["easy", "normal", "hard", "expert"]
     private let themes = ["light", "dark", "auto"]
@@ -468,6 +472,9 @@ struct SettingsView: View {
                 Section(header: Text("Privacy")) {
                     Toggle("Allow anonymous usage analytics", isOn: $allowAnalytics)
                     Toggle("Allow data sharing for app features", isOn: $allowDataSharing)
+                    Button("View Analytics Dashboard") {
+                        showingAnalytics = true
+                    }
                 }
                 
                 Section {
@@ -539,6 +546,11 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showingStore) {
                 StoreView()
+            }
+            .sheet(isPresented: $showingAnalytics) {
+                NavigationView {
+                    AnalyticsDashboardView()
+                }
             }
         }
     }

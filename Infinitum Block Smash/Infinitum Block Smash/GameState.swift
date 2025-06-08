@@ -136,6 +136,9 @@ final class GameState: ObservableObject {
     // Add constant for ad-based undos
     private let undosPerAd = 1
     
+    // Add analytics manager
+    private let analyticsManager = AnalyticsManager.shared
+    
     // MARK: - Initialization
     init() {
         // Run data migration if needed
@@ -881,6 +884,11 @@ final class GameState: ObservableObject {
             achievementsManager.updateAchievement(id: "perfect_levels_5", value: perfectLevels)
         }
         
+        // Track line clear event
+        if linesClearedThisTurn > 0 {
+            analyticsManager.trackEvent(.lineCleared(count: linesClearedThisTurn))
+        }
+        
         delegate?.gameStateDidUpdate()
     }
     
@@ -926,6 +934,9 @@ final class GameState: ObservableObject {
         let oldScore = score
         score += points
         print("[Score] Added \(points) points (from \(oldScore) to \(score))")
+        
+        // Track score event
+        analyticsManager.trackEvent(.levelComplete(level: level, score: score))
         
         // Show score animation if position is provided
         if let position = position {
@@ -1098,6 +1109,9 @@ final class GameState: ObservableObject {
             }
         }
         #endif
+        
+        // Track game end
+        analyticsManager.trackEvent(.sessionEnd)
     }
     
     private func hasValidMoves() -> Bool {
@@ -1144,6 +1158,10 @@ final class GameState: ObservableObject {
                         if group.count >= 30 {
                             achievementsManager.increment(id: "group_30")
                         }
+                        
+                        // Track pattern formation
+                        let patternKey = "group_\(group.count)"
+                        analyticsManager.trackEvent(.patternFormed(pattern: patternKey, score: 500))
                     }
                 }
             }
@@ -1791,6 +1809,9 @@ final class GameState: ObservableObject {
         refillTray()
         levelComplete = false
         isPerfectLevel = true
+        
+        // Track game start
+        analyticsManager.trackEvent(.levelStart(level: level))
     }
     
     private func cleanupMemory() async {
@@ -1913,6 +1934,27 @@ final class GameState: ObservableObject {
         
         // Add to undo stack
         addMoveToUndoStack(move)
+        
+        // Track block placement
+        analyticsManager.trackEvent(.blockPlaced(color: block.color, position: (position.row, position.col)))
+    }
+    
+    func startGame() {
+        // ... existing code ...
+        
+        // Track game start
+        analyticsManager.trackEvent(.levelStart(level: level))
+        
+        // ... rest of existing code ...
+    }
+    
+    func endGame() {
+        // ... existing code ...
+        
+        // Track game end
+        analyticsManager.trackEvent(.sessionEnd)
+        
+        // ... rest of existing code ...
     }
 }
 

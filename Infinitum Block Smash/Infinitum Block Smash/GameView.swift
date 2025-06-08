@@ -379,7 +379,7 @@ struct TutorialModal: View {
 
 private struct StatsOverlayView: View {
     @ObservedObject var gameState: GameState
-    @StateObject private var fpsManager = FPSManager.shared
+    @StateObject private var performanceMonitor = PerformanceMonitor.shared
     @AppStorage("showFPS") private var showFPS = false
     @AppStorage("showMemory") private var showMemory = false
     
@@ -389,7 +389,7 @@ private struct StatsOverlayView: View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 if showFPS {
-                    Text("FPS: \(fpsManager.currentFPS)")
+                    Text("FPS: \(Int(performanceMonitor.currentFPS))")
                         .font(.system(size: 12, weight: .medium, design: .monospaced))
                         .foregroundColor(.white)
                         .padding(.horizontal, 8)
@@ -399,9 +399,7 @@ private struct StatsOverlayView: View {
                 }
                 
                 if showMemory {
-                    let memory = MemorySystem.shared.getMemoryUsage()
-                    let percentage = (memory.used / memory.total) * 100
-                    Text("Memory: \(String(format: "%.1f", percentage))%")
+                    Text("Memory: \(String(format: "%.1f", performanceMonitor.memoryUsage))MB")
                         .font(.system(size: 12, weight: .medium, design: .monospaced))
                         .foregroundColor(.white)
                         .padding(.horizontal, 8)
@@ -414,6 +412,6 @@ private struct StatsOverlayView: View {
         }
         .padding(.horizontal, 16)
         .padding(.top, 4)
-        .allowsHitTesting(false) // Prevent the overlay from interfering with game interactions
+        .allowsHitTesting(false)
     }
 }
