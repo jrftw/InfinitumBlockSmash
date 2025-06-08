@@ -382,16 +382,14 @@ private struct StatsOverlayView: View {
     @StateObject private var fpsManager = FPSManager.shared
     @AppStorage("showFPS") private var showFPS = false
     @AppStorage("showMemory") private var showMemory = false
-    @State private var currentFPS: Int = 0
-    @State private var memoryUsage: Double = 0
     
-    let timer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+    let timer = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
     
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 if showFPS {
-                    Text("FPS: \(currentFPS)")
+                    Text("FPS: \(fpsManager.currentFPS)")
                         .font(.system(size: 12, weight: .medium, design: .monospaced))
                         .foregroundColor(.white)
                         .padding(.horizontal, 8)
@@ -401,7 +399,9 @@ private struct StatsOverlayView: View {
                 }
                 
                 if showMemory {
-                    Text("Memory: \(Int(memoryUsage * 100))%")
+                    let memory = MemorySystem.shared.getMemoryUsage()
+                    let percentage = (memory.used / memory.total) * 100
+                    Text("Memory: \(String(format: "%.1f", percentage))%")
                         .font(.system(size: 12, weight: .medium, design: .monospaced))
                         .foregroundColor(.white)
                         .padding(.horizontal, 8)
@@ -415,10 +415,5 @@ private struct StatsOverlayView: View {
         .padding(.horizontal, 16)
         .padding(.top, 4)
         .allowsHitTesting(false) // Prevent the overlay from interfering with game interactions
-        .onReceive(timer) { _ in
-            currentFPS = fpsManager.getDisplayFPS(for: fpsManager.targetFPS)
-            let memory = MemorySystem.shared.getMemoryUsage()
-            memoryUsage = memory.used / memory.total
-        }
     }
 }

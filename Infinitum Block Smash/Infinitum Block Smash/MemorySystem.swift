@@ -67,22 +67,28 @@ final class MemorySystem {
     // MARK: — Memory Monitoring
     func getMemoryUsage() -> (used: Double, total: Double) {
         var info = mach_task_basic_info()
-        var count = mach_msg_type_number_t(
-            MemoryLayout.size(ofValue: info) / MemoryLayout<natural_t>.size
-        )
-        let kr: kern_return_t = withUnsafeMutablePointer(to: &info) {
-            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+        var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size / MemoryLayout<natural_t>.size)
+        
+        let kr: kern_return_t = withUnsafeMutablePointer(to: &info) { infoPtr in
+            infoPtr.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { intPtr in
                 task_info(
                     mach_task_self_,
                     task_flavor_t(MACH_TASK_BASIC_INFO),
-                    $0,
+                    intPtr,
                     &count
                 )
             }
         }
-        guard kr == KERN_SUCCESS else { return (0, 0) }
-        let used  = Double(info.resident_size) / 1024 / 1024
-        let total = Double(ProcessInfo.processInfo.physicalMemory) / 1024 / 1024
+        
+        if kr == KERN_SUCCESS {
+            let used = Double(info.resident_size) / 1024.0 / 1024.0  // Convert to MB
+            let total = Double(ProcessInfo.processInfo.physicalMemory) / 1024.0 / 1024.0  // Convert to MB
+            return (used, total)
+        }
+        
+        // Fallback method if task_info fails
+        let total = Double(ProcessInfo.processInfo.physicalMemory) / 1024.0 / 1024.0
+        let used = total * 0.5  // Estimate 50% usage as fallback
         return (used, total)
     }
     

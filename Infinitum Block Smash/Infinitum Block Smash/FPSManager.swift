@@ -15,6 +15,12 @@ class FPSManager: ObservableObject {
     // Current target FPS
     @Published private(set) var targetFPS: Int
     
+    // Real-time FPS tracking
+    private var frameTimes: [CFTimeInterval] = []
+    private let maxFrameTimeHistory = 60 // Keep last 60 frames for calculation
+    private var lastFrameTime: CFTimeInterval = 0
+    @Published private(set) var currentFPS: Int = 0
+    
     private init() {
         // Get device's maximum refresh rate
         let maxRefreshRate = UIScreen.main.maximumFramesPerSecond
@@ -72,6 +78,30 @@ class FPSManager: ObservableObject {
             return "Unlimited"
         }
         return "\(fps) FPS"
+    }
+    
+    // MARK: - Real-time FPS Tracking
+    
+    func updateFrameTime() {
+        let currentTime = CACurrentMediaTime()
+        
+        if lastFrameTime > 0 {
+            let frameTime = currentTime - lastFrameTime
+            frameTimes.append(frameTime)
+            
+            // Keep only the last N frame times
+            if frameTimes.count > maxFrameTimeHistory {
+                frameTimes.removeFirst()
+            }
+            
+            // Calculate average FPS
+            if !frameTimes.isEmpty {
+                let averageFrameTime = frameTimes.reduce(0, +) / Double(frameTimes.count)
+                currentFPS = Int(round(1.0 / averageFrameTime))
+            }
+        }
+        
+        lastFrameTime = currentTime
     }
 }
 

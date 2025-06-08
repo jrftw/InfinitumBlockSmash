@@ -889,7 +889,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     override func update(_ currentTime: TimeInterval) {
-        super.update(currentTime)
+        // Update FPS tracking
+        FPSManager.shared.updateFrameTime()
+        
+        // Update game state
+        if let gameState = gameState {
+            Task {
+                await gameState.update()
+            }
+        }
         
         // Perform periodic memory cleanup
         if currentTime - lastMemoryCleanup > memoryCleanupInterval {
