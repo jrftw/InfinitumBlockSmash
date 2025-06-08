@@ -472,7 +472,7 @@
 	<key>UIRequiresPersistentWiFi</key>
 	<false/>
 	<key>UIStatusBarHidden</key>
-	<false/>
+	<true/>
 	<key>UIStatusBarStyle</key>
 	<string>UIStatusBarStyleDefault</string>
 	<key>UISupportedInterfaceOrientations</key>
@@ -490,5 +490,9 @@
 	<string>development</string>
 	<key>GKGameCenterEnabled</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>We need camera access to allow you to take photos for your profile picture and share your achievements.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>We need photo library access to let you choose profile pictures and share your game achievements.</string>
 </dict>
 </plist>
