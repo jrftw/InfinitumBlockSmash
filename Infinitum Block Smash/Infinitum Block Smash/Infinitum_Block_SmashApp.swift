@@ -108,31 +108,48 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     }
     
     private func requestTrackingAuthorization() {
+        print("[ATT] Starting tracking authorization request")
+        
         // Check if we've already requested tracking authorization
         let hasRequestedTracking = UserDefaults.standard.bool(forKey: "hasRequestedTracking")
+        print("[ATT] Has requested tracking before: \(hasRequestedTracking)")
         
         if !hasRequestedTracking {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                if #available(iOS 14, *) {
-                    ATTrackingManager.requestTrackingAuthorization { status in
-                        DispatchQueue.main.async {
-                            // Save the tracking status
-                            UserDefaults.standard.set(true, forKey: "hasRequestedTracking")
-                            UserDefaults.standard.set(status == .authorized, forKey: "trackingAuthorized")
-                            
-                            // Update ad-related settings based on tracking status
-                            if status == .authorized {
-                                // Enable personalized ads
-                                UserDefaults.standard.set(true, forKey: "allowAnalytics")
-                                UserDefaults.standard.set(true, forKey: "allowDataSharing")
-                            } else {
-                                // Disable personalized ads
-                                UserDefaults.standard.set(false, forKey: "allowAnalytics")
-                                UserDefaults.standard.set(false, forKey: "allowDataSharing")
+            // Ensure we're on the main thread and the app is active
+            DispatchQueue.main.async {
+                if UIApplication.shared.applicationState == .active {
+                    print("[ATT] App is active, requesting authorization")
+                    if #available(iOS 14, *) {
+                        ATTrackingManager.requestTrackingAuthorization { status in
+                            DispatchQueue.main.async {
+                                print("[ATT] Authorization status received: \(status.rawValue)")
+                                
+                                // Save the tracking status
+                                UserDefaults.standard.set(true, forKey: "hasRequestedTracking")
+                                UserDefaults.standard.set(status == .authorized, forKey: "trackingAuthorized")
+                                
+                                // Update ad-related settings based on tracking status
+                                if status == .authorized {
+                                    // Enable personalized ads
+                                    UserDefaults.standard.set(true, forKey: "allowAnalytics")
+                                    UserDefaults.standard.set(true, forKey: "allowDataSharing")
+                                    print("[ATT] Tracking authorized, enabling personalized ads")
+                                } else {
+                                    // Disable personalized ads
+                                    UserDefaults.standard.set(false, forKey: "allowAnalytics")
+                                    UserDefaults.standard.set(false, forKey: "allowDataSharing")
+                                    print("[ATT] Tracking not authorized, disabling personalized ads")
+                                }
                             }
-                            
-                            print("ATT status: \(status.rawValue)")
                         }
+                    } else {
+                        print("[ATT] iOS version below 14, skipping tracking request")
+                    }
+                } else {
+                    print("[ATT] App not active, will retry when app becomes active")
+                    // Schedule the request for when the app becomes active
+                    NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
+                        self.requestTrackingAuthorization()
                     }
                 }
             }

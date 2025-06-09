@@ -808,8 +808,8 @@ class FirebaseManager: ObservableObject {
             UserDefaults.standard.synchronize()
         }
         
-        // Sync achievements
-        try await syncAchievements()
+        // Sync achievements with the current user ID
+        try await syncAchievements(userId: userId)
     }
     
     private func getCachedGameProgress() -> GameProgress? {
@@ -820,11 +820,7 @@ class FirebaseManager: ObservableObject {
         cachedProgress = progress
     }
     
-    private func syncAchievements() async throws {
-        guard let userId = Auth.auth().currentUser?.uid else {
-            throw FirebaseError.notAuthenticated
-        }
-        
+    private func syncAchievements(userId: String) async throws {
         try validateUserId(userId)
         
         let userRef = db.collection("users").document(userId)
