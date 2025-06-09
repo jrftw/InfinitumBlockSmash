@@ -579,6 +579,66 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
     }
     
+    private func createLineHighlight(for row: Int, isRow: Bool, color: SKColor, blockSize: CGFloat) -> SKShapeNode {
+        let gridSize = GameConstants.gridSize
+        let totalSize = CGFloat(gridSize) * blockSize
+        
+        let highlight: SKShapeNode
+        if isRow {
+            highlight = SKShapeNode(rectOf: CGSize(width: totalSize, height: blockSize), cornerRadius: blockSize * 0.18)
+            highlight.position = CGPoint(
+                x: 0,
+                y: CGFloat(row) * blockSize - totalSize / 2 + blockSize / 2
+            )
+        } else {
+            highlight = SKShapeNode(rectOf: CGSize(width: blockSize, height: totalSize), cornerRadius: blockSize * 0.18)
+            highlight.position = CGPoint(
+                x: CGFloat(row) * blockSize - totalSize / 2 + blockSize / 2,
+                y: 0
+            )
+        }
+        
+        // Create gradient fill
+        let colors = [color.withAlphaComponent(0.8).cgColor, color.withAlphaComponent(0.4).cgColor]
+        let locations: [CGFloat] = [0.0, 1.0]
+        if let gradientImage = createGradientImage(size: highlight.frame.size, colors: colors, locations: locations) {
+            highlight.fillTexture = SKTexture(image: gradientImage)
+            highlight.fillColor = .white
+        } else {
+            highlight.fillColor = color.withAlphaComponent(0.6)
+        }
+        
+        // Add glow effect
+        highlight.strokeColor = .white
+        highlight.lineWidth = 2
+        highlight.glowWidth = 2
+        
+        // Add shine effect
+        let shineNode = SKShapeNode(rectOf: CGSize(width: blockSize * 0.3, height: blockSize * 0.3))
+        shineNode.fillColor = .white
+        shineNode.alpha = 0.3
+        shineNode.position = CGPoint(x: -blockSize * 0.25, y: blockSize * 0.25)
+        shineNode.zRotation = .pi / 4
+        highlight.addChild(shineNode)
+        
+        highlight.zPosition = 10
+        
+        // Add pulsing animation
+        let pulse = SKAction.sequence([
+            SKAction.group([
+                SKAction.fadeAlpha(to: 0.4, duration: 0.5),
+                SKAction.scale(to: 0.95, duration: 0.5)
+            ]),
+            SKAction.group([
+                SKAction.fadeAlpha(to: 0.8, duration: 0.5),
+                SKAction.scale(to: 1.05, duration: 0.5)
+            ])
+        ])
+        highlight.run(SKAction.repeatForever(pulse))
+        
+        return highlight
+    }
+
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = touches.first,
               let dragNode = dragNode,
@@ -587,6 +647,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let touchPoint = touch.location(in: self)
         let gridPoint = convertToGridCoordinates(touchPoint)
         
+        print("[Preview] Touch at screen: \(touchPoint), grid: \(gridPoint)")
+        
         // Record input event for latency tracking
         PerformanceMonitor.shared.recordInputEvent()
         
@@ -594,15 +656,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let blockDragOffset = UserDefaults.standard.double(forKey: "blockDragOffset")
         dragNode.position = CGPoint(x: touchPoint.x, y: touchPoint.y + GameConstants.blockSize * blockDragOffset)
         
-        // Remove any existing preview
+        // Remove any existing preview and highlights
         previewNode?.removeFromParent()
         previewNode = nil
         
         // Only show preview if placement is valid
         if gameState.canPlaceBlock(draggingBlock, at: gridPoint) {
+            print("[Preview] Creating preview at grid position: \(gridPoint)")
+            
             // Create preview node for the entire shape
             let preview = SKNode()
-            preview.zPosition = 1 // Set preview z-position just above grid
+            preview.zPosition = 5 // Set preview z-position above grid but below highlights
             
             // Create preview for each cell in the shape at BASE size
             for (dx, dy) in draggingBlock.shape.cells {
@@ -616,20 +680,50 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                     y: CGFloat(dy) * GameConstants.blockSize
                 )
                 preview.addChild(cellNode)
+                print("[Preview] Added preview cell at relative position: (\(dx), \(dy))")
             }
+            
             // Calculate the grid's total size (BASE size)
             let totalWidth = CGFloat(GameConstants.gridSize) * GameConstants.blockSize
             let totalHeight = CGFloat(GameConstants.gridSize) * GameConstants.blockSize
+            
             // Position the preview at the grid point (BASE size)
             preview.position = CGPoint(
                 x: -totalWidth / 2 + CGFloat(gridPoint.x) * GameConstants.blockSize + GameConstants.blockSize / 2,
                 y: -totalHeight / 2 + CGFloat(gridPoint.y) * GameConstants.blockSize + GameConstants.blockSize / 2
             )
-            // DO NOT scale the preview, just add to gridNode (which is already scaled)
+            
+            // Check which lines would be cleared
+            let (rowsToClear, columnsToClear) = gameState.wouldClearLines(block: draggingBlock, at: gridPoint)
+            
+            print("[Preview] Creating highlights for \(rowsToClear.count) rows and \(columnsToClear.count) columns")
+            
+            // Create highlights for rows and columns that would be cleared
+            let highlightColor = SKColor.from(draggingBlock.color.color)
+            
+            // Create a separate container for highlights
+            let highlightContainer = SKNode()
+            highlightContainer.zPosition = 10 // Ensure highlights are above everything else
+            
+            for row in rowsToClear {
+                let highlight = createLineHighlight(for: row, isRow: true, color: highlightColor, blockSize: GameConstants.blockSize)
+                highlightContainer.addChild(highlight)
+                print("[Preview] Added row highlight at row: \(row)")
+            }
+            
+            for col in columnsToClear {
+                let highlight = createLineHighlight(for: col, isRow: false, color: highlightColor, blockSize: GameConstants.blockSize)
+                highlightContainer.addChild(highlight)
+                print("[Preview] Added column highlight at column: \(col)")
+            }
+            
+            // Add both preview and highlights to gridNode
             gridNode.addChild(preview)
+            gridNode.addChild(highlightContainer)
             previewNode = preview
             dragNode.alpha = 0.7
         } else {
+            print("[Preview] Invalid placement at grid position: \(gridPoint)")
             dragNode.alpha = 1.0
         }
     }
@@ -671,6 +765,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Clean up
         dragNode.removeFromParent()
         previewNode?.removeFromParent()
+        // Remove any highlight containers
+        gridNode.children.forEach { node in
+            if node.zPosition == 10 { // Highlight container z-position
+                node.removeFromParent()
+            }
+        }
         self.dragNode = nil
         self.draggingBlock = nil
         self.previewNode = nil

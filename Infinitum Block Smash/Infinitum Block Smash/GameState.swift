@@ -2225,6 +2225,69 @@ final class GameState: ObservableObject {
         
         // ... rest of existing code ...
     }
+
+    func wouldClearLines(block: Block, at position: CGPoint) -> (rows: Set<Int>, columns: Set<Int>) {
+        let row = Int(position.y)
+        let col = Int(position.x)
+        
+        print("[LineClear] Checking lines for block at position: (\(col), \(row))")
+        
+        // Check if position is within bounds
+        guard row >= 0 && row < GameConstants.gridSize && col >= 0 && col < GameConstants.gridSize else {
+            print("[LineClear] Position out of bounds: (\(col), \(row))")
+            return (Set<Int>(), Set<Int>())
+        }
+        
+        // Create a temporary grid to simulate the placement
+        var tempGrid = grid
+        
+        // Place the block in the temporary grid
+        for (dx, dy) in block.shape.cells {
+            let x = col + dx
+            let y = row + dy
+            if x >= 0 && x < GameConstants.gridSize && y >= 0 && y < GameConstants.gridSize {
+                tempGrid[y][x] = block.color
+                print("[LineClear] Placed block cell at: (\(x), \(y))")
+            }
+        }
+        
+        // Check for full rows and columns
+        var rowsToClear = Set<Int>()
+        var columnsToClear = Set<Int>()
+        
+        // Check rows
+        for y in 0..<GameConstants.gridSize {
+            var isRowFull = true
+            for x in 0..<GameConstants.gridSize {
+                if tempGrid[y][x] == nil {
+                    isRowFull = false
+                    break
+                }
+            }
+            if isRowFull {
+                rowsToClear.insert(y)
+                print("[LineClear] Row \(y) would be cleared")
+            }
+        }
+        
+        // Check columns
+        for x in 0..<GameConstants.gridSize {
+            var isColumnFull = true
+            for y in 0..<GameConstants.gridSize {
+                if tempGrid[y][x] == nil {
+                    isColumnFull = false
+                    break
+                }
+            }
+            if isColumnFull {
+                columnsToClear.insert(x)
+                print("[LineClear] Column \(x) would be cleared")
+            }
+        }
+        
+        print("[LineClear] Found \(rowsToClear.count) rows and \(columnsToClear.count) columns to clear")
+        return (rowsToClear, columnsToClear)
+    }
 }
 
 // Deterministic seeded random generator
