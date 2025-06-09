@@ -1,11 +1,28 @@
 import Foundation
 
 struct AppVersion {
-    static let current = "1.0.3"
-    static let build = "3"
+    static let version = "1.0.3"
+    static let build = "4"
+    
+    static var fullVersion: String {
+        return "\(version) (\(build))"
+    }
+    
+    static var displayVersion: String {
+        return "Version \(version)"
+    }
+    
+    static var buildNumber: Int {
+        return Int(build) ?? 0
+    }
+    
+    static var versionNumber: String {
+        return version
+    }
     
     static let changelog: [String: [String]] = [
         "1.0.3 (Build 3)": [
+            "Add Column and Row Highlighting when about to clear",
             "Enhanced game performance and stability",
             "Improved memory management",
             "Optimized battery consumption",
@@ -153,7 +170,7 @@ struct AppVersion {
     ]
     
     static var formattedVersion: String {
-        "Version \(current) (Build \(build))"
+        "Version \(version) (Build \(build))"
     }
     
     static var copyright: String {
@@ -175,5 +192,13 @@ struct AppVersion {
         \(credits)
         \(location)
         """
+    }
+    
+    static func getChangelog(for version: String) -> [String] {
+        return changelog[version] ?? []
+    }
+    
+    static var currentChangelog: [String] {
+        return getChangelog(for: version)
     }
 } 
