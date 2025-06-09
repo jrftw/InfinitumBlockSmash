@@ -282,6 +282,11 @@ final class LeaderboardService {
                 throw LeaderboardError.updateFailed(error)
             }
         }
+        
+        // After updating scores, check if we need to update ad-free status
+        if type == .score {
+            try await updateAdFreeStatus()
+        }
     }
     
     func getLeaderboard(type: LeaderboardType, period: String) async throws -> (entries: [LeaderboardEntry], totalUsers: Int) {
@@ -359,6 +364,37 @@ final class LeaderboardService {
     
     func cleanup() {
         cancellables.removeAll()
+    }
+    
+    // Add new function to check and update ad-free status
+    func updateAdFreeStatus() async throws {
+        let snapshot = try await db.collection("classic_leaderboard")
+            .document("alltime")
+            .collection("scores")
+            .order(by: "score", descending: true)
+            .limit(to: 3)
+            .getDocuments()
+        
+        // Get all user IDs that should have ad-free status
+        let adFreeUserIds = snapshot.documents.compactMap { $0.documentID }
+        
+        // Update ad-free status for all users
+        let batch = db.batch()
+        
+        // First, remove ad-free status from all users
+        let allUsers = try await db.collection("users").getDocuments()
+        for user in allUsers.documents {
+            batch.updateData(["isAdFree": false], forDocument: user.reference)
+        }
+        
+        // Then, grant ad-free status to top 3
+        for userId in adFreeUserIds {
+            let userRef = db.collection("users").document(userId)
+            batch.updateData(["isAdFree": true], forDocument: userRef)
+        }
+        
+        try await batch.commit()
+        print("[LeaderboardService] Updated ad-free status for top 3 players")
     }
 }
 

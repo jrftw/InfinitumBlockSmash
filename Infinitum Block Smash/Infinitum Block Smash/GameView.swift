@@ -23,6 +23,7 @@ struct GameView: View {
     @AppStorage("showMemory") private var showMemory = false
     @State private var isSyncing = false
     @State private var syncError: String?
+    @StateObject private var notificationService = NotificationService.shared
     
     private enum SettingsAction {
         case resume
@@ -71,6 +72,19 @@ struct GameView: View {
                 .background(Color.black.opacity(0.7))
                 .cornerRadius(10)
             }
+            
+            // Add high score banner
+            if notificationService.showHighScoreBanner,
+               let notification = notificationService.currentHighScoreNotification {
+                VStack {
+                    HighScoreBannerView(
+                        notification: notification,
+                        isShowing: $notificationService.showHighScoreBanner
+                    )
+                    Spacer()
+                }
+                .padding(.top, 50)
+            }
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView(gameState: gameState, showingTutorial: $showingTutorial)
@@ -90,6 +104,9 @@ struct GameView: View {
             Task {
                 await syncGameData()
             }
+            
+            // Request notification permission when game view appears
+            notificationService.requestNotificationPermission()
         }
         .onChange(of: gameState.levelComplete) { isComplete in
             if isComplete {
