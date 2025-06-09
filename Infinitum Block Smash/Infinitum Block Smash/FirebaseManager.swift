@@ -567,32 +567,65 @@ class FirebaseManager: ObservableObject {
     // MARK: - Game Progress Methods
     
     func loadGameProgress() async throws -> GameProgress {
-        guard Auth.auth().currentUser != nil else {
-            throw FirebaseError.notAuthenticated
+        guard let userId = currentUser?.uid else {
+            throw NSError(domain: "FirebaseManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "No user logged in"])
         }
         
-        let docRef = db.collection("users").document(Auth.auth().currentUser!.uid)
-        let document = try await docRef.getDocument()
-        
-        guard let data = document.data() else {
-            // Return default progress if no data exists
-            return GameProgress()
+        do {
+            let doc = try await db.collection("users").document(userId).collection("progress").document("data").getDocument()
+            
+            guard let data = doc.data() else {
+                return GameProgress() // Return empty progress if no data exists
+            }
+            
+            guard let progress = GameProgress(dictionary: data) else {
+                throw NSError(domain: "FirebaseManager", code: -2, userInfo: [NSLocalizedDescriptionKey: "Invalid progress data"])
+            }
+            
+            return progress
+        } catch {
+            print("Error loading game progress: \(error)")
+            throw error
         }
-        
-        guard let progress = GameProgress(dictionary: data) else {
-            throw FirebaseError.invalidData
-        }
-        
-        return progress
     }
     
     func saveGameProgress(_ progress: GameProgress) async throws {
-        guard let userId = Auth.auth().currentUser?.uid else {
-            throw FirebaseError.notAuthenticated
-        }
+        guard let userId = currentUser?.uid else { return }
         
-        let docRef = db.collection("users").document(userId)
-        try await docRef.setData(progress.dictionary, merge: true)
+        do {
+            // Get current cloud data for conflict resolution
+            let currentDoc = try await db.collection("users").document(userId).collection("progress").document("data").getDocument()
+            var finalProgress = progress
+            
+            if let currentData = currentDoc.data(),
+               let currentProgress = GameProgress(dictionary: currentData) {
+                // Resolve conflicts by taking the higher values
+                finalProgress = GameProgress(
+                    score: max(progress.score, currentProgress.score),
+                    level: max(progress.level, currentProgress.level),
+                    blocksPlaced: max(progress.blocksPlaced, currentProgress.blocksPlaced),
+                    linesCleared: max(progress.linesCleared, currentProgress.linesCleared),
+                    gamesCompleted: max(progress.gamesCompleted, currentProgress.gamesCompleted),
+                    perfectLevels: max(progress.perfectLevels, currentProgress.perfectLevels),
+                    totalPlayTime: max(progress.totalPlayTime, currentProgress.totalPlayTime),
+                    highScore: max(progress.highScore, currentProgress.highScore),
+                    highestLevel: max(progress.highestLevel, currentProgress.highestLevel),
+                    grid: progress.grid, // Keep the most recent grid state
+                    tray: progress.tray, // Keep the most recent tray state
+                    lastSaveTime: Date()
+                )
+            }
+            
+            // Save the resolved progress
+            try await db.collection("users").document(userId).collection("progress").document("data").setData(finalProgress.dictionary)
+            
+            // Update last sync time
+            UserDefaults.standard.set(Date(), forKey: "lastFirebaseSaveTime")
+            
+        } catch {
+            print("Error saving game progress: \(error)")
+            throw error
+        }
     }
     
     func performInitialDeviceSync() async throws {
@@ -829,6 +862,19 @@ class FirebaseManager: ObservableObject {
         // Enable offline persistence for specific paths
         let leaderboardRef = Database.database().reference(withPath: "leaderboard")
         leaderboardRef.keepSynced(true)
+    }
+    
+    // Add method to check sync status
+    func checkSyncStatus() async -> Bool {
+        guard let userId = currentUser?.uid else { return false }
+        
+        do {
+            let doc = try await db.collection("users").document(userId).collection("progress").document("data").getDocument()
+            return doc.exists
+        } catch {
+            print("Error checking sync status: \(error)")
+            return false
+        }
     }
 }
 

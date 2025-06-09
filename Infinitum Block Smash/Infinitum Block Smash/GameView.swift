@@ -21,6 +21,8 @@ struct GameView: View {
     @AppStorage("showStatsOverlay") private var showStatsOverlay = false
     @AppStorage("showFPS") private var showFPS = false
     @AppStorage("showMemory") private var showMemory = false
+    @State private var isSyncing = false
+    @State private var syncError: String?
     
     private enum SettingsAction {
         case resume
@@ -38,6 +40,37 @@ struct GameView: View {
             overlays
             scoreAnimator
             bannerAdView
+            
+            // Add sync status indicator
+            if isSyncing {
+                VStack {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle())
+                    Text("Syncing...")
+                        .foregroundColor(.white)
+                }
+                .padding()
+                .background(Color.black.opacity(0.7))
+                .cornerRadius(10)
+            }
+            
+            // Show sync error if any
+            if let error = syncError {
+                VStack {
+                    Text("Sync Error")
+                        .font(.headline)
+                    Text(error)
+                        .font(.subheadline)
+                    Button("Retry") {
+                        Task {
+                            await syncGameData()
+                        }
+                    }
+                }
+                .padding()
+                .background(Color.black.opacity(0.7))
+                .cornerRadius(10)
+            }
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView(gameState: gameState, showingTutorial: $showingTutorial)
@@ -51,6 +84,11 @@ struct GameView: View {
         .onAppear {
             if showTutorial {
                 showingTutorial = true
+            }
+            
+            // Attempt to sync when view appears
+            Task {
+                await syncGameData()
             }
         }
         .onChange(of: gameState.levelComplete) { isComplete in
@@ -315,6 +353,30 @@ struct GameView: View {
             showingAchievements = true
         case .showStats:
             showingStats = true
+        }
+    }
+    
+    // Update sync function
+    private func syncGameData() async {
+        guard !UserDefaults.standard.bool(forKey: "isGuest") else { return }
+        
+        isSyncing = true
+        syncError = nil
+        
+        do {
+            // First try to sync any offline changes
+            try await gameState.syncOfflineQueue()
+            
+            // Then check if we need to load cloud data
+            let hasCloudData = await FirebaseManager.shared.checkSyncStatus()
+            if hasCloudData {
+                try await gameState.loadCloudData()
+            }
+            
+            isSyncing = false
+        } catch {
+            syncError = error.localizedDescription
+            isSyncing = false
         }
     }
 }

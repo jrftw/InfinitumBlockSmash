@@ -5,6 +5,12 @@ import FirebaseFirestore
 import FirebaseAuth
 import StoreKit
 
+// MARK: - OfflineQueueEntry
+struct OfflineQueueEntry: Codable {
+    let progress: GameProgress
+    let timestamp: Date
+}
+
 // MARK: - GameState
 protocol GameStateDelegate: AnyObject {
     func gameStateDidUpdate()
@@ -138,6 +144,11 @@ final class GameState: ObservableObject {
     
     // Add analytics manager
     private let analyticsManager = AnalyticsManager.shared
+    
+    // Add new properties for offline queue
+    private var offlineChangesQueue: [OfflineQueueEntry] = []
+    private let offlineQueueKey = "offlineChangesQueue"
+    private let lastSyncAttemptKey = "lastSyncAttempt"
     
     // MARK: - Initialization
     init() {
@@ -1496,7 +1507,20 @@ final class GameState: ObservableObject {
         userDefaults.set(highScore, forKey: scoreKey)
         userDefaults.set(highestLevel, forKey: levelKey)
         userDefaults.set(Date(), forKey: "lastSaveTime")
+        
+        // Save offline queue
+        if let queueData = try? JSONEncoder().encode(offlineChangesQueue) {
+            userDefaults.set(queueData, forKey: offlineQueueKey)
+        }
+        
         userDefaults.synchronize()
+    }
+
+    private func loadOfflineQueue() {
+        if let queueData = userDefaults.data(forKey: offlineQueueKey),
+           let queue = try? JSONDecoder().decode([OfflineQueueEntry].self, from: queueData) {
+            offlineChangesQueue = queue
+        }
     }
 
     @MainActor
@@ -1508,6 +1532,22 @@ final class GameState: ObservableObject {
         
         print("[GameState] Saved statistics - Blocks: \(blocksPlaced), Lines: \(linesCleared), Games: \(gamesCompleted), Perfect: \(perfectLevels), High Score: \(highScore), Highest Level: \(highestLevel)")
 
+        // Create current progress
+        let currentProgress = GameProgress(
+            score: score,
+            level: level,
+            blocksPlaced: blocksPlaced,
+            linesCleared: linesCleared,
+            gamesCompleted: gamesCompleted,
+            perfectLevels: perfectLevels,
+            totalPlayTime: totalPlayTime,
+            highScore: highScore,
+            highestLevel: highestLevel,
+            grid: grid,
+            tray: tray,
+            lastSaveTime: Date()
+        )
+
         // Sync with Firebase if user is logged in and auto-sync is enabled
         Task {
             if !UserDefaults.standard.bool(forKey: "isGuest") && autoSyncEnabled {
@@ -1517,29 +1557,69 @@ final class GameState: ObservableObject {
                 // Only sync if at least 30 seconds have passed since last sync
                 if now.timeIntervalSince(lastSaveTime) >= 30 {
                     do {
-                        let progress = GameProgress(
-                            score: score,
-                            level: level,
-                            blocksPlaced: blocksPlaced,
-                            linesCleared: linesCleared,
-                            gamesCompleted: gamesCompleted,
-                            perfectLevels: perfectLevels,
-                            totalPlayTime: totalPlayTime,
-                            highScore: highScore,
-                            highestLevel: highestLevel,
-                            grid: grid,
-                            tray: tray,
-                            lastSaveTime: now
-                        )
-                        try await FirebaseManager.shared.saveGameProgress(progress)
+                        // Add to offline queue first
+                        offlineChangesQueue.append(OfflineQueueEntry(progress: currentProgress, timestamp: now))
+                        saveStatisticsToUserDefaults()
+                        
+                        // Try to sync with Firebase
+                        try await FirebaseManager.shared.saveGameProgress(currentProgress)
+                        
+                        // If successful, clear the queue and update last sync time
+                        offlineChangesQueue.removeAll()
                         userDefaults.set(now, forKey: "lastFirebaseSaveTime")
+                        saveStatisticsToUserDefaults()
+                        
                         print("[GameState] Successfully synced statistics with Firebase")
                     } catch {
                         print("[GameState] Error syncing statistics with Firebase: \(error.localizedDescription)")
+                        // Keep the offline queue for later sync
                     }
                 }
             }
         }
+    }
+
+    // Update offline queue sync method
+    func syncOfflineQueue() async throws {
+        guard !UserDefaults.standard.bool(forKey: "isGuest") && autoSyncEnabled else { return }
+        
+        // Load offline queue
+        loadOfflineQueue()
+        
+        // Sort queue by timestamp to ensure chronological order
+        offlineChangesQueue.sort { $0.timestamp < $1.timestamp }
+        
+        // Try to sync each queued change
+        for entry in offlineChangesQueue {
+            do {
+                try await FirebaseManager.shared.saveGameProgress(entry.progress)
+                offlineChangesQueue.removeFirst()
+                saveStatisticsToUserDefaults()
+            } catch {
+                print("[GameState] Error syncing queued progress: \(error.localizedDescription)")
+                throw error // Propagate the error
+            }
+        }
+    }
+
+    // Add conflict resolution method
+    private func resolveConflicts(localProgress: GameProgress, cloudProgress: GameProgress) -> GameProgress {
+        // Take the higher values for statistics
+        let resolvedProgress = GameProgress(
+            score: max(localProgress.score, cloudProgress.score),
+            level: max(localProgress.level, cloudProgress.level),
+            blocksPlaced: max(localProgress.blocksPlaced, cloudProgress.blocksPlaced),
+            linesCleared: max(localProgress.linesCleared, cloudProgress.linesCleared),
+            gamesCompleted: max(localProgress.gamesCompleted, cloudProgress.gamesCompleted),
+            perfectLevels: max(localProgress.perfectLevels, cloudProgress.perfectLevels),
+            totalPlayTime: max(localProgress.totalPlayTime, cloudProgress.totalPlayTime),
+            highScore: max(localProgress.highScore, cloudProgress.highScore),
+            highestLevel: max(localProgress.highestLevel, cloudProgress.highestLevel),
+            grid: localProgress.grid, // Keep local grid state
+            tray: localProgress.tray, // Keep local tray state
+            lastSaveTime: Date()
+        )
+        return resolvedProgress
     }
 
     func handleAppWillResignActive() async {
