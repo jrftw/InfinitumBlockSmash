@@ -431,36 +431,62 @@ private struct StatsOverlayView: View {
     @StateObject private var performanceMonitor = PerformanceMonitor.shared
     @AppStorage("showFPS") private var showFPS = false
     @AppStorage("showMemory") private var showMemory = false
+    @AppStorage("showAdvancedStats") private var showAdvancedStats = false
     
     let timer = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
     
     var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                if showFPS {
-                    Text("FPS: \(Int(performanceMonitor.currentFPS))")
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.black.opacity(0.5))
-                        .cornerRadius(4)
+        VStack(spacing: 4) {
+            if showFPS || showMemory || showAdvancedStats {
+                HStack(spacing: 8) {
+                    // First Column
+                    VStack(alignment: .leading, spacing: 4) {
+                        if showFPS {
+                            StatText("FPS: \(Int(performanceMonitor.currentFPS))")
+                        }
+                        if showMemory {
+                            StatText("Memory: \(String(format: "%.1f", performanceMonitor.memoryUsage))MB")
+                        }
+                    }
+                    
+                    // Second Column
+                    if showAdvancedStats {
+                        VStack(alignment: .leading, spacing: 4) {
+                            StatText("Frame: \(String(format: "%.1f", performanceMonitor.frameTime))ms")
+                            StatText("CPU: \(String(format: "%.1f", performanceMonitor.cpuUsage))%")
+                        }
+                    }
+                    
+                    // Third Column
+                    if showAdvancedStats {
+                        VStack(alignment: .leading, spacing: 4) {
+                            StatText("Network: \(String(format: "%.1f", performanceMonitor.networkLatency))ms")
+                            StatText("Input: \(String(format: "%.1f", performanceMonitor.inputLatency))ms")
+                        }
+                    }
                 }
-                
-                if showMemory {
-                    Text("Memory: \(String(format: "%.1f", performanceMonitor.memoryUsage))MB")
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.black.opacity(0.5))
-                        .cornerRadius(4)
-                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.black.opacity(0.5))
+                .cornerRadius(4)
             }
-            Spacer()
         }
         .padding(.horizontal, 16)
         .padding(.top, 4)
         .allowsHitTesting(false)
+    }
+}
+
+private struct StatText: View {
+    let text: String
+    
+    init(_ text: String) {
+        self.text = text
+    }
+    
+    var body: some View {
+        Text(text)
+            .font(.system(size: 12, weight: .medium, design: .monospaced))
+            .foregroundColor(.white)
     }
 }

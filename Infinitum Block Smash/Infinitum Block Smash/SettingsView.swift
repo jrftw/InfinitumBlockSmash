@@ -306,6 +306,7 @@ private struct StatsForNerdsSection: View {
     @AppStorage("showStatsOverlay") private var showStatsOverlay = false
     @AppStorage("showFPS") private var showFPS = false
     @AppStorage("showMemory") private var showMemory = false
+    @AppStorage("showAdvancedStats") private var showAdvancedStats = false
     
     var body: some View {
         Section(header: Text("Stats for Nerds")) {
@@ -314,6 +315,7 @@ private struct StatsForNerdsSection: View {
             if showStatsOverlay {
                 Toggle("Show FPS", isOn: $showFPS)
                 Toggle("Show Memory Usage", isOn: $showMemory)
+                Toggle("Show Advanced Stats", isOn: $showAdvancedStats)
                 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Current FPS: \(fpsManager.getDisplayFPS(for: fpsManager.targetFPS))")
