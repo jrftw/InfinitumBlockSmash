@@ -95,13 +95,24 @@ class FirebaseManager: ObservableObject {
     }
     
     private func updateLastActive() async {
-        guard let userId = currentUser?.uid else { return }
+        guard let userId = currentUser?.uid else {
+            print("[FirebaseManager] Cannot update lastActive: No current user")
+            return
+        }
         do {
+            print("[FirebaseManager] Updating lastActive for current user: \(userId)")
             try await db.collection("users").document(userId).updateData([
                 "lastActive": FieldValue.serverTimestamp()
             ])
+            print("[FirebaseManager] Successfully updated lastActive for current user")
+            
+            // Verify the update
+            let doc = try await db.collection("users").document(userId).getDocument()
+            if let lastActive = doc.data()?["lastActive"] as? Timestamp {
+                print("[FirebaseManager] Verified lastActive timestamp: \(lastActive.dateValue())")
+            }
         } catch {
-            print("Error updating lastActive: \(error)")
+            print("[FirebaseManager] Error updating lastActive: \(error)")
         }
     }
     
@@ -123,6 +134,18 @@ class FirebaseManager: ObservableObject {
         do {
             let result = try await auth.signInAnonymously()
             isGuest = true
+            
+            // Create or update user document with proper timestamps
+            let userData: [String: Any] = [
+                "deviceId": generateDeviceId(),
+                "referralCode": generateReferralCode(),
+                "createdAt": FieldValue.serverTimestamp(),
+                "lastLogin": FieldValue.serverTimestamp(),
+                "lastActive": FieldValue.serverTimestamp(),
+                "userId": result.user.uid
+            ]
+            
+            try await db.collection("users").document(result.user.uid).setData(userData, merge: true)
             await loadUserData(userId: result.user.uid)
         } catch {
             print("Error signing in anonymously: \(error)")
@@ -383,21 +406,29 @@ class FirebaseManager: ObservableObject {
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: Date())
         
+        print("[FirebaseManager] Getting daily players count since: \(startOfDay)")
+        
         let query = db.collection("users")
-            .whereField("lastLogin", isGreaterThan: startOfDay)
+            .whereField("lastActive", isGreaterThan: startOfDay)
         
         let snapshot = try await query.count.getAggregation(source: .server)
-        return Int(truncating: snapshot.count)
+        let count = Int(truncating: snapshot.count)
+        print("[FirebaseManager] Daily players count: \(count)")
+        return count
     }
     
     func getOnlineUsersCount() async throws -> Int {
         let fiveMinutesAgo = Timestamp(date: Date().addingTimeInterval(-300))
+        print("[FirebaseManager] Getting online users count since: \(fiveMinutesAgo.dateValue())")
+        
         let snapshot = try await db.collection("users")
             .whereField("lastActive", isGreaterThan: fiveMinutesAgo)
             .count
             .getAggregation(source: .server)
         
-        return Int(truncating: snapshot.count)
+        let count = Int(truncating: snapshot.count)
+        print("[FirebaseManager] Online users count: \(count)")
+        return count
     }
     
     // MARK: - Leaderboard
