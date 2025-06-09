@@ -4,7 +4,7 @@ import FirebaseFirestore
 struct LeaderboardView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedType: LeaderboardType = .score
-    @State private var selectedPeriod: String = "alltime"
+    @State private var selectedPeriod: String = "daily"
     @State private var leaderboardData: [FirebaseManager.LeaderboardEntry] = []
     @State private var userPosition: Int?
     @State private var isLoading = false
