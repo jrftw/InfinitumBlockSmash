@@ -27,6 +27,16 @@ struct ChangeInformationView: View {
     @State private var emailValidationError = ""
     @State private var passwordValidationError = ""
     @State private var showSuccess = false
+    @State private var showingDeleteConfirmation = false
+    @State private var showingDeleteError = false
+    @State private var deleteErrorMessage = ""
+    @State private var isDeleting = false
+    @State private var showingLinkEmail = false
+    @State private var showingLinkGameCenter = false
+    @State private var linkEmail = ""
+    @State private var linkPassword = ""
+    @State private var showingLinkError = false
+    @State private var linkErrorMessage = ""
     
     var body: some View {
         NavigationView {
@@ -73,7 +83,24 @@ struct ChangeInformationView: View {
                 }
                 Section(header: Text("Connection Types")) {
                     ForEach(connectionTypes, id: \.self) { type in
-                        Text(type.capitalized)
+                        HStack {
+                            Text(type.capitalized)
+                            Spacer()
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                        }
+                    }
+                    
+                    if !connectionTypes.contains("Email") {
+                        Button("Link Email Account") {
+                            showingLinkEmail = true
+                        }
+                    }
+                    
+                    if !connectionTypes.contains("Game Center") {
+                        Button("Link Game Center") {
+                            showingLinkGameCenter = true
+                        }
                     }
                 }
                 Section(header: Text("Password")) {
@@ -91,6 +118,14 @@ struct ChangeInformationView: View {
                     }
                     .disabled(!canSave)
                 }
+                
+                Section {
+                    Button("Delete Profile") {
+                        showingDeleteConfirmation = true
+                    }
+                    .foregroundColor(.red)
+                    .disabled(isDeleting)
+                }
             }
             .navigationTitle("Change Information")
             .navigationBarItems(trailing: Button("Done") { dismiss() })
@@ -104,6 +139,51 @@ struct ChangeInformationView: View {
             } message: {
                 Text("Your information has been updated.")
             }
+            .alert("Delete Profile", isPresented: $showingDeleteConfirmation) {
+                Button("Cancel", role: .cancel) { }
+                Button("Delete", role: .destructive) {
+                    deleteProfile()
+                }
+            } message: {
+                Text("Are you sure you want to delete your profile? This action cannot be undone and all your data will be permanently deleted.")
+            }
+            .alert("Error", isPresented: $showingDeleteError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(deleteErrorMessage)
+            }
+            .alert("Error", isPresented: $showingLinkError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(linkErrorMessage)
+            }
+            .sheet(isPresented: $showingLinkEmail) {
+                NavigationView {
+                    Form {
+                        Section(header: Text("Link Email Account")) {
+                            TextField("Email", text: $linkEmail)
+                                .textContentType(.emailAddress)
+                                .keyboardType(.emailAddress)
+                                .autocapitalization(.none)
+                                .disableAutocorrection(true)
+                            
+                            SecureField("Password", text: $linkPassword)
+                                .textContentType(.password)
+                        }
+                        
+                        Section {
+                            Button("Link Account") {
+                                linkEmailAccount()
+                            }
+                            .disabled(linkEmail.isEmpty || linkPassword.isEmpty)
+                        }
+                    }
+                    .navigationTitle("Link Email")
+                    .navigationBarItems(trailing: Button("Cancel") {
+                        showingLinkEmail = false
+                    })
+                }
+            }
             .onAppear { loadUserInfo() }
         }
     }
@@ -116,28 +196,36 @@ struct ChangeInformationView: View {
     
     private func loadUserInfo() {
         guard let user = Auth.auth().currentUser else { return }
-        username = user.displayName ?? ""
-        originalUsername = username
-        email = user.email ?? ""
-        originalEmail = email
-        phone = user.phoneNumber ?? ""
-        originalPhone = phone
-        connectionTypes = user.providerData.map { provider in
-            switch provider.providerID {
-            case "password": return "Email"
-            case "phone": return "Phone"
-            case "gamecenter.apple.com": return "Game Center"
-            default: return provider.providerID
-            }
-        }
-        // Load lastUsernameChange from Firestore
+        
+        // Load user data from Firestore
         let db = Firestore.firestore()
         db.collection("users").document(user.uid).getDocument { snapshot, error in
-            if let data = snapshot?.data(), let ts = data["lastUsernameChange"] as? Timestamp {
-                lastUsernameChange = ts.dateValue()
-                canEditUsername = canChangeUsername()
-            } else {
-                canEditUsername = true
+            if let data = snapshot?.data() {
+                // Get username from Firestore
+                username = data["username"] as? String ?? ""
+                originalUsername = username
+                
+                // Get last username change timestamp
+                if let ts = data["lastUsernameChange"] as? Timestamp {
+                    lastUsernameChange = ts.dateValue()
+                    canEditUsername = canChangeUsername()
+                } else {
+                    canEditUsername = true
+                }
+            }
+            
+            // Load other user info from Auth
+            email = user.email ?? ""
+            originalEmail = email
+            phone = user.phoneNumber ?? ""
+            originalPhone = phone
+            connectionTypes = user.providerData.map { provider in
+                switch provider.providerID {
+                case "password": return "Email"
+                case "phone": return "Phone"
+                case "gamecenter.apple.com": return "Game Center"
+                default: return provider.providerID
+                }
             }
         }
     }
@@ -255,6 +343,74 @@ struct ChangeInformationView: View {
                 showSuccess = true
             }
         }
+    }
+    
+    private func deleteProfile() {
+        guard let user = Auth.auth().currentUser else { return }
+        isDeleting = true
+        
+        // Delete user data from Firestore
+        let db = Firestore.firestore()
+        db.collection("users").document(user.uid).delete { error in
+            if let error = error {
+                deleteErrorMessage = "Failed to delete user data: \(error.localizedDescription)"
+                showingDeleteError = true
+                isDeleting = false
+                return
+            }
+            
+            // Delete the user account
+            user.delete { error in
+                if let error = error {
+                    deleteErrorMessage = "Failed to delete account: \(error.localizedDescription)"
+                    showingDeleteError = true
+                    isDeleting = false
+                    return
+                }
+                
+                // Sign out and dismiss the view
+                do {
+                    try Auth.auth().signOut()
+                    dismiss()
+                } catch {
+                    deleteErrorMessage = "Failed to sign out: \(error.localizedDescription)"
+                    showingDeleteError = true
+                    isDeleting = false
+                }
+            }
+        }
+    }
+    
+    private func linkEmailAccount() {
+        guard let user = Auth.auth().currentUser else { return }
+        
+        // Create credential with email and password
+        let credential = EmailAuthProvider.credential(withEmail: linkEmail, password: linkPassword)
+        
+        // Link the credential to the current user
+        user.link(with: credential) { result, error in
+            if let error = error {
+                linkErrorMessage = error.localizedDescription
+                showingLinkError = true
+                return
+            }
+            
+            // Update connection types
+            connectionTypes.append("Email")
+            
+            // Clear form and dismiss
+            linkEmail = ""
+            linkPassword = ""
+            showingLinkEmail = false
+            showSuccess = true
+        }
+    }
+    
+    private func linkGameCenter() {
+        // Implement Game Center linking
+        // This would require additional Game Center integration
+        // and handling of Game Center authentication
+        showingLinkGameCenter = false
     }
 }
 
