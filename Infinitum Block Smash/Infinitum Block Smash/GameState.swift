@@ -542,8 +542,15 @@ final class GameState: ObservableObject {
     }
     
     private func showVideoAd(completion: @escaping (Bool) -> Void) async {
+        // Check if ad is available before showing
+        guard await AdManager.shared.isAdAvailable() else {
+            // If ad is not available, proceed without showing ad
+            completion(true)
+            return
+        }
+        
         // Show the rewarded interstitial ad
-        await adManager.showRewardedInterstitial(onReward: {
+        await AdManager.shared.showRewardedInterstitial(onReward: {
             completion(true)
         })
     }
@@ -1087,13 +1094,19 @@ final class GameState: ObservableObject {
         // Check if we need to show an ad
         if levelsCompletedSinceLastAd >= 7 {
             if adsWatchedThisGame < 3 {
-                // Show ad with skip option
+                // Check if ad is available before showing
                 Task {
-                    await AdManager.shared.showRewardedInterstitial(onReward: {
-                        self.adsWatchedThisGame += 1
+                    if await AdManager.shared.isAdAvailable() {
+                        await AdManager.shared.showRewardedInterstitial(onReward: {
+                            self.adsWatchedThisGame += 1
+                            self.levelsCompletedSinceLastAd = 0
+                            self.continueLevelUp()
+                        })
+                    } else {
+                        // If ad is not available, proceed without showing ad
                         self.levelsCompletedSinceLastAd = 0
                         self.continueLevelUp()
-                    })
+                    }
                 }
             } else {
                 // Skip ad after 3 ads watched
@@ -1190,11 +1203,16 @@ final class GameState: ObservableObject {
             print("[GameOver] TestFlight mode - skipping ad")
             delegate?.gameStateDidUpdate()
         } else {
-            // In production, show ad automatically
+            // In production, check if ad is available before showing
             Task {
-                await AdManager.shared.showRewardedInterstitial(onReward: {
+                if await AdManager.shared.isAdAvailable() {
+                    await AdManager.shared.showRewardedInterstitial(onReward: {
+                        self.continueGame()
+                    })
+                } else {
+                    // If ad is not available, proceed without showing ad
                     self.continueGame()
-                })
+                }
             }
         }
         #endif
@@ -2013,35 +2031,117 @@ final class GameState: ObservableObject {
     }
     
     private func cleanupMemory() async {
-        print("[GameState] Performing memory cleanup")
-        
-        // Clear undo history if it's too large or old
-        if let move = lastMove, let timestamp = move.timestamp, timestamp.timeIntervalSinceNow < -180 { // Reduced from 300 to 180 seconds
-            previousGrid = nil
-            previousTray = nil
-            lastMove = nil
-            previousScore = 0
-            previousLevel = 1
+        // Clear cached data that's older than 5 minutes
+        let fiveMinutesAgo = Date().addingTimeInterval(-300)
+        cachedData = cachedData.filter { key, value in
+            if let timestamp = value as? Date, timestamp < fiveMinutesAgo {
+                return false
+            }
+            return true
         }
         
-        // Clear any temporary arrays
-        usedColors.removeAll(keepingCapacity: false) // Changed to false to release memory
-        usedShapes.removeAll(keepingCapacity: false) // Changed to false to release memory
+        // Clear any temporary data
+        previousGrid = nil
+        previousTray = nil
+        lastMove = nil
         
-        // Force garbage collection
+        // Clear offline queue if it's too large
+        if offlineChangesQueue.count > 100 {
+            offlineChangesQueue = Array(offlineChangesQueue.suffix(100))
+        }
+        
+        // Force garbage collection of unused resources
         autoreleasepool {
-            // Clear any temporary objects
-            grid = grid.map { row in
-                row.map { $0 }
-            }
-            tray = tray.map { $0 }
-            
-            // Clear any cached data
-            cachedData.removeAll()
+            // Clear any temporary arrays or dictionaries
+            usedColors.removeAll()
+            usedShapes.removeAll()
         }
         
         // Call the shared memory system cleanup
         await MemorySystem.shared.cleanupMemory()
+    }
+    
+    private func setupMemoryManagement() {
+        // Subscribe to memory status updates
+        Task { @MainActor in
+            // Convert publisher to async sequence
+            let memoryStatusStream = MemorySystem.shared.memoryStatus.values
+            
+            for await status in memoryStatusStream {
+                switch status {
+                case .critical:
+                    await handleCriticalMemory()
+                case .warning:
+                    await handleMemoryWarning()
+                case .normal:
+                    break
+                }
+            }
+        }
+        
+        // Add memory warning observer
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleMemoryWarningNotification),
+            name: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil
+        )
+    }
+    
+    @objc private func handleMemoryWarningNotification() {
+        Task { @MainActor in
+            await handleMemoryWarning()
+        }
+    }
+    
+    internal func handleCriticalMemory() async {
+        // Clear all temporary data
+        previousGrid = nil
+        previousTray = nil
+        lastMove = nil
+        previousScore = 0
+        previousLevel = 1
+        
+        // Clear offline queue
+        offlineChangesQueue.removeAll()
+        
+        // Clear any temporary arrays
+        usedColors.removeAll()
+        usedShapes.removeAll()
+        
+        // Clear cached data
+        cachedData.removeAll()
+        
+        // Notify delegate to clear any cached resources
+        delegate?.gameStateDidUpdate()
+    }
+    
+    private func handleMemoryWarning() async {
+        // Clear temporary data
+        previousGrid = nil
+        previousTray = nil
+        lastMove = nil
+        
+        // Clear offline queue if it's too large
+        if offlineChangesQueue.count > 100 {
+            offlineChangesQueue = Array(offlineChangesQueue.suffix(100))
+        }
+        
+        // Clear any temporary arrays
+        usedColors.removeAll()
+        usedShapes.removeAll()
+        
+        // Clear old cached data
+        let fiveMinutesAgo = Date().addingTimeInterval(-300)
+        cachedData = cachedData.filter { key, value in
+            if let timestamp = value as? Date, timestamp < fiveMinutesAgo {
+                return false
+            }
+            return true
+        }
+        
+        // Notify delegate to clear any cached resources
+        delegate?.gameStateDidUpdate()
     }
     
     private func checkMemoryUsage() async {
@@ -2056,35 +2156,6 @@ final class GameState: ObservableObject {
     func update() async {
         await checkMemoryUsage()
         // ... rest of update logic ...
-    }
-    
-    private func setupMemoryManagement() async {
-        // Setup notification observers
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleMemoryWarningNotification),
-            name: .memoryWarning,
-            object: nil
-        )
-        
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleMemoryCriticalNotification),
-            name: .memoryCritical,
-            object: nil
-        )
-    }
-    
-    @objc private func handleMemoryWarningNotification() {
-        Task {
-            await cleanupMemory()
-        }
-    }
-    
-    @objc private func handleMemoryCriticalNotification() {
-        Task {
-            await cleanupMemory()
-        }
     }
     
     private func checkUndoAvailability() async {

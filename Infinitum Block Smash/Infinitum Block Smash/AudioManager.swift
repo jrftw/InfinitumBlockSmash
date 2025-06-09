@@ -92,6 +92,19 @@ class AudioManager {
         backgroundMusic?.stop()
     }
     
+    func stopAllSounds() {
+        // Stop background music
+        stopBackgroundMusic()
+        
+        // Stop all sound effects
+        for player in soundEffects.values {
+            player.stop()
+        }
+        
+        // Clear sound effects dictionary
+        soundEffects.removeAll()
+    }
+    
     func playSound(_ name: String) {
         guard !isMuted else { return }
         soundEffects[name]?.play()
@@ -160,10 +173,13 @@ class AudioManager {
         updateSettings(soundEnabled: soundEnabled, musicVolume: musicVolume, sfxVolume: sfxVolume)
     }
     
-    private func cleanupSoundEffects() {
-        for (_, player) in soundEffects {
+    func cleanupSoundEffects() {
+        // Stop all sound effects
+        for player in soundEffects.values {
             player.stop()
         }
+        
+        // Clear sound effects dictionary
         soundEffects.removeAll()
     }
     

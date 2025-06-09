@@ -3,8 +3,21 @@ import SwiftUI
 class ThemeManager: ObservableObject {
     static let shared = ThemeManager()
     
-    @Published var currentTheme: String = UserDefaults.standard.string(forKey: "selectedTheme") ?? "system"
-    @Published var systemTheme: String = UserDefaults.standard.string(forKey: "systemTheme") ?? "auto"
+    @Published var currentTheme: String {
+        didSet {
+            UserDefaults.standard.set(currentTheme, forKey: "selectedTheme")
+            NotificationCenter.default.post(name: NSNotification.Name("ThemeDidChange"), object: nil)
+        }
+    }
+    
+    @Published var systemTheme: String {
+        didSet {
+            UserDefaults.standard.set(systemTheme, forKey: "systemTheme")
+            if currentTheme == "system" {
+                NotificationCenter.default.post(name: NSNotification.Name("ThemeDidChange"), object: nil)
+            }
+        }
+    }
     
     private let availableThemes = [
         "system": Theme(
@@ -186,28 +199,42 @@ class ThemeManager: ObservableObject {
     ]
     
     private init() {
-        // Initialize system theme
-        if let savedSystemTheme = UserDefaults.standard.string(forKey: "systemTheme") {
-            systemTheme = savedSystemTheme
-        }
+        // Initialize system theme with "auto" as default
+        self.systemTheme = UserDefaults.standard.string(forKey: "systemTheme") ?? "auto"
         
-        // Initialize current theme
-        if let savedTheme = UserDefaults.standard.string(forKey: "selectedTheme") {
-            currentTheme = savedTheme
+        // Initialize current theme with "auto" as default
+        self.currentTheme = UserDefaults.standard.string(forKey: "selectedTheme") ?? "auto"
+        
+        // Apply the theme immediately
+        applyTheme()
+    }
+    
+    private func applyTheme() {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first else { return }
+        
+        if currentTheme == "system" {
+            switch systemTheme {
+            case "light":
+                window.overrideUserInterfaceStyle = .light
+            case "dark":
+                window.overrideUserInterfaceStyle = .dark
+            default: // "auto"
+                window.overrideUserInterfaceStyle = .unspecified
+            }
+        } else {
+            window.overrideUserInterfaceStyle = .unspecified
         }
     }
     
     func setTheme(_ theme: String) {
         if ["light", "dark", "auto"].contains(theme) {
             systemTheme = theme
-            UserDefaults.standard.set(theme, forKey: "systemTheme")
             currentTheme = "system"
-            UserDefaults.standard.set("system", forKey: "selectedTheme")
         } else {
             currentTheme = theme
-            UserDefaults.standard.set(theme, forKey: "selectedTheme")
         }
-        NotificationCenter.default.post(name: NSNotification.Name("ThemeDidChange"), object: nil)
+        applyTheme()
     }
     
     func getCurrentTheme() -> Theme {

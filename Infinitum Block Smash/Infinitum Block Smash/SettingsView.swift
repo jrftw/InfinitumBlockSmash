@@ -8,18 +8,19 @@ private func updateTheme(_ theme: String) {
     guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
           let window = windowScene.windows.first else { return }
     
+    // Use ThemeManager to set the theme
+    ThemeManager.shared.setTheme(theme)
+    
+    // Update the window's interface style
     switch theme {
     case "light":
         window.overrideUserInterfaceStyle = .light
-        UserDefaults.standard.set("light", forKey: "selectedTheme")
     case "dark":
         window.overrideUserInterfaceStyle = .dark
-        UserDefaults.standard.set("dark", forKey: "selectedTheme")
     case "auto":
         window.overrideUserInterfaceStyle = .unspecified
-        UserDefaults.standard.set("auto", forKey: "selectedTheme")
     default:
-        break
+        window.overrideUserInterfaceStyle = .unspecified
     }
 }
 
@@ -101,31 +102,27 @@ private struct GameSettingsSection: View {
                 }
             }
             
-            // System Theme Picker
-            Picker(NSLocalizedString("System Theme", comment: "Theme picker label"), selection: $systemTheme) {
+            // Unified Theme Picker
+            Picker(NSLocalizedString("Theme", comment: "Theme picker label"), selection: $theme) {
+                // System themes
+                Text(NSLocalizedString("Auto", comment: "Auto theme option")).tag("auto")
                 Text(NSLocalizedString("Light", comment: "Light theme option")).tag("light")
                 Text(NSLocalizedString("Dark", comment: "Dark theme option")).tag("dark")
-                Text(NSLocalizedString("Auto", comment: "Auto theme option")).tag("auto")
-            }
-            .onChange(of: systemTheme) { newValue in
-                UserDefaults.standard.set(newValue, forKey: "systemTheme")
-                updateTheme(newValue)
-            }
-            
-            // Custom Theme Picker
-            Picker(NSLocalizedString("Custom Theme", comment: "Custom theme picker label"), selection: $theme) {
+                // Custom themes
                 ForEach(Array(themeManager.getAvailableThemes().keys.sorted().filter { !["system", "light", "dark", "auto"].contains($0) }), id: \.self) { themeKey in
-                    if let theme = themeManager.getAvailableThemes()[themeKey] {
+                    if let themeObj = themeManager.getAvailableThemes()[themeKey] {
+                        let unlocked = isThemeUnlocked(themeKey)
                         HStack {
-                            Text(theme.name)
-                            if !isThemeUnlocked(themeKey) {
+                            Text(themeObj.name)
+                                .foregroundColor(unlocked ? .primary : .secondary)
+                            if !unlocked {
                                 Text(NSLocalizedString("Locked", comment: "Locked theme indicator"))
                                     .font(.caption)
                                     .foregroundColor(.red)
                             }
                         }
-                        .foregroundColor(isThemeUnlocked(themeKey) ? .primary : .secondary)
                         .tag(themeKey)
+                        .disabled(!unlocked)
                     }
                 }
             }
@@ -139,6 +136,8 @@ private struct GameSettingsSection: View {
                         // Show store
                         showingStore = true
                     }
+                } else {
+                    themeManager.setTheme(newValue)
                 }
             }
             

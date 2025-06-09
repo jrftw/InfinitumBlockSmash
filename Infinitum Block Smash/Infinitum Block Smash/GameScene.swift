@@ -38,6 +38,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // Add theme observation property
     private var themeObserver: NSObjectProtocol?
     
+    // MARK: - Object Pooling
+    private var blockNodePool: [SKNode] = []
+    private var particleEmitterPool: [SKEmitterNode] = []
+    private let maxPoolSize = 20
+    
     // MARK: - Initialization
     init(size: CGSize, gameState: GameState) {
         self.gameState = gameState
@@ -72,6 +77,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             print("[ERROR] GameState not initialized")
             return
         }
+        
+        // Optimize textures
+        optimizeTextures()
         
         if gridNode == nil {
             print("[DEBUG] Creating new gridNode")
@@ -141,9 +149,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     override func willMove(from view: SKView) {
         super.willMove(from: view)
-        Task {
-            await cleanupMemory()
-        }
+        prepareForSceneTransition()
         NotificationCenter.default.removeObserver(self)
         
         if let observer = themeObserver {
@@ -418,20 +424,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func createBlockNode(for block: Block) -> SKNode {
-        let blockSize = GameConstants.blockSize
-        let blockNode = SKNode()
-        
-        // Reuse existing nodes if possible
-        if let existingNode = blockNodes.first(where: { $0.parent == nil }) {
-            existingNode.removeAllChildren()
-            blockNode.addChild(existingNode)
-        }
+        let blockNode = getBlockNodeFromPool()
         
         for (dx, dy) in block.shape.cells {
-            let cellNode = SKShapeNode(rectOf: CGSize(width: blockSize, height: blockSize))
+            let cellNode = SKShapeNode(rectOf: CGSize(width: GameConstants.blockSize, height: GameConstants.blockSize))
             
             // Create gradient fill
-            let gradientNode = SKShapeNode(rectOf: CGSize(width: blockSize, height: blockSize))
+            let gradientNode = SKShapeNode(rectOf: CGSize(width: GameConstants.blockSize, height: GameConstants.blockSize))
             gradientNode.fillColor = .clear
             gradientNode.strokeColor = .clear
             
@@ -439,13 +438,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             let colors = [block.color.gradientColors.start, block.color.gradientColors.end]
             let locations: [CGFloat] = [0.0, 1.0]
             
-            if let gradientImage = createGradientImage(size: CGSize(width: blockSize, height: blockSize), colors: colors, locations: locations) {
+            if let gradientImage = createGradientImage(size: CGSize(width: GameConstants.blockSize, height: GameConstants.blockSize),
+                                                     colors: colors,
+                                                     locations: locations) {
                 gradientNode.fillTexture = SKTexture(image: gradientImage)
                 gradientNode.fillColor = .white
             }
             
             // Add shadow effect
-            let shadowNode = SKShapeNode(rectOf: CGSize(width: blockSize, height: blockSize))
+            let shadowNode = SKShapeNode(rectOf: CGSize(width: GameConstants.blockSize, height: GameConstants.blockSize))
             shadowNode.fillColor = UIColor(cgColor: block.color.shadowColor)
             shadowNode.alpha = 0.3
             shadowNode.position = CGPoint(x: 2, y: -2)
@@ -456,21 +457,20 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             gradientNode.lineWidth = 1
             
             // Add shine effect
-            let shineNode = SKShapeNode(rectOf: CGSize(width: blockSize * 0.3, height: blockSize * 0.3))
+            let shineNode = SKShapeNode(rectOf: CGSize(width: GameConstants.blockSize * 0.3, height: GameConstants.blockSize * 0.3))
             shineNode.fillColor = .white
             shineNode.alpha = 0.3
-            shineNode.position = CGPoint(x: -blockSize * 0.25, y: blockSize * 0.25)
+            shineNode.position = CGPoint(x: -GameConstants.blockSize * 0.25, y: GameConstants.blockSize * 0.25)
             shineNode.zRotation = .pi / 4
             
             cellNode.addChild(shadowNode)
             cellNode.addChild(gradientNode)
             gradientNode.addChild(shineNode)
             
-            cellNode.position = CGPoint(x: CGFloat(dx) * blockSize, y: CGFloat(dy) * blockSize)
+            cellNode.position = CGPoint(x: CGFloat(dx) * GameConstants.blockSize, y: CGFloat(dy) * GameConstants.blockSize)
             blockNode.addChild(cellNode)
         }
         
-        blockNodes.append(blockNode)
         return blockNode
     }
     
@@ -492,7 +492,19 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                                  end: CGPoint(x: size.width, y: size.height),
                                  options: [])
         
-        return UIGraphicsGetImageFromCurrentImageContext()
+        let image = UIGraphicsGetImageFromCurrentImageContext()
+        
+        // Optimize the image by reducing its size if needed
+        if let image = image, image.size.width > 256 || image.size.height > 256 {
+            let newSize = CGSize(width: min(image.size.width, 256), height: min(image.size.height, 256))
+            UIGraphicsBeginImageContextWithOptions(newSize, false, scale)
+            image.draw(in: CGRect(origin: .zero, size: newSize))
+            let optimizedImage = UIGraphicsGetImageFromCurrentImageContext()
+            UIGraphicsEndImageContext()
+            return optimizedImage
+        }
+        
+        return image
     }
     
     private func updateTray(trayHeight: CGFloat, trayWidth: CGFloat, shapeWidths: [CGFloat], spacing: CGFloat) {
@@ -752,34 +764,29 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func playComboAnimation(at positions: [CGPoint]) {
-        // Clean up any existing emitters that have finished
-        activeParticleEmitters.removeAll { emitter in
-            if emitter.particleBirthRate == 0 {
-                emitter.removeFromParent()
-                return true
-            }
-            return false
-        }
+        cleanupParticleEffects()
         
-        // Limit the number of new emitters we can create
         let remainingSlots = maxParticleEmitters - activeParticleEmitters.count
         let positionsToAnimate = Array(positions.prefix(remainingSlots))
         
         for pos in positionsToAnimate {
-            if let particles = SKEmitterNode(fileNamed: "ClearParticles") {
+            if let particles = getParticleEmitterFromPool() {
                 particles.position = CGPoint(
                     x: CGFloat(pos.x) * GameConstants.blockSize - CGFloat(GameConstants.gridSize) * GameConstants.blockSize/2,
                     y: CGFloat(pos.y) * GameConstants.blockSize - CGFloat(GameConstants.gridSize) * GameConstants.blockSize/2
                 )
-                particles.particleLifetime = 0.5 // Reduce particle lifetime
-                particles.particleBirthRate = 100 // Reduce birth rate
+                
+                // Optimize particle emitter
+                optimizeParticleEmitter(particles)
+                
                 gridNode.addChild(particles)
                 activeParticleEmitters.append(particles)
                 
-                let wait = SKAction.wait(forDuration: 0.5) // Reduced from 0.7
+                let wait = SKAction.wait(forDuration: 0.5)
                 let remove = SKAction.run { [weak self] in
                     particles.removeFromParent()
                     self?.activeParticleEmitters.removeAll { $0 === particles }
+                    self?.returnParticleEmitterToPool(particles)
                 }
                 particles.run(SKAction.sequence([wait, remove]))
             }
@@ -859,50 +866,108 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     // MARK: - Memory Management
     private func setupMemoryManagement() async {
-        // Setup notification observers
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleMemoryWarningNotification),
-            name: .memoryWarning,
-            object: nil
-        )
-        
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleMemoryCriticalNotification),
-            name: .memoryCritical,
-            object: nil
-        )
+        // Start periodic memory monitoring
+        Timer.scheduledTimer(withTimeInterval: memoryCheckInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                await self?.checkAndCleanupMemory()
+            }
+        }
     }
     
-    private func cleanupMemory() async {
-        await MemorySystem.shared.cleanupMemory()
+    private func checkAndCleanupMemory() async {
+        let status = MemorySystem.shared.checkMemoryStatus()
+        
+        // Update warning label
+        if let label = memoryWarningLabel {
+            switch status {
+            case .critical:
+                label.text = "MEMORY CRITICAL"
+                label.isHidden = false
+                await performAggressiveCleanup()
+            case .warning:
+                label.text = "MEMORY WARNING"
+                label.isHidden = false
+                await performNormalCleanup()
+            case .normal:
+                label.isHidden = true
+            }
+        }
+    }
+    
+    private func performAggressiveCleanup() async {
+        print("[DEBUG] Performing aggressive memory cleanup")
+        
+        // Stop all animations
+        setBackgroundAnimationsActive(false)
+        
+        // Remove all particle effects
+        cleanupParticleEffects()
+        
+        // Clear node cache
+        clearNodeCache()
+        
+        // Remove unused nodes
+        cleanupUnusedNodes()
+        
+        // Clear textures
+        cleanupTextures()
+        
+        // Clear audio resources
+        cleanupAudio()
+        
+        // Clear temporary data
+        cleanupTemporaryData()
+        
+        // Notify GameState
+        await gameState.handleCriticalMemory()
+    }
+    
+    private func performNormalCleanup() async {
+        print("[DEBUG] Performing normal memory cleanup")
+        
+        // Clean up finished particle effects
+        cleanupParticleEffects()
+        
+        // Clear old cached nodes
+        manageCachedNodes()
+        
+        // Remove unused nodes
+        if let gridNode = gridNode {
+            gridNode.children.forEach { node in
+                if !node.isUserInteractionEnabled && 
+                   node.name?.hasPrefix("block_") == true &&
+                   node.alpha == 0 {
+                    node.removeFromParent()
+                }
+            }
+        }
+        
+        // Clear temporary nodes if not in use
+        if dragNode?.parent == nil {
+            dragNode = nil
+        }
+        if previewNode?.parent == nil {
+            previewNode = nil
+        }
+        if hintHighlight?.parent == nil {
+            hintHighlight = nil
+        }
     }
     
     @objc private func handleMemoryWarningNotification() {
         Task { @MainActor in
-            await cleanupMemory()
-            memoryWarningLabel?.text = "Memory Warning: Cleaning up..."
-            memoryWarningLabel?.isHidden = false
-            
-            // Hide warning after 3 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
-                self?.memoryWarningLabel?.isHidden = true
-            }
+            await performNormalCleanup()
         }
     }
     
     @objc private func handleMemoryCriticalNotification() {
         Task { @MainActor in
-            await cleanupMemory()
-            memoryWarningLabel?.text = "CRITICAL: Memory cleanup in progress..."
-            memoryWarningLabel?.isHidden = false
-            
-            // Hide warning after 3 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
-                self?.memoryWarningLabel?.isHidden = true
-            }
+            await performAggressiveCleanup()
         }
+    }
+    
+    private func cleanupMemory() async {
+        await performNormalCleanup()
     }
 
     override func update(_ currentTime: TimeInterval) {
@@ -1088,6 +1153,258 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Redraw blocks with new theme colors
         renderGrid(gridNode: gridNode, gameState: gameState, blockSize: GameConstants.blockSize)
+    }
+    
+    private func cleanupParticleEffects() {
+        // Remove old particle emitters
+        while activeParticleEmitters.count > maxParticleEmitters {
+            if let oldestEmitter = activeParticleEmitters.first {
+                oldestEmitter.removeFromParent()
+                returnParticleEmitterToPool(oldestEmitter)
+                activeParticleEmitters.removeFirst()
+            }
+        }
+        
+        // Clean up any finished particle emitters
+        activeParticleEmitters = activeParticleEmitters.filter { emitter in
+            if emitter.particleBirthRate == 0 && emitter.particleLifetime == 0 {
+                emitter.removeFromParent()
+                returnParticleEmitterToPool(emitter)
+                return false
+            }
+            return true
+        }
+    }
+    
+    private func optimizeParticleEmitter(_ emitter: SKEmitterNode) {
+        // Reduce particle count
+        emitter.particleBirthRate = min(emitter.particleBirthRate, 50)
+        
+        // Reduce lifetime
+        emitter.particleLifetime = min(emitter.particleLifetime, 1.0)
+        
+        // Reduce particle size
+        emitter.particleSize = CGSize(
+            width: min(emitter.particleSize.width, 10),
+            height: min(emitter.particleSize.height, 10)
+        )
+        
+        // Reduce alpha
+        emitter.particleAlpha = min(emitter.particleAlpha, 0.8)
+        
+        // Reduce speed
+        emitter.particleSpeed = min(emitter.particleSpeed, 100)
+        
+        // Reduce acceleration
+        emitter.particleSpeedRange = min(emitter.particleSpeedRange, 50)
+        
+        // Reduce emission angle
+        emitter.emissionAngleRange = min(emitter.emissionAngleRange, .pi / 4)
+    }
+    
+    private func addParticleEffect(at position: CGPoint) {
+        cleanupParticleEffects()
+        
+        guard activeParticleEmitters.count < maxParticleEmitters else { return }
+        
+        if let emitter = getParticleEmitterFromPool() {
+            emitter.position = position
+            emitter.zPosition = 100
+            addChild(emitter)
+            activeParticleEmitters.append(emitter)
+            
+            let wait = SKAction.wait(forDuration: emitter.particleLifetime + 0.1)
+            let remove = SKAction.run { [weak self] in
+                emitter.removeFromParent()
+                self?.activeParticleEmitters.removeAll { $0 === emitter }
+                self?.returnParticleEmitterToPool(emitter)
+            }
+            emitter.run(SKAction.sequence([wait, remove]))
+        }
+    }
+    
+    private func manageCachedNodes() {
+        // Limit cache size to 50 nodes
+        if cachedNodes.count > 50 {
+            // Remove oldest entries
+            let excessCount = cachedNodes.count - 50
+            let keysToRemove = Array(cachedNodes.keys.prefix(excessCount))
+            for key in keysToRemove {
+                cachedNodes[key]?.removeFromParent()
+                cachedNodes.removeValue(forKey: key)
+            }
+        }
+    }
+    
+    private func cacheNode(_ node: SKNode, forKey key: String) {
+        manageCachedNodes()
+        cachedNodes[key] = node
+    }
+    
+    private func getCachedNode(forKey key: String) -> SKNode? {
+        return cachedNodes[key]
+    }
+    
+    private func clearNodeCache() {
+        cachedNodes.values.forEach { $0.removeFromParent() }
+        cachedNodes.removeAll()
+    }
+    
+    private func optimizeTextures() {
+        // Preload and optimize textures
+        let textureNames = ["block", "particle", "background"]
+        for name in textureNames {
+            let texture = SKTexture(imageNamed: name)
+            texture.filteringMode = .linear
+            texture.usesMipmaps = true
+        }
+    }
+    
+    private func optimizeTexture(_ texture: SKTexture) {
+        // Set texture filtering
+        texture.filteringMode = .linear
+        
+        // Enable mipmapping
+        texture.usesMipmaps = true
+    }
+    
+    private func cleanupResources() {
+        // Stop all animations
+        setBackgroundAnimationsActive(false)
+        
+        // Remove all particle effects
+        cleanupParticleEffects()
+        
+        // Clear node cache
+        clearNodeCache()
+        
+        // Remove unused nodes
+        cleanupUnusedNodes()
+        
+        // Clear textures
+        cleanupTextures()
+        
+        // Clear audio resources
+        cleanupAudio()
+        
+        // Clear temporary data
+        cleanupTemporaryData()
+    }
+    
+    private func cleanupUnusedNodes() {
+        // Remove unused grid nodes
+        gridNode.children.forEach { node in
+            if !node.isUserInteractionEnabled && node.name?.hasPrefix("block_") == true {
+                node.removeFromParent()
+            }
+        }
+        
+        // Remove unused tray nodes
+        trayNode.children.forEach { node in
+            if !node.isUserInteractionEnabled && node.name?.hasPrefix("tray_") == true {
+                node.removeFromParent()
+            }
+        }
+    }
+    
+    private func cleanupTextures() {
+        // Clear texture cache
+        SKTextureAtlas.preloadTextureAtlases([], withCompletionHandler: {})
+        
+        // Clear gradient cache
+        BlockShapeView.clearCache()
+        
+        // Clear image cache
+        UIImageView.clearImageCache()
+    }
+    
+    private func cleanupAudio() {
+        // Stop all sounds
+        AudioManager.shared.stopBackgroundMusic()
+        
+        // Clear sound effects
+        AudioManager.shared.cleanupSoundEffects()
+    }
+    
+    private func cleanupTemporaryData() {
+        // Clear temporary nodes
+        dragNode?.removeFromParent()
+        dragNode = nil
+        previewNode?.removeFromParent()
+        previewNode = nil
+        hintHighlight?.removeFromParent()
+        hintHighlight = nil
+        
+        // Clear temporary arrays
+        blockNodes.removeAll()
+        activeParticleEmitters.removeAll()
+    }
+    
+    private func getBlockNodeFromPool() -> SKNode {
+        if let node = blockNodePool.popLast() {
+            node.removeAllChildren()
+            return node
+        }
+        return SKNode()
+    }
+    
+    private func returnBlockNodeToPool(_ node: SKNode) {
+        if blockNodePool.count < maxPoolSize {
+            node.removeAllChildren()
+            blockNodePool.append(node)
+        } else {
+            node.removeFromParent()
+        }
+    }
+    
+    private func getParticleEmitterFromPool() -> SKEmitterNode? {
+        if let emitter = particleEmitterPool.popLast() {
+            emitter.resetSimulation()
+            return emitter
+        }
+        return SKEmitterNode(fileNamed: "ParticleEffect")
+    }
+    
+    private func returnParticleEmitterToPool(_ emitter: SKEmitterNode) {
+        if particleEmitterPool.count < maxPoolSize {
+            emitter.resetSimulation()
+            particleEmitterPool.append(emitter)
+        } else {
+            emitter.removeFromParent()
+        }
+    }
+    
+    private func prepareForSceneTransition() {
+        // Stop all animations
+        setBackgroundAnimationsActive(false)
+        
+        // Pause all actions
+        scene?.isPaused = true
+        
+        // Clean up resources
+        cleanupResources()
+        
+        // Clear all nodes
+        removeAllChildren()
+        
+        // Clear physics world
+        physicsWorld.removeAllJoints()
+        
+        // Clear all actions
+        removeAllActions()
+        
+        // Clear all particle effects
+        cleanupParticleEffects()
+        
+        // Clear all cached nodes
+        clearNodeCache()
+        
+        // Clear object pools
+        blockNodePool.removeAll()
+        particleEmitterPool.removeAll()
+        
+        // Clear temporary data
+        cleanupTemporaryData()
     }
 }
 

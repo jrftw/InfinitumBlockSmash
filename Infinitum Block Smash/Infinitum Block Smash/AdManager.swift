@@ -60,6 +60,7 @@ class AdManager: NSObject, ObservableObject {
     private let minimumTimeBetweenAds: TimeInterval = 60 // 1 minute
     private let maximumAdsPerGame: Int = 5
     private let maximumAdLoadAttempts: Int = 3
+    private let adLoadTimeout: TimeInterval = 10 // 10 seconds timeout for ad loading
     
     enum AdState {
         case idle
@@ -75,6 +76,7 @@ class AdManager: NSObject, ObservableObject {
         case tooFrequent
         case noAdsAvailable
         case userHasNoAds
+        case timeout
     }
     
     private let subscriptionManager = SubscriptionManager.shared
@@ -161,6 +163,43 @@ class AdManager: NSObject, ObservableObject {
         self.bannerAd = banner
     }
     
+    // MARK: - Ad Performance Tracking
+    
+    private func trackAdPerformance(adType: String, success: Bool, error: Error? = nil) {
+        Task {
+            await GameAnalytics.shared.trackEvent(.adShown, parameters: [
+                "ad_type": adType,
+                "success": success,
+                "error": error?.localizedDescription ?? "none"
+            ])
+        }
+    }
+    
+    // MARK: - Ad Availability Check
+    
+    func isAdAvailable() async -> Bool {
+        return await shouldShowAds() && adState == .ready
+    }
+    
+    // MARK: - Timeout Handling
+    
+    private func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async throws -> T) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask {
+                try await operation()
+            }
+            
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                throw AdError.timeout
+            }
+            
+            let result = try await group.next()!
+            group.cancelAll()
+            return result
+        }
+    }
+    
     // MARK: - Interstitial Ads
     
     func loadInterstitial() async {
@@ -177,6 +216,7 @@ class AdManager: NSObject, ObservableObject {
         if adLoadAttempts >= maximumAdLoadAttempts {
             adState = .error
             adError = .tooManyAttempts
+            trackAdPerformance(adType: "interstitial", success: false, error: adError)
             return
         }
         
@@ -185,15 +225,19 @@ class AdManager: NSObject, ObservableObject {
         
         do {
             let request = Request()
-            interstitialAd = try await InterstitialAd.load(with: interstitialAdUnitID, request: request)
-            interstitialAd?.fullScreenContentDelegate = self
-            adState = .ready
-            adLoadAttempts = 0
+            try await withTimeout(seconds: adLoadTimeout) {
+                interstitialAd = try await InterstitialAd.load(with: interstitialAdUnitID, request: request)
+                interstitialAd?.fullScreenContentDelegate = self
+                adState = .ready
+                adLoadAttempts = 0
+                trackAdPerformance(adType: "interstitial", success: true)
+            }
         } catch {
             print("Failed to load interstitial ad with error: \(error.localizedDescription)")
             adState = .error
-            adError = .loadFailed
+            adError = error is AdError ? error as! AdError : .loadFailed
             adLoadAttempts += 1
+            trackAdPerformance(adType: "interstitial", success: false, error: error)
         }
     }
     
@@ -220,20 +264,33 @@ class AdManager: NSObject, ObservableObject {
     // MARK: - Rewarded Interstitial Ads
     
     func loadRewardedInterstitial() async {
+        adState = .loading
+        adError = nil
+        
         // Don't load ads if user has purchased no-ads
-        guard await shouldShowAds() else { return }
+        guard await shouldShowAds() else {
+            adState = .idle
+            return
+        }
         
         // Clean up existing rewarded interstitial if any
         rewardedInterstitialAd = nil
         
         do {
             let request = Request()
-            rewardedInterstitialAd = try await RewardedInterstitialAd.load(with: rewardedInterstitialAdUnitID, request: request)
-            rewardedInterstitialAd?.fullScreenContentDelegate = self
-            adLoadFailed = false
+            try await withTimeout(seconds: adLoadTimeout) {
+                rewardedInterstitialAd = try await RewardedInterstitialAd.load(with: rewardedInterstitialAdUnitID, request: request)
+                rewardedInterstitialAd?.fullScreenContentDelegate = self
+                adState = .ready
+                adLoadFailed = false
+                trackAdPerformance(adType: "rewarded", success: true)
+            }
         } catch {
             print("Failed to load rewarded interstitial ad with error: \(error.localizedDescription)")
+            adState = .error
+            adError = error is AdError ? error as! AdError : .loadFailed
             adLoadFailed = true
+            trackAdPerformance(adType: "rewarded", success: false, error: error)
         }
     }
     
@@ -256,13 +313,17 @@ class AdManager: NSObject, ObservableObject {
         }
     }
     
-    // MARK: - Cleanup
+    // MARK: - Improved Cleanup
     
     func cleanup() {
         bannerAd?.removeFromSuperview()
         bannerAd = nil
         interstitialAd = nil
         rewardedInterstitialAd = nil
+        adState = .idle
+        adError = nil
+        adLoadAttempts = 0
+        adLoadFailed = false
     }
     
     func resetGameState() async {
