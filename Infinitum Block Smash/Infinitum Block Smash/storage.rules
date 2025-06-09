@@ -16,22 +16,54 @@ service firebase.storage {
         && request.resource.size < 1 * 1024 * 1024; // 1MB max for free tier
     }
 
+    function isValidFileType() {
+      return request.resource.contentType.matches('image/.*') ||
+             request.resource.contentType.matches('application/json') ||
+             request.resource.contentType.matches('text/.*');
+    }
+
+    function isNotRateLimited() {
+      return request.time > resource.data.lastUpdate + duration.value(1, 'm');
+    }
+
+    function isValidMetadata() {
+      return request.resource.metadata.keys().hasAll(['uploadedBy', 'timestamp']) &&
+             request.resource.metadata.uploadedBy is string &&
+             request.resource.metadata.timestamp is string;
+    }
+
     // User profile images
     match /users/{userId}/profile.jpg {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && isOwner(userId) && isValidImage();
+      allow write: if isAuthenticated() && isOwner(userId) && isValidImage() && isValidMetadata() && isNotRateLimited();
     }
 
     // Game assets
     match /game/{assetType}/{assetId} {
       allow read: if isAuthenticated();
       allow write: if false; // Only admin can upload game assets
+      allow delete: if false; // Only admin can delete game assets
     }
 
     // Achievement icons
     match /achievements/{achievementId} {
       allow read: if isAuthenticated();
       allow write: if false; // Only admin can upload achievement icons
+      allow delete: if false; // Only admin can delete achievement icons
+    }
+
+    // User uploads
+    match /uploads/{userId}/{fileName} {
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow write: if isAuthenticated() && isOwner(userId) && isValidFileType() && isValidMetadata() && isNotRateLimited();
+      allow delete: if isAuthenticated() && isOwner(userId);
+    }
+
+    // Temporary files
+    match /temp/{userId}/{fileName} {
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow write: if isAuthenticated() && isOwner(userId) && isValidFileType() && isNotRateLimited();
+      allow delete: if isAuthenticated() && isOwner(userId);
     }
   }
 } 

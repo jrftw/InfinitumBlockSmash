@@ -142,10 +142,69 @@ class ProfanityFilter {
     ]
     
     static func containsInappropriateLanguage(_ text: String) -> Bool {
-        let words = text.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted)
-        return words.contains { word in
-            inappropriateWords.contains(word)
+        let normalizedText = text.lowercased()
+            .replacingOccurrences(of: "0", with: "o")
+            .replacingOccurrences(of: "1", with: "i")
+            .replacingOccurrences(of: "3", with: "e")
+            .replacingOccurrences(of: "4", with: "a")
+            .replacingOccurrences(of: "5", with: "s")
+            .replacingOccurrences(of: "7", with: "t")
+            .replacingOccurrences(of: "8", with: "b")
+            .replacingOccurrences(of: "@", with: "a")
+            .replacingOccurrences(of: "$", with: "s")
+            .replacingOccurrences(of: "!", with: "i")
+        
+        // Check for exact word matches
+        let words = normalizedText.components(separatedBy: CharacterSet.alphanumerics.inverted)
+        if words.contains(where: { word in inappropriateWords.contains(word) }) {
+            return true
         }
+        
+        // Check for partial matches (words containing inappropriate terms)
+        for word in inappropriateWords {
+            if normalizedText.contains(word) {
+                return true
+            }
+        }
+        
+        // Check for leetspeak variations
+        for word in inappropriateWords {
+            let leetVariations = generateLeetVariations(word)
+            for variation in leetVariations {
+                if normalizedText.contains(variation) {
+                    return true
+                }
+            }
+        }
+        
+        return false
+    }
+    
+    private static func generateLeetVariations(_ word: String) -> [String] {
+        var variations = [word]
+        
+        // Common leetspeak substitutions
+        let substitutions: [Character: [Character]] = [
+            "a": ["4", "@"],
+            "e": ["3"],
+            "i": ["1", "!"],
+            "o": ["0"],
+            "s": ["5", "$"],
+            "t": ["7"],
+            "b": ["8"]
+        ]
+        
+        // Generate variations with leetspeak substitutions
+        for (char, replacements) in substitutions {
+            if word.contains(char) {
+                for replacement in replacements {
+                    let variation = word.replacingOccurrences(of: String(char), with: String(replacement))
+                    variations.append(variation)
+                }
+            }
+        }
+        
+        return variations
     }
     
     static func isAppropriate(_ text: String) -> Bool {

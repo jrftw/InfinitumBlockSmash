@@ -54,6 +54,32 @@
       ".write": "auth != null",
       ".indexOn": ["lastLogin", "lastActive"]
     },
+    "game_states": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['score', 'level', 'lastUpdate'])",
+        "score": {
+          ".validate": "newData.isNumber() && newData.val() >= 0"
+        },
+        "level": {
+          ".validate": "newData.isNumber() && newData.val() >= 1"
+        },
+        "grid": {
+          ".validate": "newData.hasChildren()"
+        },
+        "tray": {
+          ".validate": "newData.hasChildren()"
+        },
+        "lastUpdate": {
+          ".validate": "newData.isNumber() && newData.val() <= now"
+        },
+        "lastSaveTime": {
+          ".validate": "newData.isNumber() && newData.val() >= 0"
+        }
+      },
+      ".indexOn": ["lastSaveTime", "lastUpdate"]
+    },
     "online_users": {
       ".read": true,
       "$uid": {
@@ -69,17 +95,22 @@
       },
       "last_reset": {
         ".write": "auth != null",
-        ".validate": "newData.isNumber()"
+        ".validate": "newData.isNumber() && newData.val() <= now"
       }
     },
     "leaderboards": {
       ".read": "auth != null",
       "$leaderboardId": {
         ".write": "auth != null && (!data.exists() || data.child('userId').val() === auth.uid)",
+        ".validate": "newData.hasChildren(['score', 'timestamp'])",
         "score": {
           ".validate": "newData.isNumber() && newData.val() >= 0"
+        },
+        "timestamp": {
+          ".validate": "newData.isNumber() && newData.val() <= now"
         }
-      }
+      },
+      ".indexOn": ["score", "timestamp"]
     },
     "achievement_leaderboard": {
       "$timeframe": {
@@ -87,11 +118,16 @@
           "$uid": {
             ".read": "auth != null",
             ".write": "auth != null && auth.uid === $uid",
+            ".validate": "newData.hasChildren(['score', 'timestamp'])",
             "score": {
               ".validate": "newData.isNumber() && newData.val() >= 0"
+            },
+            "timestamp": {
+              ".validate": "newData.isNumber() && newData.val() <= now"
             }
           }
-        }
+        },
+        ".indexOn": ["score", "timestamp"]
       }
     },
     "settings": {
@@ -103,6 +139,7 @@
     "leaderboard": {
       ".read": true,
       ".write": "auth != null",
+      ".validate": "newData.hasChildren(['score', 'timestamp'])",
       ".indexOn": ["score", "timestamp"]
     }
   }

@@ -10,6 +10,7 @@ import FirebaseAuth
 import FirebaseFirestore
 import UserNotifications
 import BackgroundTasks
+import GameKit
 
 // MARK: - AppDelegate
 class AppDelegate: NSObject, UIApplicationDelegate {
@@ -34,6 +35,23 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Configure Google Mobile Ads
         MobileAds.shared.start { status in
             print("Google Mobile Ads SDK initialization status: \(status)")
+        }
+        
+        // Initialize Game Center
+        GKLocalPlayer.local.authenticateHandler = { viewController, error in
+            if let viewController = viewController {
+                // Present the view controller if needed
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let window = windowScene.windows.first {
+                    window.rootViewController?.present(viewController, animated: true)
+                }
+            } else if GKLocalPlayer.local.isAuthenticated {
+                print("[GameCenter] Player authenticated successfully")
+                // Initialize Game Center manager
+                _ = GameCenterManager.shared
+            } else if let error = error {
+                print("[GameCenter] Authentication error: \(error.localizedDescription)")
+            }
         }
         
         // Request App Tracking Transparency on first launch

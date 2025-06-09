@@ -13,8 +13,6 @@ struct LeaderboardView: View {
     @State private var allTimeUserPosition: Int?
     @State private var lastUpdated: Date?
     @State private var totalUsers: Int = 0
-    @State private var currentPage = 1
-    @State private var hasMorePages = false
     @State private var isOfflineMode = false
     
     private let periods = ["daily", "weekly", "monthly", "alltime"]
@@ -174,23 +172,6 @@ struct LeaderboardView: View {
                             .padding(.vertical, 4)
                             .listRowBackground(getBackgroundColor(for: index))
                         }
-                        
-                        if hasMorePages {
-                            Button(action: {
-                                currentPage += 1
-                                Task {
-                                    await loadMoreData()
-                                }
-                            }) {
-                                HStack {
-                                    Spacer()
-                                    Text("Load More")
-                                        .foregroundColor(.blue)
-                                    Spacer()
-                                }
-                            }
-                            .padding(.vertical, 8)
-                        }
                     }
                 }
             }
@@ -222,20 +203,17 @@ struct LeaderboardView: View {
     private func loadLeaderboardData() async {
         isLoading = true
         error = nil
-        currentPage = 1
         isOfflineMode = false
         
         do {
             // Load main leaderboard data
             let result = try await LeaderboardService.shared.getLeaderboard(
                 type: selectedType,
-                period: selectedPeriod,
-                page: currentPage
+                period: selectedPeriod
             )
             
             leaderboardData = result.entries
-            hasMorePages = result.hasMore
-            totalUsers = result.entries.count
+            totalUsers = result.totalUsers
             
             // Update last updated time
             lastUpdated = Date()
@@ -252,8 +230,7 @@ struct LeaderboardView: View {
                         do {
                             let allTimeResult = try await LeaderboardService.shared.getLeaderboard(
                                 type: selectedType,
-                                period: selectedPeriod,
-                                page: 1
+                                period: selectedPeriod
                             )
                             if let idx = allTimeResult.entries.firstIndex(where: { $0.id == userID }) {
                                 userPosition = idx + 1
@@ -272,8 +249,7 @@ struct LeaderboardView: View {
                     do {
                         let allTimeResult = try await LeaderboardService.shared.getLeaderboard(
                             type: selectedType,
-                            period: "alltime",
-                            page: 1
+                            period: "alltime"
                         )
                         if let idx = allTimeResult.entries.firstIndex(where: { $0.id == userID }) {
                             allTimeUserPosition = idx + 1
@@ -307,22 +283,5 @@ struct LeaderboardView: View {
         }
         
         isLoading = false
-    }
-    
-    private func loadMoreData() async {
-        do {
-            let result = try await LeaderboardService.shared.getLeaderboard(
-                type: selectedType,
-                period: selectedPeriod,
-                page: currentPage
-            )
-            
-            leaderboardData.append(contentsOf: result.entries)
-            hasMorePages = result.hasMore
-        } catch {
-            self.error = error.localizedDescription
-            // Don't show error for pagination failures, just stop loading more
-            hasMorePages = false
-        }
     }
 }

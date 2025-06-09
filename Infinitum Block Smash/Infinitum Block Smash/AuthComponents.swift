@@ -151,13 +151,27 @@ struct AdditionalInfoFormView: View {
     
     var body: some View {
         VStack(spacing: 12) {
-            Text("Complete Your Profile")
+            Text(viewModel.tempAuthProvider == "force_username_change" ? "Change Username" : "Complete Your Profile")
                 .font(.title2)
                 .foregroundColor(.white)
                 .padding(.bottom, 8)
             
+            if !viewModel.errorMessage.isEmpty {
+                Text(viewModel.errorMessage)
+                    .foregroundColor(.red)
+                    .font(.caption)
+                    .padding(.bottom, 8)
+            }
+            
             TextField("Username", text: $viewModel.username)
                 .textFieldStyle(ModernTextFieldStyle())
+                .onChange(of: viewModel.username) { newValue in
+                    if !ProfanityFilter.isAppropriate(newValue) {
+                        viewModel.errorMessage = "Username contains inappropriate language."
+                    } else {
+                        viewModel.errorMessage = ""
+                    }
+                }
             
             if viewModel.tempAuthProvider == "gamecenter" {
                 TextField("Email", text: $viewModel.email)
@@ -167,20 +181,23 @@ struct AdditionalInfoFormView: View {
                     .textFieldStyle(ModernTextFieldStyle())
             }
             
-            Button("Complete Setup") {
+            Button(viewModel.tempAuthProvider == "force_username_change" ? "Update Username" : "Complete Setup") {
                 viewModel.completeAdditionalInfo()
             }
             .buttonStyle(ModernButtonStyle())
+            .disabled(!ProfanityFilter.isAppropriate(viewModel.username))
             
-            Button("Cancel") {
-                viewModel.showAdditionalInfo = false
-                viewModel.tempUserID = ""
-                viewModel.tempAuthProvider = ""
-                viewModel.email = ""
-                viewModel.password = ""
-                viewModel.username = ""
+            if viewModel.tempAuthProvider != "force_username_change" {
+                Button("Cancel") {
+                    viewModel.showAdditionalInfo = false
+                    viewModel.tempUserID = ""
+                    viewModel.tempAuthProvider = ""
+                    viewModel.email = ""
+                    viewModel.password = ""
+                    viewModel.username = ""
+                }
+                .buttonStyle(ModernButtonStyle(filled: false, accent: .gray))
             }
-            .buttonStyle(ModernButtonStyle(filled: false, accent: .gray))
         }
         .padding(24)
         .background(BlurView(style: .systemUltraThinMaterialDark))

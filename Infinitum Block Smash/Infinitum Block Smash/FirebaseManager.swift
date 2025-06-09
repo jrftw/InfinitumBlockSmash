@@ -74,6 +74,7 @@ class FirebaseManager: ObservableObject {
         setupAuthStateListener()
         loadDeviceId()
         startLastActiveUpdates()
+        configureOfflinePersistence()
     }
     
     deinit {
@@ -414,30 +415,39 @@ class FirebaseManager: ObservableObject {
         ])
     }
     
-    func getLeaderboard(limit: Int = 100) async throws -> [LeaderboardEntry] {
+    // Add caching for frequently accessed data
+    private var leaderboardCache: (entries: [LeaderboardEntry], timestamp: Date)?
+    
+    func loadLeaderboardData(limit: Int = 100, forceRefresh: Bool = false) async throws -> [LeaderboardEntry] {
+        // Check cache first if not forcing refresh
+        if !forceRefresh, let cachedData = leaderboardCache, Date().timeIntervalSince(cachedData.timestamp) < 300 {
+            return cachedData.entries
+        }
+        
         let snapshot = try await db.collection("leaderboard")
             .order(by: "score", descending: true)
             .limit(to: limit)
             .getDocuments()
         
-        return snapshot.documents.compactMap { document in
-            let data = document.data()
-            guard let userId = data["userId"] as? String,
-                  let username = data["username"] as? String,
-                  let score = data["score"] as? Int,
-                  let level = data["level"] as? Int,
-                  let timestamp = data["timestamp"] as? Timestamp else {
+        let entries = snapshot.documents.compactMap { document -> LeaderboardEntry? in
+            guard let username = document.data()["username"] as? String,
+                  let score = document.data()["score"] as? Int,
+                  let timestamp = (document.data()["timestamp"] as? Timestamp)?.dateValue() else {
                 return nil
             }
-            
             return LeaderboardEntry(
-                userId: userId,
+                userId: document.documentID,
                 username: username,
                 score: score,
-                level: level,
-                timestamp: timestamp.dateValue()
+                level: document.data()["level"] as? Int ?? 1,
+                timestamp: timestamp
             )
         }
+        
+        // Update cache
+        leaderboardCache = (entries: entries, timestamp: Date())
+        
+        return entries
     }
     
     // MARK: - Referral Code Management
@@ -606,11 +616,11 @@ class FirebaseManager: ObservableObject {
     }
     
     private func syncAchievements() async throws {
-        guard let userId = Auth.auth().currentUser?.uid else {
+        guard Auth.auth().currentUser != nil else {
             throw FirebaseError.notAuthenticated
         }
         
-        let userRef = db.collection("users").document(userId)
+        let userRef = db.collection("users").document(currentUser?.uid ?? "")
         
         // Get local achievements
         let localAchievements = try? await userRef
@@ -774,6 +784,20 @@ class FirebaseManager: ObservableObject {
         
         let snapshot = try await query.getDocuments()
         return snapshot.documents.compactMap { $0.data()["data"] as? [String: Any] }
+    }
+    
+    private func configureOfflinePersistence() {
+        // Configure Firestore offline persistence
+        let settings = FirestoreSettings()
+        settings.cacheSettings = PersistentCacheSettings(sizeBytes: NSNumber(value: FirestoreCacheSizeUnlimited))
+        db.settings = settings
+        
+        // Configure Realtime Database offline persistence
+        Database.database().isPersistenceEnabled = true
+        
+        // Enable offline persistence for specific paths
+        let leaderboardRef = Database.database().reference(withPath: "leaderboard")
+        leaderboardRef.keepSynced(true)
     }
 }
 

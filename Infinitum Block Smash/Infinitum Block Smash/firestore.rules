@@ -17,9 +17,12 @@ service cloud.firestore {
     }
     
     function isValidUsername() {
-      return request.resource.data.username is string 
-        && request.resource.data.username.size() >= 3 
-        && request.resource.data.username.size() <= 20;
+      let username = request.resource.data.username;
+      return username is string 
+        && username.size() >= 3 
+        && username.size() <= 20
+        && !username.matches('.*[^a-z0-9_].*')  // Only allow lowercase letters, numbers, and underscores
+        && !username.matches('.*(admin|moderator|support).*');  // Prevent impersonation
     }
 
     function isValidGameProgress() {
@@ -34,42 +37,67 @@ service cloud.firestore {
              request.resource.data.highestLevel is number;
     }
 
+    // Rate limiting functions
+    function isNotRateLimited() {
+      return request.time > resource.data.lastUpdate + duration.value(1, 'm');
+    }
+
+    function isNotLeaderboardRateLimited() {
+      return request.time > resource.data.lastUpdate + duration.value(5, 'm');
+    }
+
+    function isValidTimestamp() {
+      return request.time.toMillis() - request.resource.data.timestamp.toMillis() < duration.value(1, 'h').toMillis();
+    }
+
     // Users collection
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isOwner(userId) && isValidUsername();
-      allow update: if isAuthenticated() && isOwner(userId) && isValidUsername();
+      allow update: if isAuthenticated() && isOwner(userId) && isValidUsername() && isNotRateLimited();
       allow delete: if isAuthenticated() && isOwner(userId);
       
       // User's game progress
       match /progress/{document=**} {
         allow read: if isAuthenticated() && isOwner(userId);
-        allow write: if isAuthenticated() && isOwner(userId) && isValidGameProgress();
+        allow write: if isAuthenticated() && isOwner(userId) && isValidGameProgress() && isNotRateLimited();
       }
       
       // User's achievements
       match /achievements/{achievementId} {
         allow read: if isAuthenticated() && isOwner(userId);
-        allow write: if isAuthenticated() && isOwner(userId);
+        allow write: if isAuthenticated() && isOwner(userId) && isNotRateLimited();
+      }
+
+      // User's analytics
+      match /analytics/{document=**} {
+        allow read: if isAuthenticated() && isOwner(userId);
+        allow write: if isAuthenticated() && isOwner(userId) && isNotRateLimited();
       }
     }
 
     // Classic leaderboard
     match /classic_leaderboard/{timeframe}/scores/{userId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && isOwner(userId) && isValidScore();
+      allow write: if isAuthenticated() && isOwner(userId) && isValidScore() && isNotLeaderboardRateLimited() && isValidTimestamp();
     }
 
     // Achievement leaderboard
     match /achievement_leaderboard/{timeframe}/scores/{userId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && isOwner(userId) && isValidScore();
+      allow write: if isAuthenticated() && isOwner(userId) && isValidScore() && isNotLeaderboardRateLimited() && isValidTimestamp();
     }
 
     // Game settings
     match /settings/{userId} {
       allow read: if isAuthenticated() && isOwner(userId);
-      allow write: if isAuthenticated() && isOwner(userId);
+      allow write: if isAuthenticated() && isOwner(userId) && isNotRateLimited();
+    }
+
+    // Analytics collection
+    match /analytics/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isNotRateLimited();
     }
   }
 } 

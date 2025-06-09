@@ -332,8 +332,22 @@ class AuthViewModel: ObservableObject {
     
     private func handleSuccessfulAuth() {
         isLoading = false
+        checkUsernameAppropriateness()
         resetState()
         checkNotificationStatus()
+    }
+    
+    private func checkUsernameAppropriateness() {
+        guard let user = Auth.auth().currentUser else { return }
+        
+        // Check if current username is appropriate
+        if let currentUsername = user.displayName, !ProfanityFilter.isAppropriate(currentUsername) {
+            // Force user to change username
+            showAdditionalInfo = true
+            tempUserID = user.uid
+            tempAuthProvider = "force_username_change"
+            errorMessage = "Your current username contains inappropriate language. Please choose a new username."
+        }
     }
     
     private func checkNotificationStatus() {

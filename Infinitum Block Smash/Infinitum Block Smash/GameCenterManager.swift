@@ -7,16 +7,16 @@ class GameCenterManager {
     // Leaderboard IDs
     private enum LeaderboardID {
         // Classic Leaderboard IDs
-        static let classicDaily = "classic_leaderboard.daily"
-        static let classicWeekly = "classic_leaderboard.weekly"
-        static let classicMonthly = "classic_leaderboard.monthly"
-        static let classicAllTime = "classic_leaderboard.alltime"
+        static let classicDaily = "com.infinitum.blocksmash.classic.daily"
+        static let classicWeekly = "com.infinitum.blocksmash.classic.weekly"
+        static let classicMonthly = "com.infinitum.blocksmash.classic.monthly"
+        static let classicAllTime = "com.infinitum.blocksmash.classic.alltime"
         
         // Achievement Leaderboard IDs
-        static let achievementDaily = "achievement_leaderboard.daily"
-        static let achievementWeekly = "achievement_leaderboard.weekly"
-        static let achievementMonthly = "achievement_leaderboard.monthly"
-        static let achievementAllTime = "achievement_leaderboard.alltime"
+        static let achievementDaily = "com.infinitum.blocksmash.achievement.daily"
+        static let achievementWeekly = "com.infinitum.blocksmash.achievement.weekly"
+        static let achievementMonthly = "com.infinitum.blocksmash.achievement.monthly"
+        static let achievementAllTime = "com.infinitum.blocksmash.achievement.alltime"
     }
     
     // Achievement IDs
