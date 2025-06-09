@@ -533,6 +533,13 @@ class SubscriptionManager: ObservableObject {
         print("- Hints: \(hasHints)")
         print("- No Ads: \(hasNoAds)")
     }
+    
+    // Add method to preload subscription status
+    func preloadSubscriptionStatus() async {
+        await loadProducts()
+        await updatePurchasedProducts()
+        await validateSubscriptionFeatures()
+    }
 }
 
 enum SubscriptionFeature: String {

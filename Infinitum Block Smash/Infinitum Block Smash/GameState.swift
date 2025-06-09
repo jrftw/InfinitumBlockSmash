@@ -172,6 +172,11 @@ final class GameState: ObservableObject {
     private let offlineQueueKey = "offlineChangesQueue"
     private let lastSyncAttemptKey = "lastSyncAttempt"
     
+    // Add these properties at the top of the class
+    private var lastHintTime: TimeInterval = 0
+    private let hintCooldown: TimeInterval = 1.0 // 1 second cooldown
+    private var cachedHint: (block: Block, position: (row: Int, col: Int))?
+    
     // MARK: - Initialization
     init() {
         // Run data migration if needed
@@ -1858,6 +1863,12 @@ final class GameState: ObservableObject {
     // Add this method to handle hints
     func showHint() {
         Task { @MainActor in
+            let currentTime = CACurrentMediaTime()
+            guard currentTime - lastHintTime >= hintCooldown else {
+                print("[Hint] Hint on cooldown")
+                return
+            }
+            
             let hasUnlimitedHints = await subscriptionManager.hasFeature(.hints)
             if hintsUsedThisGame >= 3 && !hasUnlimitedHints {
                 return
@@ -1865,11 +1876,24 @@ final class GameState: ObservableObject {
             
             print("[Hint] Attempting to show hint. Current hints used: \(hintsUsedThisGame)")
             
+            // Try to use cached hint first
+            if let cached = cachedHint, canPlaceBlock(cached.block, at: CGPoint(x: cached.position.col, y: cached.position.row)) {
+                delegate?.highlightHint(block: cached.block, at: cached.position)
+                if !hasUnlimitedHints {
+                    hintsUsedThisGame += 1
+                }
+                lastHintTime = currentTime
+                return
+            }
+            
+            // If no valid cached hint, find a new one
             if let (block, position) = findValidMove() {
+                cachedHint = (block, position)
                 delegate?.highlightHint(block: block, at: position)
                 if !hasUnlimitedHints {
                     hintsUsedThisGame += 1
                 }
+                lastHintTime = currentTime
             } else {
                 print("[Hint] No valid moves found")
             }
@@ -2314,6 +2338,13 @@ final class GameState: ObservableObject {
         
         print("[LineClear] Found \(rowsToClear.count) rows and \(columnsToClear.count) columns to clear")
         return (rowsToClear, columnsToClear)
+    }
+    
+    // Add this method to preload settings resources
+    func preloadSettingsResources() async {
+        // Preload any heavy resources needed for settings
+        await subscriptionManager.preloadSubscriptionStatus()
+        await achievementsManager.preloadAchievements()
     }
 }
 

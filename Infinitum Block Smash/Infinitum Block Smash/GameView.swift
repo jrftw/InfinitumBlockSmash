@@ -27,6 +27,7 @@ struct GameView: View {
     @State private var syncError: String?
     @StateObject private var notificationService = NotificationService.shared
     @State private var showingSaveWarning = false
+    @State private var isSettingsLoading = false
     
     private enum SettingsAction {
         case resume
@@ -135,7 +136,19 @@ struct GameView: View {
             }
         }
         .sheet(isPresented: $showingSettings) {
-            SettingsView(gameState: gameState, showingTutorial: $showingTutorial)
+            if isSettingsLoading {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle())
+                    .scaleEffect(1.5)
+            } else {
+                SettingsView(gameState: gameState, showingTutorial: $showingTutorial)
+                    .onAppear {
+                        // Preload any heavy resources here
+                        Task {
+                            await gameState.preloadSettingsResources()
+                        }
+                    }
+            }
         }
         .sheet(isPresented: $showingAchievements) {
             AchievementsView(achievementsManager: gameState.achievementsManager)
@@ -177,6 +190,15 @@ struct GameView: View {
             // Check top three status when score changes
             Task {
                 await adManager.checkTopThreeStatus()
+            }
+        }
+        .onChange(of: showingSettings) { newValue in
+            if newValue {
+                isSettingsLoading = true
+                // Add a small delay to ensure smooth transition
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    isSettingsLoading = false
+                }
             }
         }
         .onDisappear {

@@ -725,6 +725,13 @@ class AchievementsManager: ObservableObject {
             userDefaults.synchronize()
         }
     }
+    
+    // Add method to preload achievements
+    func preloadAchievements() async {
+        loadAchievements()
+        calculateTotalPoints()
+        await syncAchievementsWithFirebase()
+    }
 }
 
 // Add at the top of the file with other extensions

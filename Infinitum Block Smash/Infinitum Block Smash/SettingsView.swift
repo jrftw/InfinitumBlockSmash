@@ -396,6 +396,204 @@ private struct StatsForNerdsSection: View {
     }
 }
 
+// Add these new view structs before the main SettingsView
+private struct StoreSection: View {
+    @Binding var showingStore: Bool
+    
+    var body: some View {
+        Section {
+            Button(action: { showingStore = true }) {
+                HStack {
+                    Image(systemName: "cart.fill")
+                        .foregroundColor(.blue)
+                    Text("Store")
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .foregroundColor(.gray)
+                }
+            }
+        }
+    }
+}
+
+private struct ReferralSection: View {
+    var body: some View {
+        Section {
+            NavigationLink {
+                ReferralView()
+            } label: {
+                HStack {
+                    Image(systemName: "person.2.fill")
+                        .foregroundColor(.green)
+                    Text("Refer Friends")
+                    Spacer()
+                }
+            }
+        }
+    }
+}
+
+private struct GameModeRulesSection: View {
+    var body: some View {
+        Section(header: Text("Game Mode Rules")) {
+            NavigationLink(destination: GameRulesView(gameMode: "Classic")) {
+                HStack {
+                    Image(systemName: "gamecontroller.fill")
+                        .foregroundColor(.blue)
+                    Text("Classic")
+                    Spacer()
+                    if !UserDefaults.standard.bool(forKey: "isTimedMode") {
+                        Text("Current")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            
+            NavigationLink(destination: ClassicTimedRulesView()) {
+                HStack {
+                    Image(systemName: "timer")
+                        .foregroundColor(.red)
+                    Text("Classic Timed")
+                    Spacer()
+                    if UserDefaults.standard.bool(forKey: "isTimedMode") {
+                        Text("Current")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct GameProgressSection: View {
+    @ObservedObject var gameState: GameState
+    
+    var body: some View {
+        Section(header: Text("Game Progress")) {
+            HStack {
+                Text("High Score")
+                Spacer()
+                Text("\(gameState.highScore)")
+                    .foregroundColor(.blue)
+            }
+            
+            HStack {
+                Text("Highest Level")
+                Spacer()
+                Text("\(gameState.highestLevel)")
+                    .foregroundColor(.blue)
+            }
+        }
+    }
+}
+
+private struct DataManagementSection: View {
+    @Binding var autoSyncEnabled: Bool
+    @Binding var showingResetConfirmation: Bool
+    
+    var body: some View {
+        Section(header: Text("Data Management")) {
+            Toggle("Auto Sync Data", isOn: $autoSyncEnabled)
+            
+            Button("Reset Game Data") {
+                showingResetConfirmation = true
+            }
+            .foregroundColor(.red)
+        }
+    }
+}
+
+private struct InformationSection: View {
+    @Binding var showingDiscordWebView: Bool
+    @Binding var showingTestFlightAlert: Bool
+    @Binding var showingFeedbackMail: Bool
+    @Binding var showingFeatureMail: Bool
+    
+    var body: some View {
+        Section(header: Text("Information")) {
+            NavigationLink(destination: ChangelogView()) {
+                Text("Changelog")
+            }
+            
+            NavigationLink(destination: EULAView()) {
+                Text("End User License Agreement")
+            }
+            
+            Button("Join the Discord") {
+                showingDiscordWebView = true
+            }
+            
+            Button("Test New Features") {
+                showingTestFlightAlert = true
+            }
+            
+            Button("Send Feedback") {
+                showingFeedbackMail = true
+            }
+            
+            Button("Suggest a Feature") {
+                showingFeatureMail = true
+            }
+        }
+    }
+}
+
+private struct UpdateSettingsSection: View {
+    var body: some View {
+        Section(header: Text("Update Settings")) {
+            Toggle("Force Public Version", isOn: Binding(
+                get: { ForcePublicVersion.shared.isEnabled },
+                set: { ForcePublicVersion.shared.isEnabled = $0 }
+            ))
+        }
+    }
+}
+
+private struct PrivacySection: View {
+    @Binding var allowAnalytics: Bool
+    @Binding var allowDataSharing: Bool
+    @Binding var showingAnalytics: Bool
+    
+    var body: some View {
+        Section(header: Text("Privacy")) {
+            Toggle("Allow anonymous usage analytics", isOn: $allowAnalytics)
+            Toggle("Allow data sharing for app features", isOn: $allowDataSharing)
+            Toggle("Send crash reports", isOn: Binding(
+                get: { UserDefaults.standard.bool(forKey: "allowCrashReports") },
+                set: { UserDefaults.standard.set($0, forKey: "allowCrashReports") }
+            ))
+            Button("View Analytics Dashboard") {
+                showingAnalytics = true
+            }
+        }
+    }
+}
+
+private struct VersionSection: View {
+    var body: some View {
+        Section {
+            VStack(spacing: 8) {
+                Text(AppVersion.formattedVersion)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text(AppVersion.copyright)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                Text(AppVersion.credits)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                Text(AppVersion.location)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+        }
+    }
+}
+
 // MARK: - Main View
 struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
@@ -404,8 +602,8 @@ struct SettingsView: View {
     @AppStorage("showTutorial") private var showTutorial = true
     @AppStorage("soundEnabled") private var soundEnabled = true
     @AppStorage("hapticsEnabled") private var hapticsEnabled = true
-    @AppStorage("musicVolume") private var musicVolume: Double = 0.7
-    @AppStorage("sfxVolume") private var sfxVolume: Double = 0.7
+    @AppStorage("musicVolume") private var musicVolume: Double = 1.0
+    @AppStorage("sfxVolume") private var sfxVolume: Double = 1.0
     @AppStorage("difficulty") private var difficulty: String = "normal"
     @AppStorage("theme") private var theme: String = "auto"
     @AppStorage("autoSave") private var autoSave = true
@@ -432,195 +630,145 @@ struct SettingsView: View {
     @AppStorage("showStatsOverlay") private var showStatsOverlay = false
     @AppStorage("showFPS") private var showFPS = false
     @AppStorage("showMemory") private var showMemory = false
+    @State private var isLoading = true
+    @State private var loadedSections: Set<String> = ["store", "referral", "gameSettings", "gameplaySettings", "gameModeRules", "audioSettings", "gameProgress", "statsForNerds", "dataManagement", "information", "updateSettings", "privacy"]
     
     private let difficulties = ["easy", "normal", "hard", "expert"]
     private let themes = ["light", "dark", "auto"]
     
+    private func loadSection(_ section: String) {
+        guard !loadedSections.contains(section) else { return }
+        loadedSections.insert(section)
+    }
+    
     var body: some View {
         NavigationView {
             List {
-                Section {
-                    Button(action: { showingStore = true }) {
-                        HStack {
-                            Image(systemName: "cart.fill")
-                                .foregroundColor(.blue)
-                            Text("Store")
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .foregroundColor(.gray)
+                Group {
+                    StoreSection(showingStore: $showingStore)
+                }
+                .onAppear { loadSection("store") }
+                
+                Group {
+                    ReferralSection()
+                }
+                .onAppear { loadSection("referral") }
+                
+                if loadedSections.contains("gameSettings") {
+                    Group {
+                        GameSettingsSection(
+                            theme: $theme,
+                            showTutorial: $showTutorial,
+                            autoSave: $autoSave,
+                            fpsManager: fpsManager,
+                            gameState: gameState,
+                            showingStore: $showingStore,
+                            themes: themes
+                        )
+                    }
+                    .onAppear { loadSection("gameSettings") }
+                }
+                
+                if loadedSections.contains("gameplaySettings") {
+                    Group {
+                        GameplaySettingsSection(
+                            placementPrecision: $placementPrecision,
+                            blockDragOffset: $blockDragOffset,
+                            showingPlacementPrecisionInfo: $showingPlacementPrecisionInfo,
+                            showingBlockDragInfo: $showingBlockDragInfo
+                        )
+                    }
+                    .onAppear { loadSection("gameplaySettings") }
+                }
+                
+                if loadedSections.contains("gameModeRules") {
+                    Group {
+                        GameModeRulesSection()
+                    }
+                    .onAppear { loadSection("gameModeRules") }
+                }
+                
+                if loadedSections.contains("audioSettings") {
+                    Group {
+                        AudioSettingsSection(
+                            soundEnabled: $soundEnabled,
+                            hapticsEnabled: $hapticsEnabled,
+                            musicVolume: $musicVolume,
+                            sfxVolume: $sfxVolume
+                        )
+                        .onChange(of: soundEnabled) { newValue in
+                            AudioManager.shared.updateSettings(soundEnabled: newValue, musicVolume: musicVolume, sfxVolume: sfxVolume)
+                        }
+                        .onChange(of: musicVolume) { newValue in
+                            AudioManager.shared.updateSettings(soundEnabled: soundEnabled, musicVolume: newValue, sfxVolume: sfxVolume)
+                        }
+                        .onChange(of: sfxVolume) { newValue in
+                            AudioManager.shared.updateSettings(soundEnabled: soundEnabled, musicVolume: musicVolume, sfxVolume: newValue)
+                        }
+                        .onChange(of: hapticsEnabled) { newValue in
+                            UserDefaults.standard.set(newValue, forKey: "hapticsEnabled")
+                            UserDefaults.standard.synchronize()
                         }
                     }
+                    .onAppear { loadSection("audioSettings") }
                 }
                 
-                Section {
-                    NavigationLink {
-                        ReferralView()
-                    } label: {
-                        HStack {
-                            Image(systemName: "person.2.fill")
-                                .foregroundColor(.green)
-                            Text("Refer Friends")
-                            Spacer()
-                        }
+                if loadedSections.contains("gameProgress") {
+                    Group {
+                        GameProgressSection(gameState: gameState)
                     }
+                    .onAppear { loadSection("gameProgress") }
                 }
                 
-                GameSettingsSection(
-                    theme: $theme,
-                    showTutorial: $showTutorial,
-                    autoSave: $autoSave,
-                    fpsManager: fpsManager,
-                    gameState: gameState,
-                    showingStore: $showingStore,
-                    themes: themes
-                )
-                
-                GameplaySettingsSection(
-                    placementPrecision: $placementPrecision,
-                    blockDragOffset: $blockDragOffset,
-                    showingPlacementPrecisionInfo: $showingPlacementPrecisionInfo,
-                    showingBlockDragInfo: $showingBlockDragInfo
-                )
-                
-                Section(header: Text("Game Mode Rules")) {
-                    NavigationLink(destination: GameRulesView(gameMode: "Classic")) {
-                        HStack {
-                            Image(systemName: "gamecontroller.fill")
-                                .foregroundColor(.blue)
-                            Text("Classic")
-                            Spacer()
-                            if !UserDefaults.standard.bool(forKey: "isTimedMode") {
-                                Text("Current")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
+                if loadedSections.contains("statsForNerds") {
+                    Group {
+                        StatsForNerdsSection(gameState: gameState)
                     }
-                    
-                    NavigationLink(destination: ClassicTimedRulesView()) {
-                        HStack {
-                            Image(systemName: "timer")
-                                .foregroundColor(.red)
-                            Text("Classic Timed")
-                            Spacer()
-                            if UserDefaults.standard.bool(forKey: "isTimedMode") {
-                                Text("Current")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
+                    .onAppear { loadSection("statsForNerds") }
                 }
                 
-                AudioSettingsSection(
-                    soundEnabled: $soundEnabled,
-                    hapticsEnabled: $hapticsEnabled,
-                    musicVolume: $musicVolume,
-                    sfxVolume: $sfxVolume
-                )
-                .onChange(of: soundEnabled) { newValue in
-                    AudioManager.shared.updateSettings(soundEnabled: newValue, musicVolume: musicVolume, sfxVolume: sfxVolume)
-                }
-                .onChange(of: musicVolume) { newValue in
-                    AudioManager.shared.updateSettings(soundEnabled: soundEnabled, musicVolume: newValue, sfxVolume: sfxVolume)
-                }
-                .onChange(of: sfxVolume) { newValue in
-                    AudioManager.shared.updateSettings(soundEnabled: soundEnabled, musicVolume: musicVolume, sfxVolume: newValue)
-                }
-                .onChange(of: hapticsEnabled) { newValue in
-                    UserDefaults.standard.set(newValue, forKey: "hapticsEnabled")
-                    UserDefaults.standard.synchronize()
+                if loadedSections.contains("dataManagement") {
+                    Group {
+                        DataManagementSection(
+                            autoSyncEnabled: $autoSyncEnabled,
+                            showingResetConfirmation: $showingResetConfirmation
+                        )
+                    }
+                    .onAppear { loadSection("dataManagement") }
                 }
                 
-                Section(header: Text("Game Progress")) {
-                    HStack {
-                        Text("High Score")
-                        Spacer()
-                        Text("\(gameState.highScore)")
-                            .foregroundColor(.blue)
+                if loadedSections.contains("information") {
+                    Group {
+                        InformationSection(
+                            showingDiscordWebView: $showingDiscordWebView,
+                            showingTestFlightAlert: $showingTestFlightAlert,
+                            showingFeedbackMail: $showingFeedbackMail,
+                            showingFeatureMail: $showingFeatureMail
+                        )
                     }
-                    
-                    HStack {
-                        Text("Highest Level")
-                        Spacer()
-                        Text("\(gameState.highestLevel)")
-                            .foregroundColor(.blue)
-                    }
+                    .onAppear { loadSection("information") }
                 }
                 
-                StatsForNerdsSection(gameState: gameState)
-                
-                Section(header: Text("Data Management")) {
-                    Toggle("Auto Sync Data", isOn: $autoSyncEnabled)
-                    
-                    Button("Reset Game Data") {
-                        showingResetConfirmation = true
+                if loadedSections.contains("updateSettings") {
+                    Group {
+                        UpdateSettingsSection()
                     }
-                    .foregroundColor(.red)
+                    .onAppear { loadSection("updateSettings") }
                 }
                 
-                Section(header: Text("Information")) {
-                    NavigationLink(destination: ChangelogView()) {
-                        Text("Changelog")
+                if loadedSections.contains("privacy") {
+                    Group {
+                        PrivacySection(
+                            allowAnalytics: $allowAnalytics,
+                            allowDataSharing: $allowDataSharing,
+                            showingAnalytics: $showingAnalytics
+                        )
                     }
-                    
-                    NavigationLink(destination: EULAView()) {
-                        Text("End User License Agreement")
-                    }
-                    
-                    Button("Join the Discord") {
-                        showingDiscordWebView = true
-                    }
-                    
-                    Button("Test New Features") {
-                        showingTestFlightAlert = true
-                    }
-                    
-                    Button("Send Feedback") {
-                        showingFeedbackMail = true
-                    }
-                    
-                    Button("Suggest a Feature") {
-                        showingFeatureMail = true
-                    }
+                    .onAppear { loadSection("privacy") }
                 }
                 
-                Section(header: Text("Update Settings")) {
-                    Toggle("Force Public Version", isOn: Binding(
-                        get: { ForcePublicVersion.shared.isEnabled },
-                        set: { ForcePublicVersion.shared.isEnabled = $0 }
-                    ))
-                }
-                
-                Section(header: Text("Privacy")) {
-                    Toggle("Allow anonymous usage analytics", isOn: $allowAnalytics)
-                    Toggle("Allow data sharing for app features", isOn: $allowDataSharing)
-                    Toggle("Send crash reports", isOn: Binding(
-                        get: { UserDefaults.standard.bool(forKey: "allowCrashReports") },
-                        set: { UserDefaults.standard.set($0, forKey: "allowCrashReports") }
-                    ))
-                    Button("View Analytics Dashboard") {
-                        showingAnalytics = true
-                    }
-                }
-                
-                Section {
-                    VStack(spacing: 8) {
-                        Text(AppVersion.formattedVersion)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Text(AppVersion.copyright)
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                        Text(AppVersion.credits)
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                        Text(AppVersion.location)
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
+                Group {
+                    VersionSection()
                 }
             }
             .navigationTitle("Settings")
@@ -631,6 +779,19 @@ struct SettingsView: View {
                         dismiss()
                     }
                 }
+            }
+            .overlay(
+                Group {
+                    if isLoading {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle())
+                            .scaleEffect(1.5)
+                    }
+                }
+            )
+            .task {
+                await gameState.preloadSettingsResources()
+                isLoading = false
             }
             .alert("Reset Game Data", isPresented: $showingResetConfirmation) {
                 Button("Cancel", role: .cancel) { }
