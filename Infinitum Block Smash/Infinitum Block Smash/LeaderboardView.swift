@@ -1,17 +1,18 @@
 import SwiftUI
 import FirebaseFirestore
+import FirebaseAuth
 
 struct LeaderboardView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedType: LeaderboardType = .score
     @State private var selectedPeriod: String = "daily"
     @State private var leaderboardData: [FirebaseManager.LeaderboardEntry] = []
+    @State private var totalUsers: Int = 0
     @State private var userPosition: Int?
     @State private var isLoading = false
     @State private var error: Error?
     @State private var searchText = ""
     @State private var lastUpdated: Date?
-    @State private var totalUsers = 0
     @State private var isOffline = false
     
     private let periods = ["daily", "weekly", "monthly", "alltime"]
@@ -173,8 +174,16 @@ struct LeaderboardView: View {
         isLoading = true
         error = nil
         
+        // Check authentication state first
+        guard Auth.auth().currentUser != nil else {
+            print("[LeaderboardView] User not authenticated")
+            error = LeaderboardError.notAuthenticated
+            isLoading = false
+            return
+        }
+        
         do {
-            let entries = try await FirebaseManager.shared.getLeaderboardEntries(
+            let (entries, total) = try await LeaderboardService.shared.getLeaderboard(
                 type: selectedType,
                 period: selectedPeriod
             )
@@ -184,21 +193,18 @@ struct LeaderboardView: View {
                 userPosition = entries.firstIndex(where: { $0.id == userId })
             }
             
-            // Cache the data for offline access
-            if let encodedData = try? JSONEncoder().encode(entries) {
-                UserDefaults.standard.set(encodedData, forKey: "cached_leaderboard_\(selectedType)_\(selectedPeriod)")
-            }
-            
             leaderboardData = entries
-            totalUsers = entries.count
+            totalUsers = total
             lastUpdated = Date()
             isOffline = false
         } catch {
-            // Try to load cached data
-            if let cachedData = UserDefaults.standard.data(forKey: "cached_leaderboard_\(selectedType)_\(selectedPeriod)"),
-               let entries = try? JSONDecoder().decode([FirebaseManager.LeaderboardEntry].self, from: cachedData) {
-                leaderboardData = entries
-                totalUsers = entries.count
+            print("[LeaderboardView] Error loading leaderboard: \(error.localizedDescription)")
+            // Only try to load cached data if we have a valid authentication state
+            if Auth.auth().currentUser != nil,
+               let cachedData = LeaderboardCache.shared.getCachedLeaderboard(type: selectedType, period: selectedPeriod) {
+                print("[LeaderboardView] Using cached data after error")
+                leaderboardData = cachedData
+                totalUsers = cachedData.count
                 isOffline = true
             } else {
                 self.error = error

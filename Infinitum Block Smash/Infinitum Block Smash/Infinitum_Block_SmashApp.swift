@@ -17,7 +17,16 @@ import FirebaseDatabase
 // MARK: - AppDelegate
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
-        // Configure Firebase first
+        // Configure AppCheck first
+        #if DEBUG
+        let providerFactory = AppCheckDebugProviderFactory()
+        AppCheck.setAppCheckProviderFactory(providerFactory)
+        print("[AppCheck] Using debug AppCheckProviderFactory with token: \(MyAppCheckProviderFactory.getDebugToken())")
+        #else
+        MyAppCheckProviderFactory.configureProductionProvider()
+        #endif
+        
+        // Configure Firebase after AppCheck
         FirebaseApp.configure()
         
         // Configure Firestore settings before any Firestore operations
@@ -30,9 +39,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         
         // Enable force logout
         ForceLogout.shared.isForceLogoutEnabled = true
-        
-        // Configure AppCheck
-        configureAppCheck()
         
         // Configure In-App Messaging
         configureInAppMessaging()
@@ -232,15 +238,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         } catch {
             print("Error syncing data in background: \(error)")
         }
-    }
-    
-    // MARK: - AppCheck Configuration
-    private func configureAppCheck() {
-        #if DEBUG
-        MyAppCheckProviderFactory.configureDebugProvider()
-        #else
-        MyAppCheckProviderFactory.configureProductionProvider()
-        #endif
     }
     
     // MARK: - In-App Messaging Configuration

@@ -22,8 +22,8 @@ class MyAppCheckProviderFactory: NSObject, AppCheckProviderFactory {
     
     func createProvider(with app: FirebaseApp) -> AppCheckProvider? {
         if #available(iOS 14.0, *) {
-            // Use DeviceCheck provider for iOS 14+
-            return DeviceCheckProvider(app: app)
+            // Use App Attest provider for iOS 14+
+            return AppAttestProvider(app: app)
         } else {
             // Fallback to DeviceCheck provider for older iOS versions
             return DeviceCheckProvider(app: app)
@@ -34,7 +34,7 @@ class MyAppCheckProviderFactory: NSObject, AppCheckProviderFactory {
     
     #if DEBUG
     static func getDebugToken() -> String {
-        return ProcessInfo.processInfo.environment["FIREBASE_APP_CHECK_DEBUG_TOKEN"] ?? "D605B88E-43B0-42C8-BBDE-718858DF4ED3"
+        return ProcessInfo.processInfo.environment["FIREBASE_APP_CHECK_DEBUG_TOKEN"] ?? "2F8387F3-1DA9-46B8-9817-9EE434A923C5"
     }
     
     static func isDebugMode() -> Bool {

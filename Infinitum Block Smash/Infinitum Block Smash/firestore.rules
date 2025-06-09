@@ -39,15 +39,28 @@ service cloud.firestore {
 
     // Rate limiting functions
     function isNotRateLimited() {
-      return request.time > resource.data.lastUpdate + duration.value(1, 'm');
+      return !("lastUpdate" in resource.data) || request.time > resource.data.lastUpdate + duration.value(1, 'm');
     }
 
     function isNotLeaderboardRateLimited() {
-      return request.time > resource.data.lastUpdate + duration.value(5, 'm');
+      return !("lastUpdate" in resource.data) || request.time > resource.data.lastUpdate + duration.value(5, 'm');
     }
 
     function isValidTimestamp() {
-      return request.time.toMillis() - request.resource.data.timestamp.toMillis() < duration.value(1, 'h').toMillis();
+      return request.resource.data.timestamp is timestamp &&
+             request.time.toMillis() - request.resource.data.timestamp.toMillis() < duration.value(1, 'h').toMillis();
+    }
+
+    // New function to validate timeframe
+    function isValidTimeframe(timeframe) {
+      let today = request.time.toDate().toISOString().split('T')[0];
+      let yesterday = (request.time - duration.value(1, 'd')).toDate().toISOString().split('T')[0];
+      return timeframe == today || timeframe == yesterday;
+    }
+
+    // New function to check if entry is expired
+    function isEntryExpired() {
+      return request.time.toMillis() - resource.data.timestamp.toMillis() > duration.value(2, 'd').toMillis();
     }
 
     // USERS COLLECTION
@@ -64,20 +77,31 @@ service cloud.firestore {
     match /leaderboard/{docId} {
       allow read: if isAuthenticated();
 
-      allow create: if request.auth.uid == request.resource.data.userId;
+      allow create: if request.auth.uid == request.resource.data.userId && 
+                      isValidScore() &&
+                      request.resource.data.timestamp is timestamp;
 
-      allow update: if isAuthenticated()
-        && resource.data.userId == request.auth.uid
-        && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() &&
+                      resource.data.userId == request.auth.uid &&
+                      request.resource.data.userId == request.auth.uid &&
+                      request.resource.data.score > resource.data.score &&
+                      isValidScore() &&
+                      isNotLeaderboardRateLimited() &&
+                      !isEntryExpired();
 
-      allow delete: if false;
+      allow delete: if isAuthenticated() && isEntryExpired();
     }
 
     // CLASSIC LEADERBOARD
     match /classic_leaderboard/{timeframe} {
       match /scores/{userId} {
         allow read: if isAuthenticated();
-        allow write: if isAuthenticated() && isValidScore() && isNotLeaderboardRateLimited() && isValidTimestamp();
+        allow write: if isAuthenticated() &&
+                       isValidScore() &&
+                       isNotLeaderboardRateLimited() &&
+                       isValidTimestamp() &&
+                       isValidTimeframe(timeframe);
+        allow delete: if isAuthenticated() && isEntryExpired();
       }
     }
 
@@ -85,7 +109,12 @@ service cloud.firestore {
     match /achievement_leaderboard/{timeframe} {
       match /scores/{userId} {
         allow read: if isAuthenticated();
-        allow write: if isAuthenticated() && isValidScore() && isNotLeaderboardRateLimited() && isValidTimestamp();
+        allow write: if isAuthenticated() &&
+                       isValidScore() &&
+                       isNotLeaderboardRateLimited() &&
+                       isValidTimestamp() &&
+                       isValidTimeframe(timeframe);
+        allow delete: if isAuthenticated() && isEntryExpired();
       }
     }
 
@@ -93,7 +122,11 @@ service cloud.firestore {
     match /classic_timed_leaderboard/{timeframe} {
       match /scores/{userId} {
         allow read: if isAuthenticated();
-        allow write: if isAuthenticated() && isValidScore() && isValidTimestamp();
+        allow write: if isAuthenticated() &&
+                       isValidScore() &&
+                       isValidTimestamp() &&
+                       isValidTimeframe(timeframe);
+        allow delete: if isAuthenticated() && isEntryExpired();
       }
     }
 

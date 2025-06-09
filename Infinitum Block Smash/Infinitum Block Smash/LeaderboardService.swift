@@ -4,7 +4,7 @@ import Combine
 import FirebaseAuth
 
 @MainActor
-final class LeaderboardService {
+final class LeaderboardService: ObservableObject {
     static let shared = LeaderboardService()
     private let db = Firestore.firestore()
     private var cancellables = Set<AnyCancellable>()
@@ -345,11 +345,18 @@ final class LeaderboardService {
         }
     }
     
-    func getLeaderboard(type: LeaderboardType, period: String) async throws -> (entries: [LeaderboardEntry], totalUsers: Int) {
+    func getLeaderboard(type: LeaderboardType, period: String) async throws -> (entries: [FirebaseManager.LeaderboardEntry], totalUsers: Int) {
         print("[Leaderboard] Fetching \(period) leaderboard for type: \(type)")
+        
+        // Check authentication state first
+        guard Auth.auth().currentUser != nil else {
+            print("[Leaderboard] User not authenticated")
+            throw LeaderboardError.notAuthenticated
+        }
         
         // Try to get cached data first
         if let cachedData = LeaderboardCache.shared.getCachedLeaderboard(type: type, period: period) {
+            print("[Leaderboard] Using cached data for \(period) leaderboard")
             return (cachedData, cachedData.count)
         }
         
@@ -398,14 +405,19 @@ final class LeaderboardService {
             let snapshot = try await query.getDocuments()
             print("[Leaderboard] Retrieved \(snapshot.documents.count) entries for \(period) leaderboard")
             
-            let entries = snapshot.documents.compactMap { document -> LeaderboardEntry? in
+            let entries = snapshot.documents.compactMap { document -> FirebaseManager.LeaderboardEntry? in
                 guard let username = document.data()["username"] as? String,
                       let score = document.data()[type.scoreField] as? Int,
                       let timestamp = (document.data()["timestamp"] as? Timestamp)?.dateValue() else {
                     print("[Leaderboard] Failed to parse entry: \(document.documentID)")
                     return nil
                 }
-                return LeaderboardEntry(id: document.documentID, username: username, score: score, timestamp: timestamp)
+                return FirebaseManager.LeaderboardEntry(
+                    id: document.documentID,
+                    username: username,
+                    score: score,
+                    timestamp: timestamp
+                )
             }
             
             // Cache the results
@@ -414,6 +426,11 @@ final class LeaderboardService {
             return (entries, totalUsers)
         } catch {
             print("[Leaderboard] Error loading \(period) leaderboard: \(error.localizedDescription)")
+            // Try to get cached data as fallback
+            if let cachedData = LeaderboardCache.shared.getCachedLeaderboard(type: type, period: period) {
+                print("[Leaderboard] Using cached data after error for \(period) leaderboard")
+                return (cachedData, cachedData.count)
+            }
             throw LeaderboardError.loadFailed(error)
         }
     }

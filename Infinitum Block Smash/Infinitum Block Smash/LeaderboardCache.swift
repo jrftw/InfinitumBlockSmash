@@ -1,42 +1,60 @@
 import Foundation
+import FirebaseAuth
 
 class LeaderboardCache {
     static let shared = LeaderboardCache()
-    private let cache = NSCache<NSString, NSArray>()
-    private let userDefaults = UserDefaults.standard
+    private let cache = NSCache<NSString, CachedLeaderboard>()
     private let cacheExpirationInterval: TimeInterval = 300 // 5 minutes
     
     private init() {}
     
-    // Cache key format: "type_period_timestamp"
-    private func cacheKey(type: LeaderboardType, period: String) -> String {
-        return "\(type.collectionName)_\(period)"
+    class CachedLeaderboard {
+        let entries: [FirebaseManager.LeaderboardEntry]
+        let timestamp: Date
+        
+        init(entries: [FirebaseManager.LeaderboardEntry], timestamp: Date) {
+            self.entries = entries
+            self.timestamp = timestamp
+        }
     }
     
-    func cacheLeaderboard(_ entries: [LeaderboardEntry], type: LeaderboardType, period: String) {
-        let key = cacheKey(type: type, period: period)
-        cache.setObject(entries as NSArray, forKey: key as NSString)
-        userDefaults.set(Date().timeIntervalSince1970, forKey: "\(key)_timestamp")
+    func cacheLeaderboard(_ entries: [FirebaseManager.LeaderboardEntry], type: LeaderboardType, period: String) {
+        guard Auth.auth().currentUser != nil else {
+            print("[LeaderboardCache] Not caching data - User not authenticated")
+            return
+        }
+        
+        let key = "\(type.collectionName)_\(period)" as NSString
+        let cachedData = CachedLeaderboard(entries: entries, timestamp: Date())
+        cache.setObject(cachedData, forKey: key)
+        print("[LeaderboardCache] Cached \(entries.count) entries for \(period) leaderboard")
     }
     
-    func getCachedLeaderboard(type: LeaderboardType, period: String) -> [LeaderboardEntry]? {
-        let key = cacheKey(type: type, period: period)
-        guard let timestamp = userDefaults.object(forKey: "\(key)_timestamp") as? TimeInterval else {
+    func getCachedLeaderboard(type: LeaderboardType, period: String) -> [FirebaseManager.LeaderboardEntry]? {
+        guard Auth.auth().currentUser != nil else {
+            print("[LeaderboardCache] Not serving cached data - User not authenticated")
+            return nil
+        }
+        
+        let key = "\(type.collectionName)_\(period)" as NSString
+        guard let cachedData = cache.object(forKey: key) else {
+            print("[LeaderboardCache] No cached data found for \(period) leaderboard")
             return nil
         }
         
         // Check if cache is expired
-        if Date().timeIntervalSince1970 - timestamp > cacheExpirationInterval {
+        if Date().timeIntervalSince(cachedData.timestamp) > cacheExpirationInterval {
+            print("[LeaderboardCache] Cache expired for \(period) leaderboard")
+            cache.removeObject(forKey: key)
             return nil
         }
         
-        return cache.object(forKey: key as NSString) as? [LeaderboardEntry]
+        print("[LeaderboardCache] Serving \(cachedData.entries.count) cached entries for \(period) leaderboard")
+        return cachedData.entries
     }
     
     func clearCache() {
         cache.removeAllObjects()
-        // Clear timestamp keys
-        let keys = userDefaults.dictionaryRepresentation().keys.filter { $0.hasSuffix("_timestamp") }
-        keys.forEach { userDefaults.removeObject(forKey: $0) }
+        print("[LeaderboardCache] Cleared all cached data")
     }
 } 
