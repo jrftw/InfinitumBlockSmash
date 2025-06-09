@@ -1433,6 +1433,12 @@ final class GameState: ObservableObject {
     // Add a new method to handle user confirmation of level completion
     func confirmLevelCompletion() {
         guard levelComplete else { return }
+        
+        // Notify that level is complete for timed mode
+        if UserDefaults.standard.bool(forKey: "isTimedMode") {
+            NotificationCenter.default.post(name: .levelCompleted, object: nil)
+        }
+        
         advanceToNextLevel()
     }
     
@@ -1718,6 +1724,13 @@ final class GameState: ObservableObject {
     
     func saveProgress() async throws {
         do {
+            // Check if there's a saved game and show warning if needed
+            if userDefaults.bool(forKey: hasSavedGameKey) {
+                // Post notification to show warning
+                NotificationCenter.default.post(name: .showSaveGameWarning, object: nil)
+                return
+            }
+            
             // Convert grid to a format Firebase can handle
             let serializedGrid = grid.map { row in
                 row.map { color in
@@ -1739,7 +1752,13 @@ final class GameState: ObservableObject {
                 tray: tray
             )
             
-            try await FirebaseManager.shared.saveGameProgress(progress)
+            // Try to save to Firebase, but continue with local save even if it fails
+            do {
+                try await FirebaseManager.shared.saveGameProgress(progress)
+            } catch {
+                print("[GameState] Firebase save failed: \(error.localizedDescription)")
+                // Continue with local save even if Firebase save fails
+            }
             
             // Update local storage on main actor
             try await MainActor.run {
@@ -1760,7 +1779,8 @@ final class GameState: ObservableObject {
                             "color": block.color.rawValue,
                             "shape": block.shape.rawValue
                         ]
-                    }
+                    },
+                    "isTimedMode": UserDefaults.standard.bool(forKey: "isTimedMode")
                 ]
                 let data = try JSONSerialization.data(withJSONObject: progressData)
                 self.userDefaults.set(data, forKey: self.progressKey)
@@ -1775,6 +1795,13 @@ final class GameState: ObservableObject {
             NotificationCenter.default.post(name: .gameStateSaveFailed, object: error)
             throw GameError.saveFailed(error)
         }
+    }
+    
+    func confirmSaveOverwrite() async throws {
+        // Delete existing save first
+        deleteSavedGame()
+        // Then save new game
+        try await saveProgress()
     }
 
     func deleteSavedGame() {
@@ -2336,4 +2363,6 @@ extension Notification.Name {
     static let gameStateSaveFailed = Notification.Name("gameStateSaveFailed")
     static let gameStateLoaded = Notification.Name("gameStateLoaded")
     static let gameStateLoadFailed = Notification.Name("gameStateLoadFailed")
+    static let showSaveGameWarning = Notification.Name("showSaveGameWarning")
+    static let levelCompleted = Notification.Name("levelCompleted")
 }

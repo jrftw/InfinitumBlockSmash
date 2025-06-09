@@ -2,6 +2,8 @@ import SwiftUI
 import AppTrackingTransparency
 import MessageUI
 import SafariServices
+import Firebase
+import FirebaseAuth
 
 // MARK: - Theme Management
 private func updateTheme(_ theme: String) {
@@ -307,6 +309,53 @@ private struct StatsForNerdsSection: View {
     @AppStorage("showFPS") private var showFPS = false
     @AppStorage("showMemory") private var showMemory = false
     @AppStorage("showAdvancedStats") private var showAdvancedStats = false
+    @AppStorage("username") private var username = ""
+    @AppStorage("userID") private var userID = ""
+    @AppStorage("isGuest") private var isGuest = false
+    
+    private func canWriteToLeaderboard() -> (canWrite: Bool, reason: String) {
+        // Check if user is authenticated
+        guard Auth.auth().currentUser != nil else {
+            return (false, "Not authenticated")
+        }
+        
+        // Check if user is a guest
+        if isGuest {
+            return (false, "Guest user")
+        }
+        
+        // Check if username is valid
+        if username.isEmpty {
+            return (false, "No username")
+        }
+        
+        // Check if userID is valid
+        if userID.isEmpty {
+            return (false, "No userID")
+        }
+        
+        // Check if score is greater than 0
+        if gameState.score <= 0 {
+            return (false, "Score is 0")
+        }
+        
+        // Check network connectivity
+        if !NetworkMonitor.shared.isConnected {
+            return (false, "No internet")
+        }
+        
+        // Check rate limiting (5 minutes between updates)
+        if let lastUpdate = UserDefaults.standard.object(forKey: "lastLeaderboardUpdate") as? Date {
+            let timeSinceLastUpdate = Date().timeIntervalSince(lastUpdate)
+            if timeSinceLastUpdate < 300 { // 5 minutes in seconds
+                let remainingTime = Int(300 - timeSinceLastUpdate)
+                return (false, "Rate limited (\(remainingTime)s)")
+            }
+        }
+        
+        // All checks passed
+        return (true, "Can write")
+    }
     
     var body: some View {
         Section(header: Text("Stats for Nerds")) {
@@ -330,6 +379,16 @@ private struct StatsForNerdsSection: View {
                     Text("Cache Stats: \(hits) hits, \(misses) misses")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                    
+                    let leaderboardStatus = canWriteToLeaderboard()
+                    Text("Leaderboard: \(leaderboardStatus.canWrite ? "Yes" : "No")")
+                        .font(.caption)
+                        .foregroundColor(leaderboardStatus.canWrite ? .green : .red)
+                    if !leaderboardStatus.canWrite {
+                        Text("Reason: \(leaderboardStatus.reason)")
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    }
                 }
                 .padding(.vertical, 8)
             }
@@ -430,9 +489,25 @@ struct SettingsView: View {
                                 .foregroundColor(.blue)
                             Text("Classic")
                             Spacer()
-                            Text("Current")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                            if !UserDefaults.standard.bool(forKey: "isTimedMode") {
+                                Text("Current")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    
+                    NavigationLink(destination: ClassicTimedRulesView()) {
+                        HStack {
+                            Image(systemName: "timer")
+                                .foregroundColor(.red)
+                            Text("Classic Timed")
+                            Spacer()
+                            if UserDefaults.standard.bool(forKey: "isTimedMode") {
+                                Text("Current")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
                         }
                     }
                 }

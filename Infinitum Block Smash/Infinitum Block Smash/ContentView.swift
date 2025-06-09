@@ -17,6 +17,7 @@ struct ContentView: View {
     @AppStorage("isGuest") private var isGuest: Bool = false
     @State private var showingNewGameConfirmation = false
     @State private var showingStore = false
+    @State private var showingClassicTimedView = false
     @StateObject private var authViewModel = AuthViewModel()
     @State private var onlineUsersCount = 0
     @State private var dailyPlayersCount = 0
@@ -81,13 +82,14 @@ struct ContentView: View {
                             }
                         }
                         
-                        MenuButton(title: "Play Classic", icon: "gamecontroller.fill") {
-                            if gameState.hasSavedGame() {
-                                showingNewGameConfirmation = true
-                            } else {
-                                gameState.resetGame()
-                                showingGameView = true
-                            }
+                        MenuButton(title: "Classic", icon: "gamecontroller.fill") {
+                            UserDefaults.standard.set(false, forKey: "isTimedMode")
+                            showingGameView = true
+                        }
+                        
+                        MenuButton(title: "Classic Timed", icon: "timer") {
+                            UserDefaults.standard.set(true, forKey: "isTimedMode")
+                            showingClassicTimedView = true
                         }
                         
                         MenuButton(title: "Leaderboard", icon: "trophy.fill") {
@@ -158,7 +160,7 @@ struct ContentView: View {
         .fullScreenCover(isPresented: $showingGameView) {
             GameView(gameState: gameState)
         }
-        .fullScreenCover(isPresented: $showingLeaderboard) {
+        .sheet(isPresented: $showingLeaderboard) {
             LeaderboardView()
         }
         .fullScreenCover(isPresented: $showingSettings) {
@@ -175,6 +177,12 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showingStore) {
             StoreView()
+        }
+        .fullScreenCover(isPresented: $showingClassicTimedView) {
+            ClassicTimedGameView()
+        }
+        .sheet(isPresented: $showingNewGameConfirmation) {
+            // ... existing code ...
         }
         .alert("Start New Game?", isPresented: $showingNewGameConfirmation) {
             Button("No", role: .cancel) { }
@@ -350,5 +358,38 @@ struct MenuButton: View {
                     }
             )
         }
+    }
+}
+
+struct GameModeButton: View {
+    let title: String
+    let description: String
+    let icon: String
+    let color: Color
+    
+    var body: some View {
+        HStack {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundColor(color)
+                .frame(width: 30)
+            
+            VStack(alignment: .leading) {
+                Text(title)
+                    .font(.headline)
+                Text(description)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+            
+            Image(systemName: "chevron.right")
+                .foregroundColor(.gray)
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(10)
+        .shadow(radius: 2)
     }
 }

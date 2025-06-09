@@ -1,86 +1,31 @@
 import SwiftUI
 import SpriteKit
-import UIKit
-import GoogleMobileAds
-import AppTrackingTransparency
-import Firebase
-import FirebaseAuth
 
-struct GameView: View {
-    @ObservedObject var gameState: GameState
-    @StateObject private var adManager = AdManager.shared
+struct ClassicTimedGameView: View {
+    @StateObject private var gameState = GameState()
+    @StateObject private var timedState: ClassicTimedGameState
     @State private var showingSettings = false
     @State private var showingAchievements = false
-    @State private var showingAchievementNotification = false
-    @State private var currentAchievement: Achievement?
-    @AppStorage("showTutorial") private var showTutorial = true
-    @State private var showingTutorial = false
     @State private var isPaused = false
-    @Environment(\.presentationMode) var presentationMode
+    @Environment(\.dismiss) var dismiss
     @State private var scoreAnimator = ScoreAnimationContainer()
-    @Environment(\.colorScheme) private var colorScheme
-    @State private var showingStats = false
     @AppStorage("showStatsOverlay") private var showStatsOverlay = false
     @AppStorage("showFPS") private var showFPS = false
     @AppStorage("showMemory") private var showMemory = false
-    @State private var isSyncing = false
-    @State private var syncError: String?
-    @StateObject private var notificationService = NotificationService.shared
     @State private var showingSaveWarning = false
     
-    private enum SettingsAction {
-        case resume
-        case restart
-        case endGame
-        case showTutorial
-        case showAchievements
-        case showStats
+    init() {
+        let gameState = GameState()
+        _gameState = StateObject(wrappedValue: gameState)
+        _timedState = StateObject(wrappedValue: ClassicTimedGameState(gameState: gameState))
     }
-
+    
     var body: some View {
         ZStack {
             GameSceneProvider(gameState: gameState)
             mainGameView
             overlays
             scoreAnimator
-            bannerAdView
-            
-            // Add sync status indicator
-            if isSyncing {
-                VStack {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle())
-                    Text("Syncing...")
-                        .foregroundColor(.white)
-                }
-                .padding()
-                .background(Color.black.opacity(0.7))
-                .cornerRadius(10)
-            }
-            
-            // Show sync error if any
-            if let error = syncError {
-                Color.clear
-                    .onAppear {
-                        print("[GameView] Sync error occurred: \(error)")
-                        Task {
-                            await syncGameData()
-                        }
-                    }
-            }
-            
-            // Add high score banner
-            if notificationService.showHighScoreBanner,
-               let notification = notificationService.currentHighScoreNotification {
-                VStack {
-                    HighScoreBannerView(
-                        notification: notification,
-                        isShowing: $notificationService.showHighScoreBanner
-                    )
-                    Spacer()
-                }
-                .padding(.top, 50)
-            }
             
             // Add save warning alert
             if showingSaveWarning {
@@ -109,9 +54,10 @@ struct GameView: View {
                                     Task {
                                         do {
                                             try await gameState.confirmSaveOverwrite()
+                                            timedState.confirmSaveTimerState()
                                             isPaused = false
                                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                                presentationMode.wrappedValue.dismiss()
+                                                dismiss()
                                             }
                                         } catch {
                                             print("[PauseMenu] Error saving progress: \(error.localizedDescription)")
@@ -134,26 +80,11 @@ struct GameView: View {
                     )
             }
         }
-        .sheet(isPresented: $showingSettings) {
-            SettingsView(gameState: gameState, showingTutorial: $showingTutorial)
-        }
-        .sheet(isPresented: $showingAchievements) {
-            AchievementsView(achievementsManager: gameState.achievementsManager)
-        }
-        .sheet(isPresented: $showingTutorial) {
-            TutorialModal(showingTutorial: $showingTutorial, showTutorial: $showTutorial)
-        }
         .onAppear {
-            if showTutorial {
-                showingTutorial = true
-            }
-            // Delay sync by 1 second to allow network monitor to update
+            UserDefaults.standard.set(true, forKey: "isTimedMode")
             Task {
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-                await syncGameData()
+                await timedState.startNewLevel()
             }
-            // Request notification permission when game view appears
-            notificationService.requestNotificationPermission()
             
             // Add observer for save warning
             NotificationCenter.default.addObserver(
@@ -164,22 +95,8 @@ struct GameView: View {
                 showingSaveWarning = true
             }
         }
-        .onChange(of: gameState.levelComplete) { isComplete in
-            if isComplete {
-                Task {
-                    await adManager.showRewardedInterstitial(onReward: {
-                        // Don't automatically reset levelComplete - wait for user interaction
-                    })
-                }
-            }
-        }
-        .onChange(of: gameState.score) { _ in
-            // Check top three status when score changes
-            Task {
-                await adManager.checkTopThreeStatus()
-            }
-        }
         .onDisappear {
+            UserDefaults.standard.set(false, forKey: "isTimedMode")
             Task {
                 await gameState.cleanup()
             }
@@ -187,11 +104,25 @@ struct GameView: View {
             // Remove observer
             NotificationCenter.default.removeObserver(self)
         }
+        .onChange(of: gameState.levelComplete) { isComplete in
+            if isComplete {
+                Task {
+                    await timedState.startNewLevel()
+                }
+            }
+        }
     }
     
     private var mainGameView: some View {
         VStack(spacing: 0) {
             GameTopBar(showingSettings: $showingSettings, showingAchievements: $showingAchievements, isPaused: $isPaused, gameState: gameState)
+                .onChange(of: isPaused) { newValue in
+                    if newValue {
+                        timedState.pauseGame()
+                    } else {
+                        timedState.resumeGame()
+                    }
+                }
             scoreLevelBar
             if showStatsOverlay && (showFPS || showMemory) {
                 StatsOverlayView(gameState: gameState)
@@ -219,7 +150,7 @@ struct GameView: View {
         HStack(alignment: .center) {
             scoreView
             Spacer()
-            undoButtonView
+            timerView
             Spacer()
             levelView
         }
@@ -241,38 +172,17 @@ struct GameView: View {
         .accessibilityLabel(String(format: NSLocalizedString("%d points", comment: "Score accessibility label"), gameState.score))
     }
     
-    private var undoButtonView: some View {
-        VStack(spacing: 2) {
-            Button(action: {
-                Task {
-                    await gameState.undo()
-                }
-            }) {
-                Text(gameState.canUndo ? 
-                    NSLocalizedString("Undo Last Move", comment: "Undo button text") :
-                    NSLocalizedString("Watch Ad for Undo", comment: "Watch ad for undo button text"))
-                    .font(.headline)
-                    .foregroundColor(gameState.canUndo ? Color(#colorLiteral(red: 0.2, green: 0.5, blue: 1, alpha: 1)) : Color.gray)
-            }
-            .disabled(!gameState.canUndo && !gameState.canAdUndo)
-            .buttonStyle(PlainButtonStyle())
-            .accessibilityLabel(gameState.canUndo ? 
-                NSLocalizedString("Undo Last Move", comment: "Undo button accessibility label") :
-                NSLocalizedString("Watch Ad for Undo", comment: "Watch ad for undo button accessibility label"))
-            .accessibilityHint(gameState.canUndo ? 
-                NSLocalizedString("Tap to undo your last move", comment: "Undo button accessibility hint") :
-                NSLocalizedString("Watch an ad to get more undos", comment: "Watch ad for undo button accessibility hint"))
-            
-            if !gameState.canUndo && gameState.canAdUndo {
-                Text(String(format: NSLocalizedString("Undos: %d", comment: "Remaining undos count"), gameState.adUndoCount))
-                    .font(.caption2)
-                    .foregroundColor(.white.opacity(0.9))
-            }
-            
-            Text(String(format: NSLocalizedString("Need: %d", comment: "Required score"), gameState.calculateRequiredScore() - gameState.score))
-                .font(.caption2)
+    private var timerView: some View {
+        VStack(alignment: .center, spacing: 2) {
+            Text(NSLocalizedString("Time", comment: "Time label"))
+                .font(.caption)
                 .foregroundColor(.white.opacity(0.9))
+            Text("\(timedState.timeString)")
+                .font(.system(size: 36, weight: .bold, design: .rounded))
+                .foregroundColor(timedState.timeColor)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(String(format: NSLocalizedString("%d seconds remaining", comment: "Time accessibility label"), timedState.remainingTime))
     }
     
     private var levelView: some View {
@@ -308,7 +218,7 @@ struct GameView: View {
     }
     
     private var overlays: some View {
-        Group {
+        ZStack {
             if gameState.showingAchievementNotification, let achievement = gameState.currentAchievement {
                 AchievementNotificationOverlay(
                     showing: .constant(true),
@@ -323,6 +233,7 @@ struct GameView: View {
             
             LevelCompleteOverlay(isPresented: gameState.levelComplete, score: gameState.score, level: gameState.level) {
                 gameState.confirmLevelCompletion()
+                timedState.resumeAfterLevelComplete()
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Level \(gameState.level) Complete! Score: \(gameState.score)")
@@ -333,12 +244,17 @@ struct GameView: View {
                 level: gameState.level,
                 onRetry: {
                     gameState.resetGame()
+                    Task {
+                        await timedState.startNewLevel()
+                    }
                 },
                 onMainMenu: {
-                    presentationMode.wrappedValue.dismiss()
+                    dismiss()
                 },
                 onContinue: {
-                    gameState.continueGame()
+                    Task {
+                        await timedState.handleTimeUp()
+                    }
                 },
                 canContinue: !gameState.hasUsedContinueAd
             )
@@ -349,14 +265,16 @@ struct GameView: View {
                 isPresented: isPaused,
                 onResume: {
                     isPaused = false
+                    timedState.resumeGame()
                 },
                 onSave: {
                     Task {
                         do {
                             try await gameState.saveProgress()
+                            timedState.saveTimerState()
                             isPaused = false
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                presentationMode.wrappedValue.dismiss()
+                                dismiss()
                             }
                         } catch {
                             print("[PauseMenu] Error saving progress: \(error.localizedDescription)")
@@ -366,136 +284,22 @@ struct GameView: View {
                 },
                 onRestart: {
                     gameState.resetGame()
+                    Task {
+                        await timedState.startNewLevel()
+                    }
                     isPaused = false
                 },
                 onHome: {
                     gameState.resetGame()
-                    presentationMode.wrappedValue.dismiss()
+                    dismiss()
                 },
                 onEndGame: {
                     gameState.resetGame()
-                    presentationMode.wrappedValue.dismiss()
+                    dismiss()
                 }
             )
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Pause Menu")
-            
-            if showingAchievements {
-                AchievementsView(achievementsManager: gameState.achievementsManager)
-            }
-            
-            if showingStats {
-                StatsView(gameState: gameState)
-            }
-        }
-    }
-    
-    private var bannerAdView: some View {
-        VStack {
-            Spacer()
-            BannerAdView()
-                .frame(maxWidth: .infinity)
-                .frame(height: 50)
-                .background(Color.black.opacity(0.1))
-        }
-    }
-    
-    private func getRootViewController() -> UIViewController? {
-        return UIApplication.shared.connectedScenes
-            .compactMap({ ($0 as? UIWindowScene)?.windows.first?.rootViewController })
-            .first
-    }
-    
-    private func handleSettingsAction(_ action: SettingsAction) {
-        switch action {
-        case .resume:
-            gameState.isPaused = false
-            isPaused = false
-        case .restart:
-            // Check username before restarting
-            if !UserDefaults.standard.bool(forKey: "isGuest") {
-                if let username = UserDefaults.standard.string(forKey: "username"), !username.isEmpty {
-                    gameState.resetGame()
-                    isPaused = false
-                } else {
-                    // Show alert or handle missing username
-                    print("[GameView] Cannot start game: Username not set")
-                    // You might want to show an alert here
-                }
-            } else {
-                gameState.resetGame()
-                isPaused = false
-            }
-        case .endGame:
-            gameState.endGameFromSettings()
-            isPaused = false
-            presentationMode.wrappedValue.dismiss()
-        case .showTutorial:
-            showingTutorial = true
-        case .showAchievements:
-            showingAchievements = true
-        case .showStats:
-            showingStats = true
-        }
-    }
-    
-    // Update sync function
-    private func syncGameData() async {
-        guard !UserDefaults.standard.bool(forKey: "isGuest") else { return }
-        
-        // Check network connectivity first
-        guard await NetworkMonitor.shared.checkConnection() else {
-            syncError = "No internet connection. Please check your network and try again."
-            return
-        }
-        
-        // Ensure we're authenticated
-        guard FirebaseManager.shared.isAuthenticated else {
-            syncError = "Please sign in to sync your game data."
-            return
-        }
-        
-        isSyncing = true
-        syncError = nil
-        
-        do {
-            // First try to sync any offline changes
-            try await gameState.syncOfflineQueue()
-            
-            // Then check if we need to load cloud data
-            let hasCloudData = await FirebaseManager.shared.checkSyncStatus()
-            if hasCloudData {
-                await gameState.loadCloudData()
-            }
-            
-            // Update last sync time
-            UserDefaults.standard.set(Date(), forKey: "lastFirebaseSaveTime")
-            UserDefaults.standard.synchronize()
-            
-            isSyncing = false
-        } catch let error as FirebaseError {
-            print("[GameView] Firebase error syncing game data: \(error)")
-            switch error {
-            case .notAuthenticated:
-                syncError = "Please sign in to sync your game data."
-            case .networkError:
-                syncError = "Network error. Please check your connection and try again."
-            case .permissionDenied:
-                syncError = "Permission denied. Please sign in again."
-            case .offlineMode:
-                syncError = "You're currently offline. Changes will be saved locally."
-            case .retryLimitExceeded:
-                syncError = "Too many sync attempts. Please try again later."
-            case .invalidData:
-                syncError = "Invalid data detected. Please restart the app."
-            case .invalidCredential:
-                syncError = "Invalid credentials. Please sign in again."
-            }
-            isSyncing = false
-        } catch {
-            print("[GameView] Error syncing game data: \(error.localizedDescription)")
-            syncError = error.localizedDescription
-            isSyncing = false
         }
     }
 }
@@ -563,4 +367,4 @@ private struct StatText: View {
             .font(.system(size: 12, weight: .medium, design: .monospaced))
             .foregroundColor(.white)
     }
-}
+} 

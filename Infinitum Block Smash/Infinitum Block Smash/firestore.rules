@@ -8,7 +8,7 @@ service cloud.firestore {
     }
     
     function isOwner(userId) {
-      return request.auth.uid == userId;
+      return isAuthenticated() && request.auth.uid == userId;
     }
     
     function isValidScore() {
@@ -50,54 +50,61 @@ service cloud.firestore {
       return request.time.toMillis() - request.resource.data.timestamp.toMillis() < duration.value(1, 'h').toMillis();
     }
 
-    // Users collection
+    // USERS COLLECTION
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isOwner(userId) && isValidUsername();
-      allow update: if isAuthenticated() && isOwner(userId) && isValidUsername() && isNotRateLimited();
-      allow delete: if isAuthenticated() && isOwner(userId);
-      
-      // User's game progress
-      match /progress/{document=**} {
-        allow read: if isAuthenticated() && isOwner(userId);
-        allow write: if isAuthenticated() && isOwner(userId) && isValidGameProgress() && isNotRateLimited();
-      }
-      
-      // User's achievements
-      match /achievements/{achievementId} {
-        allow read: if isAuthenticated() && isOwner(userId);
-        allow write: if isAuthenticated() && isOwner(userId) && isNotRateLimited();
-      }
+      allow read, write: if isOwner(userId);
 
-      // User's analytics
-      match /analytics/{document=**} {
-        allow read: if isAuthenticated() && isOwner(userId);
-        allow write: if isAuthenticated() && isOwner(userId) && isNotRateLimited();
+      // All subcollections under users
+      match /{document=**} {
+        allow read, write: if isOwner(userId);
       }
     }
 
-    // Classic leaderboard
-    match /classic_leaderboard/{timeframe}/scores/{userId} {
+    // LEADERBOARD COLLECTION
+    match /leaderboard/{docId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && isOwner(userId) && isValidScore() && isNotLeaderboardRateLimited() && isValidTimestamp();
+
+      allow create: if request.auth.uid == request.resource.data.userId;
+
+      allow update: if isAuthenticated()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == request.auth.uid;
+
+      allow delete: if false;
     }
 
-    // Achievement leaderboard
-    match /achievement_leaderboard/{timeframe}/scores/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && isOwner(userId) && isValidScore() && isNotLeaderboardRateLimited() && isValidTimestamp();
+    // CLASSIC LEADERBOARD
+    match /classic_leaderboard/{timeframe} {
+      match /scores/{userId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && isValidScore() && isNotLeaderboardRateLimited() && isValidTimestamp();
+      }
     }
 
-    // Game settings
-    match /settings/{userId} {
-      allow read: if isAuthenticated() && isOwner(userId);
-      allow write: if isAuthenticated() && isOwner(userId) && isNotRateLimited();
+    // ACHIEVEMENT LEADERBOARD
+    match /achievement_leaderboard/{timeframe} {
+      match /scores/{userId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && isValidScore() && isNotLeaderboardRateLimited() && isValidTimestamp();
+      }
     }
 
-    // Analytics collection
-    match /analytics/{document=**} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && isNotRateLimited();
+    // TIMED LEADERBOARD
+    match /classic_timed_leaderboard/{timeframe} {
+      match /scores/{userId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && isValidScore() && isValidTimestamp();
+      }
+    }
+
+    // SETTINGS COLLECTION
+    match /settings/{docId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // ANALYTICS COLLECTION
+    match /analytics/{docId} {
+      allow read, write: if isAuthenticated();
     }
   }
 } 

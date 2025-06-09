@@ -623,11 +623,12 @@ class FirebaseManager: ObservableObject {
                 return nil
             }
             return LeaderboardEntry(
-                userId: document.documentID,
+                id: document.documentID,
                 username: username,
                 score: score,
-                level: document.data()["level"] as? Int ?? 1,
-                timestamp: timestamp
+                timestamp: timestamp,
+                level: document.data()["level"] as? Int,
+                time: document.data()["time"] as? TimeInterval
             )
         }
         
@@ -1037,18 +1038,87 @@ class FirebaseManager: ObservableObject {
         }
         return userId
     }
+
+    func saveLeaderboardEntry(_ entry: LeaderboardEntry, type: LeaderboardType, period: String) async throws {
+        let db = Firestore.firestore()
+        
+        var data: [String: Any] = [
+            "username": entry.username,
+            type.scoreField: entry.score,
+            "timestamp": entry.timestamp
+        ]
+        
+        if let level = entry.level {
+            data["level"] = level
+        }
+        
+        if let time = entry.time {
+            data["time"] = time
+        }
+        
+        try await db.collection(type.collectionName)
+            .document(period)
+            .collection("scores")
+            .document(entry.id)
+            .setData(data)
+    }
+    
+    func getLeaderboardEntries(type: LeaderboardType, period: String) async throws -> [LeaderboardEntry] {
+        let db = Firestore.firestore()
+        
+        let snapshot = try await db.collection(type.collectionName)
+            .document(period)
+            .collection("scores")
+            .order(by: type.scoreField, descending: type.sortOrder == "desc")
+            .limit(to: 20)  // Limit to top 20 entries
+            .getDocuments()
+        
+        return snapshot.documents.compactMap { document in
+            let data = document.data()
+            guard let username = data["username"] as? String,
+                  let score = data[type.scoreField] as? Int,
+                  let timestamp = (data["timestamp"] as? Timestamp)?.dateValue() else {
+                return nil
+            }
+            
+            let level = data["level"] as? Int
+            let time = data["time"] as? TimeInterval
+            
+            return LeaderboardEntry(
+                id: document.documentID,
+                username: username,
+                score: score,
+                timestamp: timestamp,
+                level: level,
+                time: time
+            )
+        }
+    }
 }
 
 // MARK: - Models
 
 extension FirebaseManager {
-    struct LeaderboardEntry: Identifiable {
-        let id = UUID()
-        let userId: String
+    struct LeaderboardEntry: Identifiable, Codable {
+        let id: String
         let username: String
         let score: Int
-        let level: Int
         let timestamp: Date
+        let level: Int?
+        let time: TimeInterval?
+        
+        init(id: String, username: String, score: Int, timestamp: Date, level: Int? = nil, time: TimeInterval? = nil) {
+            self.id = id
+            self.username = username
+            self.score = score
+            self.timestamp = timestamp
+            self.level = level
+            self.time = time
+        }
+    }
+    
+    var currentUserId: String? {
+        Auth.auth().currentUser?.uid
     }
 }
 

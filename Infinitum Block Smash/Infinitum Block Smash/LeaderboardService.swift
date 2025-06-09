@@ -21,19 +21,18 @@ final class LeaderboardService {
     }
     
     private func setupResetTimer() {
-        // Calculate time until next midnight EST
+        // Calculate time until next reset in EST
         let calendar = Calendar.current
+        let now = Date()
+        let estNow = now.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
+        
+        // Get next midnight in EST
         var components = DateComponents()
         components.hour = 0
         components.minute = 0
         components.second = 0
         
-        // Get current date in EST
-        let now = Date()
-        let estDate = now.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
-        
-        // Get next midnight in EST
-        guard let nextMidnight = calendar.nextDate(after: estDate,
+        guard let nextMidnight = calendar.nextDate(after: estNow,
                                                  matching: components,
                                                  matchingPolicy: .nextTime) else {
             return
@@ -41,11 +40,10 @@ final class LeaderboardService {
         
         // Convert back to local time for timer
         let localNextMidnight = nextMidnight.addingTimeInterval(-TimeInterval(estTimeZone.secondsFromGMT()))
-        
-        // Calculate time interval until next midnight
         let timeInterval = localNextMidnight.timeIntervalSince(now)
         
         // Create timer that fires at next midnight
+        resetTimer?.invalidate()
         resetTimer = Timer.scheduledTimer(withTimeInterval: timeInterval, repeats: false) { [weak self] _ in
             Task { @MainActor [weak self] in
                 await self?.handleMidnightReset()
@@ -53,16 +51,58 @@ final class LeaderboardService {
                 self?.setupResetTimer()
             }
         }
+        
+        print("[Leaderboard] Next reset scheduled in \(timeInterval) seconds")
     }
     
     private func handleMidnightReset() async {
         print("[Leaderboard] Performing midnight EST reset")
         let now = Date()
-        print("[Leaderboard] Current EST time: \(now.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT())))")
+        let estNow = now.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
+        print("[Leaderboard] Current EST time: \(estNow)")
         
-        await resetPeriodScores(period: "daily", collection: "classic_leaderboard")
-        await resetPeriodScores(period: "daily", collection: "achievement_leaderboard")
-        UserDefaults.standard.set(now, forKey: "lastDailyReset")
+        // Check if we need to perform any resets
+        let calendar = Calendar.current
+        
+        // Check daily reset
+        if let lastDailyReset = UserDefaults.standard.object(forKey: "lastDailyReset") as? Date {
+            let estLastReset = lastDailyReset.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
+            if !calendar.isDateInToday(estLastReset) {
+                print("[Leaderboard] Performing daily reset")
+                await resetPeriodScores(period: "daily", collection: "classic_leaderboard")
+                await resetPeriodScores(period: "daily", collection: "achievement_leaderboard")
+                await resetPeriodScores(period: "daily", collection: "classic_timed_leaderboard")
+                UserDefaults.standard.set(now, forKey: "lastDailyReset")
+            }
+        }
+        
+        // Check weekly reset (Sunday)
+        if calendar.component(.weekday, from: estNow) == 1 { // Sunday
+            if let lastWeeklyReset = UserDefaults.standard.object(forKey: "lastWeeklyReset") as? Date {
+                let estLastReset = lastWeeklyReset.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
+                if !calendar.isDate(estNow, equalTo: estLastReset, toGranularity: .weekOfYear) {
+                    print("[Leaderboard] Performing weekly reset")
+                    await resetPeriodScores(period: "weekly", collection: "classic_leaderboard")
+                    await resetPeriodScores(period: "weekly", collection: "achievement_leaderboard")
+                    await resetPeriodScores(period: "weekly", collection: "classic_timed_leaderboard")
+                    UserDefaults.standard.set(now, forKey: "lastWeeklyReset")
+                }
+            }
+        }
+        
+        // Check monthly reset
+        if calendar.component(.day, from: estNow) == 1 { // First day of month
+            if let lastMonthlyReset = UserDefaults.standard.object(forKey: "lastMonthlyReset") as? Date {
+                let estLastReset = lastMonthlyReset.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
+                if !calendar.isDate(estNow, equalTo: estLastReset, toGranularity: .month) {
+                    print("[Leaderboard] Performing monthly reset")
+                    await resetPeriodScores(period: "monthly", collection: "classic_leaderboard")
+                    await resetPeriodScores(period: "monthly", collection: "achievement_leaderboard")
+                    await resetPeriodScores(period: "monthly", collection: "classic_timed_leaderboard")
+                    UserDefaults.standard.set(now, forKey: "lastMonthlyReset")
+                }
+            }
+        }
     }
     
     private func setupPeriodResets() async {
@@ -79,44 +119,58 @@ final class LeaderboardService {
                 print("[Leaderboard] Performing daily reset - Last reset: \(estLastReset)")
                 await resetPeriodScores(period: "daily", collection: "classic_leaderboard")
                 await resetPeriodScores(period: "daily", collection: "achievement_leaderboard")
+                await resetPeriodScores(period: "daily", collection: "classic_timed_leaderboard")
                 UserDefaults.standard.set(now, forKey: "lastDailyReset")
             }
         } else {
             print("[Leaderboard] No previous daily reset found, performing initial reset")
             await resetPeriodScores(period: "daily", collection: "classic_leaderboard")
             await resetPeriodScores(period: "daily", collection: "achievement_leaderboard")
+            await resetPeriodScores(period: "daily", collection: "classic_timed_leaderboard")
             UserDefaults.standard.set(now, forKey: "lastDailyReset")
         }
         
         // Weekly reset
         if let lastWeeklyReset = UserDefaults.standard.object(forKey: "lastWeeklyReset") as? Date {
             let estLastReset = lastWeeklyReset.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
-            if !calendar.isDate(estNow, equalTo: estLastReset, toGranularity: .weekOfYear) {
+            let estComponents = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: estLastReset)
+            let currentComponents = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: estNow)
+            
+            if estComponents.yearForWeekOfYear != currentComponents.yearForWeekOfYear ||
+               estComponents.weekOfYear != currentComponents.weekOfYear {
                 print("[Leaderboard] Performing weekly reset - Last reset: \(estLastReset)")
                 await resetPeriodScores(period: "weekly", collection: "classic_leaderboard")
                 await resetPeriodScores(period: "weekly", collection: "achievement_leaderboard")
+                await resetPeriodScores(period: "weekly", collection: "classic_timed_leaderboard")
                 UserDefaults.standard.set(now, forKey: "lastWeeklyReset")
             }
         } else {
             print("[Leaderboard] No previous weekly reset found, performing initial reset")
             await resetPeriodScores(period: "weekly", collection: "classic_leaderboard")
             await resetPeriodScores(period: "weekly", collection: "achievement_leaderboard")
+            await resetPeriodScores(period: "weekly", collection: "classic_timed_leaderboard")
             UserDefaults.standard.set(now, forKey: "lastWeeklyReset")
         }
         
         // Monthly reset
         if let lastMonthlyReset = UserDefaults.standard.object(forKey: "lastMonthlyReset") as? Date {
             let estLastReset = lastMonthlyReset.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
-            if !calendar.isDate(estNow, equalTo: estLastReset, toGranularity: .month) {
+            let estComponents = calendar.dateComponents([.year, .month], from: estLastReset)
+            let currentComponents = calendar.dateComponents([.year, .month], from: estNow)
+            
+            if estComponents.year != currentComponents.year ||
+               estComponents.month != currentComponents.month {
                 print("[Leaderboard] Performing monthly reset - Last reset: \(estLastReset)")
                 await resetPeriodScores(period: "monthly", collection: "classic_leaderboard")
                 await resetPeriodScores(period: "monthly", collection: "achievement_leaderboard")
+                await resetPeriodScores(period: "monthly", collection: "classic_timed_leaderboard")
                 UserDefaults.standard.set(now, forKey: "lastMonthlyReset")
             }
         } else {
             print("[Leaderboard] No previous monthly reset found, performing initial reset")
             await resetPeriodScores(period: "monthly", collection: "classic_leaderboard")
             await resetPeriodScores(period: "monthly", collection: "achievement_leaderboard")
+            await resetPeriodScores(period: "monthly", collection: "classic_timed_leaderboard")
             UserDefaults.standard.set(now, forKey: "lastMonthlyReset")
         }
     }
@@ -243,15 +297,6 @@ final class LeaderboardService {
                             ])
                             // Submit to Game Center
                             GameCenterManager.shared.submitScore(score, for: type, period: period)
-                        } else if score > prevScore {
-                            print("[Leaderboard] Updating daily score - Higher score")
-                            try await docRef.setData([
-                                "username": username,
-                                type.scoreField: score,
-                                "timestamp": Timestamp(date: now)
-                            ], merge: true)
-                            // Submit to Game Center
-                            GameCenterManager.shared.submitScore(score, for: type, period: period)
                         }
                     } else {
                         // For backward compatibility - if no timestamp exists, create new entry
@@ -264,18 +309,29 @@ final class LeaderboardService {
                         // Submit to Game Center
                         GameCenterManager.shared.submitScore(score, for: type, period: period)
                     }
-                } else if score > prevScore {
-                    // For other periods, only update if score is higher
-                    print("[Leaderboard] Updating \(period) score - Higher score")
-                    try await docRef.setData([
-                        "username": username,
-                        type.scoreField: score,
-                        "timestamp": Timestamp(date: now)
-                    ], merge: true)
-                    // Submit to Game Center
-                    GameCenterManager.shared.submitScore(score, for: type, period: period)
                 } else {
-                    print("[Leaderboard] Skipping \(period) update - Score not higher")
+                    // For other periods, check if score is better based on leaderboard type
+                    let shouldUpdate: Bool
+                    if type == .timed {
+                        // For timed mode, lower score (time) is better
+                        shouldUpdate = score < prevScore || prevScore == 0
+                    } else {
+                        // For other modes, higher score is better
+                        shouldUpdate = score > prevScore
+                    }
+                    
+                    if shouldUpdate {
+                        print("[Leaderboard] Updating \(period) score - Better score")
+                        try await docRef.setData([
+                            "username": username,
+                            type.scoreField: score,
+                            "timestamp": Timestamp(date: now)
+                        ], merge: true)
+                        // Submit to Game Center
+                        GameCenterManager.shared.submitScore(score, for: type, period: period)
+                    } else {
+                        print("[Leaderboard] Skipping \(period) update - Score not better")
+                    }
                 }
             } catch {
                 print("[Leaderboard] Error updating \(period) leaderboard: \(error.localizedDescription)")
@@ -332,7 +388,7 @@ final class LeaderboardService {
             var query = db.collection(type.collectionName)
                 .document(period)
                 .collection("scores")
-                .order(by: type.scoreField, descending: true)
+                .order(by: type.scoreField, descending: type.sortOrder == "desc")
                 .limit(to: leaderboardLimit)
             
             if let startDate = startDate {

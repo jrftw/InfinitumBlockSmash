@@ -12,6 +12,12 @@ class GameCenterManager {
         static let classicMonthly = "com.infinitum.blocksmash.classic.monthly"
         static let classicAllTime = "com.infinitum.blocksmash.classic.alltime"
         
+        // Classic Timed Leaderboard IDs
+        static let classicTimedDaily = "com.infinitum.blocksmash.classictimed.daily"
+        static let classicTimedWeekly = "com.infinitum.blocksmash.classictimed.weekly"
+        static let classicTimedMonthly = "com.infinitum.blocksmash.classictimed.monthly"
+        static let classicTimedAllTime = "com.infinitum.blocksmash.classictimed.alltime"
+        
         // Achievement Leaderboard IDs
         static let achievementDaily = "com.infinitum.blocksmash.achievement.daily"
         static let achievementWeekly = "com.infinitum.blocksmash.achievement.weekly"
@@ -122,6 +128,14 @@ class GameCenterManager {
             leaderboardID = LeaderboardID.classicMonthly
         case (.score, "alltime"):
             leaderboardID = LeaderboardID.classicAllTime
+        case (.score, "dailyTimed"):
+            leaderboardID = LeaderboardID.classicTimedDaily
+        case (.score, "weeklyTimed"):
+            leaderboardID = LeaderboardID.classicTimedWeekly
+        case (.score, "monthlyTimed"):
+            leaderboardID = LeaderboardID.classicTimedMonthly
+        case (.score, "alltimeTimed"):
+            leaderboardID = LeaderboardID.classicTimedAllTime
         case (.achievement, "daily"):
             leaderboardID = LeaderboardID.achievementDaily
         case (.achievement, "weekly"):
@@ -178,6 +192,14 @@ class GameCenterManager {
             leaderboardID = LeaderboardID.classicMonthly
         case (.score, "alltime"):
             leaderboardID = LeaderboardID.classicAllTime
+        case (.score, "dailyTimed"):
+            leaderboardID = LeaderboardID.classicTimedDaily
+        case (.score, "weeklyTimed"):
+            leaderboardID = LeaderboardID.classicTimedWeekly
+        case (.score, "monthlyTimed"):
+            leaderboardID = LeaderboardID.classicTimedMonthly
+        case (.score, "alltimeTimed"):
+            leaderboardID = LeaderboardID.classicTimedAllTime
         case (.achievement, "daily"):
             leaderboardID = LeaderboardID.achievementDaily
         case (.achievement, "weekly"):
