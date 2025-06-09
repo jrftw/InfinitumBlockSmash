@@ -520,6 +520,10 @@ struct SettingsView: View {
                 Section(header: Text("Privacy")) {
                     Toggle("Allow anonymous usage analytics", isOn: $allowAnalytics)
                     Toggle("Allow data sharing for app features", isOn: $allowDataSharing)
+                    Toggle("Send crash reports", isOn: Binding(
+                        get: { UserDefaults.standard.bool(forKey: "allowCrashReports") },
+                        set: { UserDefaults.standard.set($0, forKey: "allowCrashReports") }
+                    ))
                     Button("View Analytics Dashboard") {
                         showingAnalytics = true
                     }

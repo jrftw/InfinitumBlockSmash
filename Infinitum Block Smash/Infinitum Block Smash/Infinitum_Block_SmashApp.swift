@@ -311,7 +311,20 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
     // MARK: - Crashlytics Configuration
     private func configureCrashlytics() {
-        // Implementation of configureCrashlytics method
+        // Set default value for allowCrashReports if not set
+        if UserDefaults.standard.object(forKey: "allowCrashReports") == nil {
+            UserDefaults.standard.set(true, forKey: "allowCrashReports")
+        }
+        
+        // Configure Crashlytics
+        Crashlytics.crashlytics().setCrashlyticsCollectionEnabled(UserDefaults.standard.bool(forKey: "allowCrashReports"))
+        
+        // Add observer for when the setting changes
+        NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { _ in
+            Crashlytics.crashlytics().setCrashlyticsCollectionEnabled(UserDefaults.standard.bool(forKey: "allowCrashReports"))
+        }
+        
+        print("[Crashlytics] Crash reporting is \(UserDefaults.standard.bool(forKey: "allowCrashReports") ? "enabled" : "disabled")")
     }
 }
 

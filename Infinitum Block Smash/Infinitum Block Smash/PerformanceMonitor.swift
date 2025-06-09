@@ -78,9 +78,40 @@ class PerformanceMonitor: ObservableObject {
     }
     
     private func updateCPUUsage() {
-        let userCPUTime = Double(processInfo.activeProcessorCount)
-        cpuUsage = (userCPUTime / Double(processInfo.processorCount)) * 100
-        performanceMetrics["cpu"] = cpuUsage
+        var cpuInfo = processor_info_array_t?(nil)
+        var numCpuInfo: mach_msg_type_number_t = 0
+        var numCpus: natural_t = 0
+        var totalUsage: Double = 0
+        
+        let result = host_processor_info(mach_host_self(),
+                                       PROCESSOR_CPU_LOAD_INFO,
+                                       &numCpus,
+                                       &cpuInfo,
+                                       &numCpuInfo)
+        
+        if result == KERN_SUCCESS {
+            let cpuInfoArray = UnsafeBufferPointer(start: cpuInfo, count: Int(numCpuInfo))
+            let cpuInfoArraySize = Int(numCpuInfo) / Int(numCpus)
+            
+            for i in 0..<Int(numCpus) {
+                let offset = i * cpuInfoArraySize
+                let user = Double(cpuInfoArray[offset + Int(CPU_STATE_USER)])
+                let system = Double(cpuInfoArray[offset + Int(CPU_STATE_SYSTEM)])
+                let idle = Double(cpuInfoArray[offset + Int(CPU_STATE_IDLE)])
+                let total = user + system + idle
+                
+                if total > 0 {
+                    totalUsage += ((user + system) / total) * 100.0
+                }
+            }
+            
+            cpuUsage = totalUsage / Double(numCpus)
+            performanceMetrics["cpu"] = cpuUsage
+        }
+        
+        if let cpuInfo = cpuInfo {
+            vm_deallocate(mach_task_self_, vm_address_t(bitPattern: cpuInfo), vm_size_t(numCpuInfo) * vm_size_t(MemoryLayout<integer_t>.stride))
+        }
     }
     
     private func updateNetworkLatency() {

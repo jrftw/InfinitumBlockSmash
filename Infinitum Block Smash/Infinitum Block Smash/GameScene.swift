@@ -559,6 +559,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         guard let touch = touches.first else { return }
         let location = touch.location(in: trayNode)
         let nodesAtPoint = trayNode.nodes(at: location)
+        
+        // Record input event for latency tracking
+        PerformanceMonitor.shared.recordInputEvent()
+        
         if let node = nodesAtPoint.first(where: { $0.name?.starts(with: "trayShape_") == true }),
            let blockIdString = node.name?.replacingOccurrences(of: "trayShape_", with: ""),
            let block = gameState.tray.first(where: { $0.id.uuidString == blockIdString }) {
@@ -573,23 +577,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             dragNode?.zPosition = 50
             addChild(dragNode!)
         }
-        
-        let nodes = nodes(at: touch.location(in: self))
-        
-        for node in nodes {
-            if node.name == "tryAgainButton" {
-                gameState.resetGame()
-                node.parent?.removeFromParent()
-                return
-            } else if node.name == "mainMenuButton" {
-                gameState.gameOver()
-                node.parent?.removeFromParent()
-                return
-            }
-        }
-        
-        // Handle other touches if not on buttons
-        super.touchesBegan(touches, with: event)
     }
     
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -599,6 +586,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         let touchPoint = touch.location(in: self)
         let gridPoint = convertToGridCoordinates(touchPoint)
+        
+        // Record input event for latency tracking
+        PerformanceMonitor.shared.recordInputEvent()
         
         // Update drag node position to follow touch more precisely
         let blockDragOffset = UserDefaults.standard.double(forKey: "blockDragOffset")
@@ -648,6 +638,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         guard let touch = touches.first,
               let dragNode = dragNode,
               let draggingBlock = draggingBlock else { return }
+        
+        // Record input event for latency tracking
+        PerformanceMonitor.shared.recordInputEvent()
         
         // Check if enough time has passed since last placement
         let currentTime = CACurrentMediaTime()
