@@ -167,11 +167,7 @@ class AdManager: NSObject, ObservableObject {
     
     private func trackAdPerformance(adType: String, success: Bool, error: Error? = nil) {
         Task {
-            await GameAnalytics.shared.trackEvent(.adShown, parameters: [
-                "ad_type": adType,
-                "success": success,
-                "error": error?.localizedDescription ?? "none"
-            ])
+            AnalyticsManager.shared.trackEvent(.performanceMetric(name: "ad_shown", value: success ? 1.0 : 0.0))
         }
     }
     
@@ -226,11 +222,11 @@ class AdManager: NSObject, ObservableObject {
         do {
             let request = Request()
             try await withTimeout(seconds: adLoadTimeout) {
-                interstitialAd = try await InterstitialAd.load(with: interstitialAdUnitID, request: request)
-                interstitialAd?.fullScreenContentDelegate = self
-                adState = .ready
-                adLoadAttempts = 0
-                trackAdPerformance(adType: "interstitial", success: true)
+                self.interstitialAd = try await InterstitialAd.load(with: self.interstitialAdUnitID, request: request)
+                self.interstitialAd?.fullScreenContentDelegate = self
+                self.adState = .ready
+                self.adLoadAttempts = 0
+                self.trackAdPerformance(adType: "interstitial", success: true)
             }
         } catch {
             print("Failed to load interstitial ad with error: \(error.localizedDescription)")
@@ -279,11 +275,11 @@ class AdManager: NSObject, ObservableObject {
         do {
             let request = Request()
             try await withTimeout(seconds: adLoadTimeout) {
-                rewardedInterstitialAd = try await RewardedInterstitialAd.load(with: rewardedInterstitialAdUnitID, request: request)
-                rewardedInterstitialAd?.fullScreenContentDelegate = self
-                adState = .ready
-                adLoadFailed = false
-                trackAdPerformance(adType: "rewarded", success: true)
+                self.rewardedInterstitialAd = try await RewardedInterstitialAd.load(with: self.rewardedInterstitialAdUnitID, request: request)
+                self.rewardedInterstitialAd?.fullScreenContentDelegate = self
+                self.adState = .ready
+                self.adLoadFailed = false
+                self.trackAdPerformance(adType: "rewarded", success: true)
             }
         } catch {
             print("Failed to load rewarded interstitial ad with error: \(error.localizedDescription)")
