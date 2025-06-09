@@ -1022,13 +1022,13 @@ final class GameState: ObservableObject {
             if score > leaderboardHighScore {
                 Task {
                     // Update leaderboard
-                    if let userID = UserDefaults.standard.string(forKey: "userID"),
+                    if let currentUser = Auth.auth().currentUser,
                        let username = UserDefaults.standard.string(forKey: "username") {
                         try? await LeaderboardService.shared.updateLeaderboard(
                             type: .score,
                             score: score,
                             username: username,
-                            userID: userID
+                            userID: currentUser.uid
                         )
                     }
                     // Refresh leaderboard high score
