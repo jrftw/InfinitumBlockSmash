@@ -488,6 +488,10 @@ struct SettingsView: View {
                         Text("Changelog")
                     }
                     
+                    NavigationLink(destination: EULAView()) {
+                        Text("End User License Agreement")
+                    }
+                    
                     Button("Join the Discord") {
                         showingDiscordWebView = true
                     }

@@ -73,7 +73,8 @@ You have the right to:
 
 ### Contact
 For privacy-related questions:
-- Email: support@infinitumlive.com
+- Email: jrftw@infinitumlive.com
+- Phone: 724-689-2673
 - Website: https://infinitumlive.com
 
-Last updated: [Current Date] 
+Last updated: June 9, 2025 

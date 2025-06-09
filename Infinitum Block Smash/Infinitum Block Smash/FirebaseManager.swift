@@ -11,6 +11,7 @@ import FirebaseCore
 import FirebaseCrashlytics
 import AuthenticationServices
 import CryptoKit
+import FirebaseFunctions
 
 // Network monitoring class
 final class NetworkMonitor: ObservableObject {
@@ -473,14 +474,132 @@ class FirebaseManager: ObservableObject {
         
         try validateUserId(userId)
         
-        let scoreData = addMetadata([
+        let scoreData: [String: Any] = [
+            "userId": userId,
             "score": score,
             "level": level,
-            "username": username
-        ], userId: userId)
+            "username": username,
+            "timestamp": FieldValue.serverTimestamp()
+        ]
         
+        // Submit to global leaderboard
         try await db.collection("leaderboard").addDocument(data: scoreData)
+        
+        // Submit to daily leaderboard
+        try await db.collection("classic_leaderboard")
+            .document("daily")
+            .collection("scores")
+            .document(userId)
+            .setData(scoreData, merge: true)
+        
+        // Submit to weekly leaderboard
+        try await db.collection("classic_leaderboard")
+            .document("weekly")
+            .collection("scores")
+            .document(userId)
+            .setData(scoreData, merge: true)
+        
+        // Submit to monthly leaderboard
+        try await db.collection("classic_leaderboard")
+            .document("monthly")
+            .collection("scores")
+            .document(userId)
+            .setData(scoreData, merge: true)
+        
+        // Submit to Realtime Database
+        let rtdbRef = rtdb.child("leaderboards").childByAutoId()
+        try await rtdbRef.setValue([
+            "userId": userId,
+            "score": score,
+            "timestamp": ServerValue.timestamp()
+        ])
+        
         print("[FirebaseManager] Successfully submitted score for user: \(userId)")
+    }
+    
+    // Add function to submit achievement score
+    func submitAchievementScore(_ score: Int, achievementId: String) async throws {
+        guard let userId = currentUser?.uid,
+              let username = username else { 
+            throw FirebaseError.notAuthenticated 
+        }
+        
+        try validateUserId(userId)
+        
+        let scoreData: [String: Any] = [
+            "userId": userId,
+            "score": score,
+            "achievementId": achievementId,
+            "username": username,
+            "timestamp": FieldValue.serverTimestamp()
+        ]
+        
+        // Submit to daily achievement leaderboard
+        try await db.collection("achievement_leaderboard")
+            .document("daily")
+            .collection("scores")
+            .document(userId)
+            .setData(scoreData, merge: true)
+        
+        // Submit to weekly achievement leaderboard
+        try await db.collection("achievement_leaderboard")
+            .document("weekly")
+            .collection("scores")
+            .document(userId)
+            .setData(scoreData, merge: true)
+        
+        // Submit to monthly achievement leaderboard
+        try await db.collection("achievement_leaderboard")
+            .document("monthly")
+            .collection("scores")
+            .document(userId)
+            .setData(scoreData, merge: true)
+        
+        print("[FirebaseManager] Successfully submitted achievement score for user: \(userId)")
+    }
+    
+    // Add function to get current leaderboard timeframes
+    func getCurrentLeaderboardTimeframes() async throws -> [String: [String: Date]] {
+        let functions = Functions.functions()
+        let result = try await functions.httpsCallable("getCurrentLeaderboardTimeframe").call()
+        
+        guard let data = result.data as? [String: [String: Any]] else {
+            throw FirebaseError.invalidData
+        }
+        
+        var timeframes: [String: [String: Date]] = [:]
+        
+        if let daily = data["daily"] {
+            let startDate = (daily["start"] as? [String: Any])?["_seconds"] as? TimeInterval
+            let endDate = (daily["end"] as? [String: Any])?["_seconds"] as? TimeInterval
+            
+            timeframes["daily"] = [
+                "start": startDate.map { Date(timeIntervalSince1970: $0) } ?? Date(),
+                "end": endDate.map { Date(timeIntervalSince1970: $0) } ?? Date()
+            ]
+        }
+        
+        if let weekly = data["weekly"] {
+            let startDate = (weekly["start"] as? [String: Any])?["_seconds"] as? TimeInterval
+            let endDate = (weekly["end"] as? [String: Any])?["_seconds"] as? TimeInterval
+            
+            timeframes["weekly"] = [
+                "start": startDate.map { Date(timeIntervalSince1970: $0) } ?? Date(),
+                "end": endDate.map { Date(timeIntervalSince1970: $0) } ?? Date()
+            ]
+        }
+        
+        if let monthly = data["monthly"] {
+            let startDate = (monthly["start"] as? [String: Any])?["_seconds"] as? TimeInterval
+            let endDate = (monthly["end"] as? [String: Any])?["_seconds"] as? TimeInterval
+            
+            timeframes["monthly"] = [
+                "start": startDate.map { Date(timeIntervalSince1970: $0) } ?? Date(),
+                "end": endDate.map { Date(timeIntervalSince1970: $0) } ?? Date()
+            ]
+        }
+        
+        return timeframes
     }
     
     // Add caching for frequently accessed data
@@ -633,8 +752,8 @@ class FirebaseManager: ObservableObject {
         var progressData = progress.dictionary
         progressData["userId"] = userId
         progressData["deviceId"] = UIDevice.current.identifierForVendor?.uuidString ?? ""
-        progressData["lastUpdate"] = FieldValue.serverTimestamp()
-        progressData["lastSaveTime"] = FieldValue.serverTimestamp()
+        progressData["lastUpdate"] = Date().timeIntervalSince1970
+        progressData["lastSaveTime"] = Date().timeIntervalSince1970
         
         // Save to Firestore
         let firestoreRef = db.collection("users").document(userId)
