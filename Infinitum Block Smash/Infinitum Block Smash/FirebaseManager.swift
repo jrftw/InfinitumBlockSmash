@@ -13,11 +13,12 @@ import AuthenticationServices
 import CryptoKit
 
 // Network monitoring class
-final class NetworkMonitor {
+final class NetworkMonitor: ObservableObject {
     static let shared = NetworkMonitor()
     private let monitor = NWPathMonitor()
     private let queue = DispatchQueue(label: "NetworkMonitor")
-    private(set) var isConnected = false
+    @Published private(set) var isConnected = false
+    @Published private(set) var connectionType: NWInterface.InterfaceType = .other
     
     private init() {
         startMonitoring()
@@ -25,13 +26,45 @@ final class NetworkMonitor {
     
     func startMonitoring() {
         monitor.pathUpdateHandler = { [weak self] path in
-            self?.isConnected = path.status == .satisfied
+            DispatchQueue.main.async {
+                self?.isConnected = path.status == .satisfied
+                self?.connectionType = path.availableInterfaces.first?.type ?? .other
+                
+                if path.status == .satisfied {
+                    print("[NetworkMonitor] Connected via \(self?.connectionType.description ?? "unknown")")
+                } else {
+                    print("[NetworkMonitor] Not connected. Status: \(path.status)")
+                }
+            }
         }
         monitor.start(queue: queue)
     }
     
     func stopMonitoring() {
         monitor.cancel()
+    }
+    
+    func checkConnection() async -> Bool {
+        return isConnected
+    }
+}
+
+extension NWInterface.InterfaceType {
+    var description: String {
+        switch self {
+        case .wifi:
+            return "WiFi"
+        case .cellular:
+            return "Cellular"
+        case .wiredEthernet:
+            return "Ethernet"
+        case .loopback:
+            return "Loopback"
+        case .other:
+            return "Other"
+        @unknown default:
+            return "Unknown"
+        }
     }
 }
 
@@ -69,12 +102,11 @@ class FirebaseManager: ObservableObject {
     private var authStateListener: AuthStateDidChangeListenerHandle?
     private var cachedProgress: GameProgress?
     private var lastActiveUpdateTimer: Timer?
+    private let rtdb = Database.database().reference()
     
     private init() {
-        setupAuthStateListener()
-        loadDeviceId()
-        startLastActiveUpdates()
-        configureOfflinePersistence()
+        // Keep RTDB synced
+        rtdb.keepSynced(true)
     }
     
     deinit {
@@ -435,15 +467,20 @@ class FirebaseManager: ObservableObject {
     
     func submitScore(_ score: Int, level: Int) async throws {
         guard let userId = currentUser?.uid,
-              let username = username else { return }
+              let username = username else { 
+            throw FirebaseError.notAuthenticated 
+        }
         
-        try await db.collection("leaderboard").addDocument(data: [
-            "userId": userId,
-            "username": username,
+        try validateUserId(userId)
+        
+        let scoreData = addMetadata([
             "score": score,
             "level": level,
-            "timestamp": FieldValue.serverTimestamp()
-        ])
+            "username": username
+        ], userId: userId)
+        
+        try await db.collection("leaderboard").addDocument(data: scoreData)
+        print("[FirebaseManager] Successfully submitted score for user: \(userId)")
     }
     
     // Add caching for frequently accessed data
@@ -590,42 +627,27 @@ class FirebaseManager: ObservableObject {
     }
     
     func saveGameProgress(_ progress: GameProgress) async throws {
-        guard let userId = currentUser?.uid else { return }
+        let userId = try validateUserId()
         
-        do {
-            // Get current cloud data for conflict resolution
-            let currentDoc = try await db.collection("users").document(userId).collection("progress").document("data").getDocument()
-            var finalProgress = progress
-            
-            if let currentData = currentDoc.data(),
-               let currentProgress = GameProgress(dictionary: currentData) {
-                // Resolve conflicts by taking the higher values
-                finalProgress = GameProgress(
-                    score: max(progress.score, currentProgress.score),
-                    level: max(progress.level, currentProgress.level),
-                    blocksPlaced: max(progress.blocksPlaced, currentProgress.blocksPlaced),
-                    linesCleared: max(progress.linesCleared, currentProgress.linesCleared),
-                    gamesCompleted: max(progress.gamesCompleted, currentProgress.gamesCompleted),
-                    perfectLevels: max(progress.perfectLevels, currentProgress.perfectLevels),
-                    totalPlayTime: max(progress.totalPlayTime, currentProgress.totalPlayTime),
-                    highScore: max(progress.highScore, currentProgress.highScore),
-                    highestLevel: max(progress.highestLevel, currentProgress.highestLevel),
-                    grid: progress.grid, // Keep the most recent grid state
-                    tray: progress.tray, // Keep the most recent tray state
-                    lastSaveTime: Date()
-                )
-            }
-            
-            // Save the resolved progress
-            try await db.collection("users").document(userId).collection("progress").document("data").setData(finalProgress.dictionary)
-            
-            // Update last sync time
-            UserDefaults.standard.set(Date(), forKey: "lastFirebaseSaveTime")
-            
-        } catch {
-            print("Error saving game progress: \(error)")
-            throw error
-        }
+        // Add metadata to progress data
+        var progressData = progress.dictionary
+        progressData["userId"] = userId
+        progressData["deviceId"] = UIDevice.current.identifierForVendor?.uuidString ?? ""
+        progressData["lastUpdate"] = FieldValue.serverTimestamp()
+        progressData["lastSaveTime"] = FieldValue.serverTimestamp()
+        
+        // Save to Firestore
+        let firestoreRef = db.collection("users").document(userId)
+            .collection("progress")
+            .document("current")
+        try await firestoreRef.setData(progressData, merge: true)
+        
+        // Save to RTDB for real-time sync
+        let rtdbRef = rtdb.child("users").child(userId)
+            .child("progress")
+        try await rtdbRef.setValue(progressData)
+        
+        print("[Firebase] Game progress saved for user: \(userId)")
     }
     
     func performInitialDeviceSync() async throws {
@@ -680,11 +702,13 @@ class FirebaseManager: ObservableObject {
     }
     
     private func syncAchievements() async throws {
-        guard Auth.auth().currentUser != nil else {
+        guard let userId = Auth.auth().currentUser?.uid else {
             throw FirebaseError.notAuthenticated
         }
         
-        let userRef = db.collection("users").document(currentUser?.uid ?? "")
+        try validateUserId(userId)
+        
+        let userRef = db.collection("users").document(userId)
         
         // Get local achievements
         let localAchievements = try? await userRef
@@ -719,18 +743,24 @@ class FirebaseManager: ObservableObject {
             }
         }
         
-        // Save merged achievements
+        // Save merged achievements with metadata
         for (id, data) in mergedAchievements {
+            let achievementData = addMetadata(data, userId: userId)
+            
             try await userRef
                 .collection("achievements")
                 .document(id)
-                .setData(data, merge: true)
+                .setData(achievementData, merge: true)
         }
         
         // Update last sync time
         try await userRef.updateData([
-            "lastAchievementSync": FieldValue.serverTimestamp()
+            "lastAchievementSync": FieldValue.serverTimestamp(),
+            "lastActive": FieldValue.serverTimestamp(),
+            "lastSync": FieldValue.serverTimestamp()
         ])
+        
+        print("[FirebaseManager] Successfully synced achievements for user: \(userId)")
     }
     
     private func createOrUpdateUserDocument(user: User) async throws {
@@ -757,18 +787,20 @@ class FirebaseManager: ObservableObject {
     // MARK: - Analytics Methods
     
     func saveAnalyticsData(_ data: [String: Any]) async throws {
-        guard let userId = currentUser?.uid else { return }
+        let userId = try validateUserId()
         
-        let analyticsRef = db.collection("users").document(userId).collection("analytics")
+        // Add metadata to analytics data
+        var analyticsData = data
+        analyticsData["userId"] = userId
+        analyticsData["deviceId"] = UIDevice.current.identifierForVendor?.uuidString ?? ""
+        analyticsData["timestamp"] = FieldValue.serverTimestamp()
         
-        // Save current analytics data
-        try await analyticsRef.document("current").setData(data)
+        // Save to Firestore
+        try await db.collection("users").document(userId)
+            .collection("analytics")
+            .addDocument(data: analyticsData)
         
-        // Save historical data point
-        try await analyticsRef.addDocument(data: [
-            "data": data,
-            "timestamp": FieldValue.serverTimestamp()
-        ])
+        print("[Firebase] Analytics data saved for user: \(userId)")
     }
     
     func loadAnalyticsData(timeRange: TimeRange) async throws -> [String: Any] {
@@ -850,31 +882,45 @@ class FirebaseManager: ObservableObject {
         return snapshot.documents.compactMap { $0.data()["data"] as? [String: Any] }
     }
     
-    private func configureOfflinePersistence() {
-        // Configure Firestore offline persistence
-        let settings = FirestoreSettings()
-        settings.cacheSettings = PersistentCacheSettings(sizeBytes: NSNumber(value: FirestoreCacheSizeUnlimited))
-        db.settings = settings
-        
-        // Configure Realtime Database offline persistence
-        Database.database().isPersistenceEnabled = true
-        
-        // Enable offline persistence for specific paths
-        let leaderboardRef = Database.database().reference(withPath: "leaderboard")
-        leaderboardRef.keepSynced(true)
-    }
-    
     // Add method to check sync status
     func checkSyncStatus() async -> Bool {
-        guard let userId = currentUser?.uid else { return false }
+        guard currentUser?.uid != nil else { return false }
         
         do {
-            let doc = try await db.collection("users").document(userId).collection("progress").document("data").getDocument()
+            let doc = try await db.collection("users").document(currentUser!.uid).collection("progress").document("data").getDocument()
             return doc.exists
         } catch {
-            print("Error checking sync status: \(error)")
+            print("[FirebaseManager] Error checking sync status: \(error)")
             return false
         }
+    }
+    
+    private func validateUserId(_ userId: String) throws {
+        guard !userId.isEmpty else {
+            throw FirebaseError.invalidData
+        }
+        guard userId == currentUser?.uid else {
+            throw FirebaseError.permissionDenied
+        }
+    }
+
+    private func addMetadata(_ data: [String: Any], userId: String) -> [String: Any] {
+        var metadata = data
+        metadata["userId"] = userId
+        metadata["deviceId"] = deviceId
+        metadata["lastUpdate"] = FieldValue.serverTimestamp()
+        metadata["lastModified"] = FieldValue.serverTimestamp()
+        metadata["appVersion"] = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+        metadata["buildNumber"] = Bundle.main.infoDictionary?["CFBundleVersion"] as? String
+        return metadata
+    }
+
+    // MARK: - User ID Validation
+    private func validateUserId() throws -> String {
+        guard let userId = Auth.auth().currentUser?.uid, !userId.isEmpty else {
+            throw FirebaseError.notAuthenticated
+        }
+        return userId
     }
 }
 

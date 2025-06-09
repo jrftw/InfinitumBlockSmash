@@ -37,6 +37,7 @@ private struct GameSettingsSection: View {
     @State private var hasEliteAccess = false
     @State private var unlockedThemes: Set<String> = []
     @AppStorage("selectedLanguage") private var selectedLanguage = Locale.current.languageCode ?? "en"
+    @State private var systemTheme: String = UserDefaults.standard.string(forKey: "systemTheme") ?? "auto"
     
     private let availableLanguages = [
         ("en", "English"),
@@ -101,16 +102,14 @@ private struct GameSettingsSection: View {
             }
             
             // System Theme Picker
-            Picker(NSLocalizedString("System Theme", comment: "Theme picker label"), selection: $theme) {
+            Picker(NSLocalizedString("System Theme", comment: "Theme picker label"), selection: $systemTheme) {
                 Text(NSLocalizedString("Light", comment: "Light theme option")).tag("light")
                 Text(NSLocalizedString("Dark", comment: "Dark theme option")).tag("dark")
                 Text(NSLocalizedString("Auto", comment: "Auto theme option")).tag("auto")
             }
-            .onChange(of: theme) { newValue in
-                if ["light", "dark", "auto"].contains(newValue) {
-                    themeManager.setTheme(newValue)
-                    updateTheme(newValue)
-                }
+            .onChange(of: systemTheme) { newValue in
+                UserDefaults.standard.set(newValue, forKey: "systemTheme")
+                updateTheme(newValue)
             }
             
             // Custom Theme Picker

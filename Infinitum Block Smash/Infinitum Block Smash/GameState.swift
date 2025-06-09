@@ -134,6 +134,28 @@ final class GameState: ObservableObject {
     private let memoryCleanupInterval: TimeInterval = 60.0 // Cleanup every minute
     private var cachedData: [String: Any] = [:]
     
+    // Add leaderboard high score property
+    private var leaderboardHighScore: Int = 0
+    
+    // Add method to fetch leaderboard high score
+    func fetchLeaderboardHighScore() async {
+        do {
+            let result = try await LeaderboardService.shared.getLeaderboard(type: .score, period: "alltime")
+            if let topScore = result.entries.first?.score {
+                await MainActor.run {
+                    self.leaderboardHighScore = topScore
+                    // Update highScore if leaderboard score is higher
+                    if topScore > self.highScore {
+                        self.highScore = topScore
+                        self.userDefaults.set(topScore, forKey: self.scoreKey)
+                    }
+                }
+            }
+        } catch {
+            print("[GameState] Error fetching leaderboard high score: \(error.localizedDescription)")
+        }
+    }
+    
     // Add undo state tracking
     private var undoStack = GameMoveStack(maxSize: 10)
     private var unlimitedUndos: Bool = false
@@ -171,6 +193,11 @@ final class GameState: ObservableObject {
         
         // Start play time timer
         startPlayTimeTimer()
+        
+        // Fetch leaderboard high score
+        Task {
+            await fetchLeaderboardHighScore()
+        }
         
         // Perform initial device sync if user is logged in and auto-sync is enabled
         Task {
@@ -974,7 +1001,7 @@ final class GameState: ObservableObject {
         
         achievementsManager.updateAchievement(id: "score_1000", value: score)
         
-        // Update high scores locally only
+        // Update high scores locally and check against leaderboard
         if score > highScore {
             highScore = score
             userDefaults.set(highScore, forKey: scoreKey)
@@ -983,6 +1010,24 @@ final class GameState: ObservableObject {
             
             // Update high score achievement
             achievementsManager.increment(id: "high_score")
+            
+            // Check if this is a new leaderboard high score
+            if score > leaderboardHighScore {
+                Task {
+                    // Update leaderboard
+                    if let userID = UserDefaults.standard.string(forKey: "userID"),
+                       let username = UserDefaults.standard.string(forKey: "username") {
+                        try? await LeaderboardService.shared.updateLeaderboard(
+                            type: .score,
+                            score: score,
+                            username: username,
+                            userID: userID
+                        )
+                    }
+                    // Refresh leaderboard high score
+                    await fetchLeaderboardHighScore()
+                }
+            }
         }
         
         // Update level high score

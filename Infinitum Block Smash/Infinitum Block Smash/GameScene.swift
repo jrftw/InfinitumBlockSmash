@@ -35,6 +35,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private let memoryCleanupInterval: TimeInterval = 30.0 // Cleanup every 30 seconds
     private var cachedNodes: [String: SKNode] = [:]
     
+    // Add theme observation property
+    private var themeObserver: NSObjectProtocol?
+    
     // MARK: - Initialization
     init(size: CGSize, gameState: GameState) {
         self.gameState = gameState
@@ -125,6 +128,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         super.didMove(to: view)
         setBackgroundAnimationsActive(true)
+        
+        // Observe theme changes
+        themeObserver = NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("ThemeDidChange"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.updateTheme()
+        }
     }
     
     override func willMove(from view: SKView) {
@@ -133,6 +145,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             await cleanupMemory()
         }
         NotificationCenter.default.removeObserver(self)
+        
+        if let observer = themeObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
     
     deinit {
@@ -237,7 +253,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Create grid background with a slight padding
         let padding: CGFloat = 2
         let gridBackground = SKShapeNode(rectOf: CGSize(width: totalWidth + padding, height: totalHeight + padding))
-        gridBackground.fillColor = .black
+        let theme = ThemeManager.shared.getCurrentTheme()
+        gridBackground.fillColor = SKColor.from(theme.colors.background)
         gridBackground.alpha = 0.3
         gridBackground.position = CGPoint(x: 0, y: 0)
         gridBackground.zPosition = -2
@@ -252,7 +269,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         if !hasBlocks {
             let debugBorder = SKShapeNode(rectOf: CGSize(width: totalWidth, height: totalHeight))
-            debugBorder.strokeColor = .red
+            debugBorder.strokeColor = SKColor.from(theme.colors.primary)
             debugBorder.lineWidth = 2
             debugBorder.zPosition = 10
             debugBorder.name = "debugBorder"
@@ -266,7 +283,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             let y = -totalHeight / 2 + CGFloat(i) * blockSize
             // Vertical line
             let verticalLine = SKShapeNode(rectOf: CGSize(width: 1, height: totalHeight))
-            verticalLine.fillColor = .white
+            verticalLine.fillColor = SKColor.from(theme.colors.secondary)
             verticalLine.alpha = 0.2
             verticalLine.position = CGPoint(x: x, y: 0)
             verticalLine.zPosition = 2
@@ -274,7 +291,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             gridNode.addChild(verticalLine)
             // Horizontal line
             let horizontalLine = SKShapeNode(rectOf: CGSize(width: totalWidth, height: 1))
-            horizontalLine.fillColor = .white
+            horizontalLine.fillColor = SKColor.from(theme.colors.secondary)
             horizontalLine.alpha = 0.2
             horizontalLine.position = CGPoint(x: 0, y: y)
             horizontalLine.zPosition = 2
@@ -1046,6 +1063,31 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     func highlightHint(at position: (row: Int, col: Int)) {
         // This is kept for backward compatibility but should not be used
         print("[Hint] Warning: Using deprecated highlightHint method")
+    }
+    
+    private func updateTheme() {
+        // Update grid appearance
+        if let gridBackground = gridNode.childNode(withName: "gridBackground") as? SKShapeNode {
+            let theme = ThemeManager.shared.getCurrentTheme()
+            gridBackground.fillColor = SKColor.from(theme.colors.background)
+        }
+        
+        // Update grid lines
+        gridNode.children.forEach { node in
+            if node.name == "gridLine", let line = node as? SKShapeNode {
+                let theme = ThemeManager.shared.getCurrentTheme()
+                line.fillColor = SKColor.from(theme.colors.secondary)
+            }
+        }
+        
+        // Update debug border if present
+        if let debugBorder = gridNode.childNode(withName: "debugBorder") as? SKShapeNode {
+            let theme = ThemeManager.shared.getCurrentTheme()
+            debugBorder.strokeColor = SKColor.from(theme.colors.primary)
+        }
+        
+        // Redraw blocks with new theme colors
+        renderGrid(gridNode: gridNode, gameState: gameState, blockSize: GameConstants.blockSize)
     }
 }
 

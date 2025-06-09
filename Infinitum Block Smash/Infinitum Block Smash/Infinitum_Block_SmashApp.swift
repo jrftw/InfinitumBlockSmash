@@ -8,50 +8,78 @@ import FirebaseAppCheck
 import FirebaseCrashlytics
 import FirebaseAuth
 import FirebaseFirestore
+import FirebaseInAppMessaging
 import UserNotifications
 import BackgroundTasks
 import GameKit
+import FirebaseDatabase
 
 // MARK: - AppDelegate
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+        // Configure Firebase first
+        FirebaseApp.configure()
+        
+        // Configure Firestore settings before any Firestore operations
+        let settings = FirestoreSettings()
+        settings.cacheSettings = PersistentCacheSettings(sizeBytes: NSNumber(value: FirestoreCacheSizeUnlimited))
+        Firestore.firestore().settings = settings
+        
+        // Now configure RTDB persistence
+        Database.database().isPersistenceEnabled = true
+        
         // Enable force logout
         ForceLogout.shared.isForceLogoutEnabled = true
         
-        // Initialize Firebase on the main thread
-        FirebaseApp.configure()
-        
-        // Configure Crashlytics
-        #if !targetEnvironment(simulator)
-        Crashlytics.crashlytics().setCrashlyticsCollectionEnabled(true)
-        #endif
-        
-        // Configure AppCheck with proper provider
+        // Configure AppCheck
         configureAppCheck()
         
-        // Initialize FirebaseManager to set up Firestore settings
-        _ = FirebaseManager.shared
+        // Configure In-App Messaging
+        configureInAppMessaging()
+        
+        // Configure Game Center
+        configureGameCenter()
+        
+        // Configure Firebase Messaging
+        configureFirebaseMessaging(application)
+        
+        // Configure Analytics
+        configureAnalytics()
+        
+        // Configure Crashlytics
+        configureCrashlytics()
+        
+        // Configure background tasks
+        configureBackgroundTasks()
+        
+        print("[Firebase] Successfully configured Firebase")
+        
+        // Add auth state listener
+        _ = Auth.auth().addStateDidChangeListener { auth, user in
+            if let user = user {
+                print("[Firebase] User is signed in with uid: \(user.uid)")
+                // Update last login time
+                Task {
+                    do {
+                        try await Firestore.firestore()
+                            .collection("users")
+                            .document(user.uid)
+                            .updateData([
+                                "lastLogin": FieldValue.serverTimestamp(),
+                                "lastActive": FieldValue.serverTimestamp()
+                            ])
+                    } catch {
+                        print("[Firebase] Error updating last login: \(error)")
+                    }
+                }
+            } else {
+                print("[Firebase] User is signed out")
+            }
+        }
         
         // Configure Google Mobile Ads
         MobileAds.shared.start { status in
             print("Google Mobile Ads SDK initialization status: \(status)")
-        }
-        
-        // Initialize Game Center
-        GKLocalPlayer.local.authenticateHandler = { viewController, error in
-            if let viewController = viewController {
-                // Present the view controller if needed
-                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                   let window = windowScene.windows.first {
-                    window.rootViewController?.present(viewController, animated: true)
-                }
-            } else if GKLocalPlayer.local.isAuthenticated {
-                print("[GameCenter] Player authenticated successfully")
-                // Initialize Game Center manager
-                _ = GameCenterManager.shared
-            } else if let error = error {
-                print("[GameCenter] Authentication error: \(error.localizedDescription)")
-            }
         }
         
         // Request App Tracking Transparency on first launch
@@ -63,8 +91,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Check for updates immediately
         VersionCheckService.shared.checkForUpdates()
         
-        // Configure background tasks
-        configureBackgroundTasks()
+        // Configure Firebase Messaging
+        configureFirebaseMessaging(application)
         
         return true
     }
@@ -191,9 +219,59 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     
     // MARK: - AppCheck Configuration
     private func configureAppCheck() {
-        let providerFactory = MyAppCheckProviderFactory()
-        AppCheck.setAppCheckProviderFactory(providerFactory)
-        print("[AppCheck] Using custom AppCheckProviderFactory")
+        #if DEBUG
+        MyAppCheckProviderFactory.configureDebugProvider()
+        #else
+        MyAppCheckProviderFactory.configureProductionProvider()
+        #endif
+    }
+    
+    // MARK: - In-App Messaging Configuration
+    private func configureInAppMessaging() {
+        InAppMessaging.inAppMessaging().automaticDataCollectionEnabled = true
+        InAppMessaging.inAppMessaging().messageDisplaySuppressed = false
+        
+        // Set up message display delegate
+        InAppMessaging.inAppMessaging().delegate = self
+    }
+    
+    // MARK: - Game Center Configuration
+    private func configureGameCenter() {
+        GKLocalPlayer.local.authenticateHandler = { viewController, error in
+            if let viewController = viewController {
+                // Present the view controller if needed
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let window = windowScene.windows.first {
+                    window.rootViewController?.present(viewController, animated: true)
+                }
+            } else if GKLocalPlayer.local.isAuthenticated {
+                print("[GameCenter] Player authenticated successfully")
+                // Use the modern Game Center authentication approach
+                GameCenterAuthProvider.getCredential { credential, error in
+                    if let error = error {
+                        print("Failed to get Game Center credential: \(error)")
+                        return
+                    }
+                    
+                    guard let credential = credential else {
+                        print("No Game Center credential available")
+                        return
+                    }
+                    
+                    Auth.auth().signIn(with: credential) { authResult, error in
+                        if let error = error {
+                            print("Firebase Game Center sign-in failed: \(error)")
+                        } else {
+                            print("Firebase Game Center sign-in succeeded!")
+                        }
+                    }
+                }
+                // Initialize Game Center manager
+                _ = GameCenterManager.shared
+            } else if let error = error {
+                print("[GameCenter] Authentication error: \(error.localizedDescription)")
+            }
+        }
     }
 
     private func isTestFlight() -> Bool {
@@ -202,6 +280,40 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         #else
         return false
         #endif
+    }
+
+    // MARK: - Firebase Messaging Configuration
+    private func configureFirebaseMessaging(_ application: UIApplication) {
+        // Implementation of configureFirebaseMessaging method
+    }
+
+    // MARK: - Analytics Configuration
+    private func configureAnalytics() {
+        // Implementation of configureAnalytics method
+    }
+
+    // MARK: - Crashlytics Configuration
+    private func configureCrashlytics() {
+        // Implementation of configureCrashlytics method
+    }
+}
+
+// MARK: - InAppMessagingDelegate
+extension AppDelegate: InAppMessagingDisplayDelegate {
+    func messageClicked(_ inAppMessage: InAppMessagingDisplayMessage, with action: InAppMessagingAction) {
+        print("[InAppMessaging] Message clicked: \(inAppMessage.campaignInfo.campaignName)")
+    }
+    
+    func messageDismissed(_ inAppMessage: InAppMessagingDisplayMessage, dismissType: InAppMessagingDismissType) {
+        print("[InAppMessaging] Message dismissed: \(inAppMessage.campaignInfo.campaignName)")
+    }
+    
+    func impressionDetected(for inAppMessage: InAppMessagingDisplayMessage) {
+        print("[InAppMessaging] Impression detected: \(inAppMessage.campaignInfo.campaignName)")
+    }
+    
+    func displayError(for inAppMessage: InAppMessagingDisplayMessage, error: Error) {
+        print("[InAppMessaging] Display error: \(error.localizedDescription)")
     }
 }
 

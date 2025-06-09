@@ -10,6 +10,8 @@ class NotificationService: ObservableObject {
     @Published var currentHighScoreNotification: HighScoreNotification?
     @Published var showHighScoreBanner = false
     
+    private let lastShownHighScoreKey = "lastShownHighScore"
+    
     struct HighScoreNotification: Identifiable {
         let id = UUID()
         let username: String
@@ -38,26 +40,33 @@ class NotificationService: ObservableObject {
                     return
                 }
                 
-                // Create notification
-                let notification = HighScoreNotification(
-                    username: username,
-                    score: score,
-                    timestamp: timestamp
-                )
-                
-                // Show banner for users currently playing
-                DispatchQueue.main.async {
-                    self.currentHighScoreNotification = notification
-                    self.showHighScoreBanner = true
+                // Check if this is a new high score that hasn't been shown before
+                let lastShownScore = UserDefaults.standard.integer(forKey: self.lastShownHighScoreKey)
+                if score > lastShownScore {
+                    // Create notification
+                    let notification = HighScoreNotification(
+                        username: username,
+                        score: score,
+                        timestamp: timestamp
+                    )
                     
-                    // Hide banner after 5 seconds
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-                        self.showHighScoreBanner = false
+                    // Show banner for users currently playing
+                    DispatchQueue.main.async {
+                        self.currentHighScoreNotification = notification
+                        self.showHighScoreBanner = true
+                        
+                        // Save the shown score
+                        UserDefaults.standard.set(score, forKey: self.lastShownHighScoreKey)
+                        
+                        // Hide banner after 5 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                            self.showHighScoreBanner = false
+                        }
                     }
+                    
+                    // Send push notification to users not currently playing
+                    self.sendPushNotification(for: notification)
                 }
-                
-                // Send push notification to users not currently playing
-                self.sendPushNotification(for: notification)
             }
     }
     

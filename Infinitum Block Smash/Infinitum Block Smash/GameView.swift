@@ -57,20 +57,13 @@ struct GameView: View {
             
             // Show sync error if any
             if let error = syncError {
-                VStack {
-                    Text("Sync Error")
-                        .font(.headline)
-                    Text(error)
-                        .font(.subheadline)
-                    Button("Retry") {
+                Color.clear
+                    .onAppear {
+                        print("[GameView] Sync error occurred: \(error)")
                         Task {
                             await syncGameData()
                         }
                     }
-                }
-                .padding()
-                .background(Color.black.opacity(0.7))
-                .cornerRadius(10)
             }
             
             // Add high score banner
@@ -99,12 +92,11 @@ struct GameView: View {
             if showTutorial {
                 showingTutorial = true
             }
-            
-            // Attempt to sync when view appears
+            // Delay sync by 1 second to allow network monitor to update
             Task {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
                 await syncGameData()
             }
-            
             // Request notification permission when game view appears
             notificationService.requestNotificationPermission()
         }
@@ -377,6 +369,18 @@ struct GameView: View {
     private func syncGameData() async {
         guard !UserDefaults.standard.bool(forKey: "isGuest") else { return }
         
+        // Check network connectivity first
+        guard await NetworkMonitor.shared.checkConnection() else {
+            syncError = "No internet connection. Please check your network and try again."
+            return
+        }
+        
+        // Ensure we're authenticated
+        guard FirebaseManager.shared.isAuthenticated else {
+            syncError = "Please sign in to sync your game data."
+            return
+        }
+        
         isSyncing = true
         syncError = nil
         
@@ -387,11 +391,35 @@ struct GameView: View {
             // Then check if we need to load cloud data
             let hasCloudData = await FirebaseManager.shared.checkSyncStatus()
             if hasCloudData {
-                try await gameState.loadCloudData()
+                await gameState.loadCloudData()
             }
             
+            // Update last sync time
+            UserDefaults.standard.set(Date(), forKey: "lastFirebaseSaveTime")
+            UserDefaults.standard.synchronize()
+            
+            isSyncing = false
+        } catch let error as FirebaseError {
+            print("[GameView] Firebase error syncing game data: \(error)")
+            switch error {
+            case .notAuthenticated:
+                syncError = "Please sign in to sync your game data."
+            case .networkError:
+                syncError = "Network error. Please check your connection and try again."
+            case .permissionDenied:
+                syncError = "Permission denied. Please sign in again."
+            case .offlineMode:
+                syncError = "You're currently offline. Changes will be saved locally."
+            case .retryLimitExceeded:
+                syncError = "Too many sync attempts. Please try again later."
+            case .invalidData:
+                syncError = "Invalid data detected. Please restart the app."
+            case .invalidCredential:
+                syncError = "Invalid credentials. Please sign in again."
+            }
             isSyncing = false
         } catch {
+            print("[GameView] Error syncing game data: \(error.localizedDescription)")
             syncError = error.localizedDescription
             isSyncing = false
         }

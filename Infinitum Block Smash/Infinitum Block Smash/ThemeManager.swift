@@ -4,6 +4,7 @@ class ThemeManager: ObservableObject {
     static let shared = ThemeManager()
     
     @Published var currentTheme: String = UserDefaults.standard.string(forKey: "selectedTheme") ?? "system"
+    @Published var systemTheme: String = UserDefaults.standard.string(forKey: "systemTheme") ?? "auto"
     
     private let availableThemes = [
         "system": Theme(
@@ -184,14 +185,63 @@ class ThemeManager: ObservableObject {
         )
     ]
     
-    private init() {}
+    private init() {
+        // Initialize system theme
+        if let savedSystemTheme = UserDefaults.standard.string(forKey: "systemTheme") {
+            systemTheme = savedSystemTheme
+        }
+        
+        // Initialize current theme
+        if let savedTheme = UserDefaults.standard.string(forKey: "selectedTheme") {
+            currentTheme = savedTheme
+        }
+    }
     
     func setTheme(_ theme: String) {
-        currentTheme = theme
-        UserDefaults.standard.set(theme, forKey: "selectedTheme")
+        if ["light", "dark", "auto"].contains(theme) {
+            systemTheme = theme
+            UserDefaults.standard.set(theme, forKey: "systemTheme")
+            currentTheme = "system"
+            UserDefaults.standard.set("system", forKey: "selectedTheme")
+        } else {
+            currentTheme = theme
+            UserDefaults.standard.set(theme, forKey: "selectedTheme")
+        }
+        NotificationCenter.default.post(name: NSNotification.Name("ThemeDidChange"), object: nil)
     }
     
     func getCurrentTheme() -> Theme {
+        if currentTheme == "system" {
+            // Use system theme colors based on systemTheme setting
+            switch systemTheme {
+            case "light":
+                return Theme(
+                    name: "System Light",
+                    colors: ThemeColors(
+                        primary: Color.accentColor,
+                        background: Color(.systemBackground),
+                        secondary: Color(.secondarySystemBackground),
+                        text: Color(.label)
+                    ),
+                    isCustom: false,
+                    isFree: true
+                )
+            case "dark":
+                return Theme(
+                    name: "System Dark",
+                    colors: ThemeColors(
+                        primary: Color.accentColor,
+                        background: Color(.systemBackground),
+                        secondary: Color(.secondarySystemBackground),
+                        text: Color(.label)
+                    ),
+                    isCustom: false,
+                    isFree: true
+                )
+            default: // "auto"
+                return availableThemes["system"]!
+            }
+        }
         return availableThemes[currentTheme] ?? availableThemes["system"]!
     }
     
