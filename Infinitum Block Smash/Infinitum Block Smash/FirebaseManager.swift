@@ -122,15 +122,9 @@ class FirebaseManager: ObservableObject {
         AppCheck.setAppCheckProviderFactory(providerFactory)
         print("[FirebaseManager] Using debug App Check provider")
         #else
-        if #available(iOS 14.0, *) {
-            let providerFactory = DCAppAttestProviderFactory()
-            AppCheck.setAppCheckProviderFactory(providerFactory)
-            print("[FirebaseManager] Using App Attest provider")
-        } else {
-            let providerFactory = DeviceCheckProviderFactory()
-            AppCheck.setAppCheckProviderFactory(providerFactory)
-            print("[FirebaseManager] Using DeviceCheck provider")
-        }
+        let providerFactory = DeviceCheckProviderFactory()
+        AppCheck.setAppCheckProviderFactory(providerFactory)
+        print("[FirebaseManager] Using DeviceCheck provider")
         #endif
         
         // Initialize App Check token

@@ -30,18 +30,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
         AppCheck.setAppCheckProviderFactory(providerFactory)
         print("[AppCheck] Using debug provider")
         #else
-        // In production/TestFlight, use appropriate provider based on iOS version
-        if #available(iOS 14.0, *) {
-            // Use App Attest for iOS 14+
-            let providerFactory = AppAttestProviderFactory()
-            AppCheck.setAppCheckProviderFactory(providerFactory)
-            print("[AppCheck] Using App Attest provider")
-        } else {
-            // Fallback to DeviceCheck for older iOS versions
-            let providerFactory = DeviceCheckProviderFactory()
-            AppCheck.setAppCheckProviderFactory(providerFactory)
-            print("[AppCheck] Using DeviceCheck provider")
-        }
+        // In production/TestFlight, use DeviceCheck provider
+        let providerFactory = DeviceCheckProviderFactory()
+        AppCheck.setAppCheckProviderFactory(providerFactory)
+        print("[AppCheck] Using DeviceCheck provider")
         #endif
         
         // Configure Firebase
