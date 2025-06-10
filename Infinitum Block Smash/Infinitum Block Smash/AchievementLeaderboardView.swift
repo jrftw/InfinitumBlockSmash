@@ -128,43 +128,67 @@ struct AchievementLeaderboardView: View {
     }
     
     private func loadLeaderboardData() {
+        print("[AchievementLeaderboardView] Starting to load achievement leaderboard data")
+        print("[AchievementLeaderboardView] Selected period: \(selectedPeriod)")
+        
         isLoading = true
         error = nil
         
         Task {
             do {
+                print("[AchievementLeaderboardView] Fetching leaderboard entries from Firebase")
                 let entries = try await FirebaseManager.shared.getLeaderboardEntries(
                     type: .achievement,
                     period: selectedPeriod
                 )
                 
+                print("[AchievementLeaderboardView] Received \(entries.count) entries")
+                
                 // Update user position
                 if let userId = FirebaseManager.shared.currentUserId {
                     userPosition = entries.firstIndex(where: { $0.id == userId })
+                    print("[AchievementLeaderboardView] User position in leaderboard: \(userPosition ?? -1)")
+                }
+                
+                // Log sample entries for debugging
+                if !entries.isEmpty {
+                    print("[AchievementLeaderboardView] Sample entries:")
+                    for (index, entry) in entries.prefix(3).enumerated() {
+                        print("[AchievementLeaderboardView] Entry \(index + 1):")
+                        print("  - Username: \(entry.username)")
+                        print("  - Score: \(entry.score)")
+                        print("  - Timestamp: \(entry.timestamp)")
+                    }
                 }
                 
                 // Cache the data for offline access
                 if let encodedData = try? JSONEncoder().encode(entries) {
                     UserDefaults.standard.set(encodedData, forKey: "cached_leaderboard_achievement_\(selectedPeriod)")
+                    print("[AchievementLeaderboardView] Successfully cached \(entries.count) entries")
                 }
                 
                 leaderboardData = entries
                 totalUsers = entries.count
                 lastUpdated = Date()
                 isOffline = false
+                print("[AchievementLeaderboardView] ✅ Successfully loaded achievement leaderboard data")
             } catch {
+                print("[AchievementLeaderboardView] ❌ Error loading achievement leaderboard: \(error.localizedDescription)")
                 // Try to load cached data
                 if let cachedData = UserDefaults.standard.data(forKey: "cached_leaderboard_achievement_\(selectedPeriod)"),
                    let entries = try? JSONDecoder().decode([FirebaseManager.LeaderboardEntry].self, from: cachedData) {
+                    print("[AchievementLeaderboardView] Using cached data with \(entries.count) entries")
                     leaderboardData = entries
                     totalUsers = entries.count
                     isOffline = true
                 } else {
+                    print("[AchievementLeaderboardView] ❌ No cached data available")
                     self.error = error.localizedDescription
                 }
             }
             
             isLoading = false
+            print("[AchievementLeaderboardView] Completed loading achievement leaderboard data")
         }
     }
 }

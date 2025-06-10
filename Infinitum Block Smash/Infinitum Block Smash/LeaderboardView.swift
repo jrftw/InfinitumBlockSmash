@@ -171,47 +171,70 @@ struct LeaderboardView: View {
     }
     
     private func loadLeaderboardData() async {
+        print("[LeaderboardView] Starting to load leaderboard data")
+        print("[LeaderboardView] Selected type: \(selectedType), period: \(selectedPeriod)")
+        
         isLoading = true
         error = nil
         
         // Check authentication state first
-        guard Auth.auth().currentUser != nil else {
-            print("[LeaderboardView] User not authenticated")
+        guard let currentUser = Auth.auth().currentUser else {
+            print("[LeaderboardView] ❌ User not authenticated")
             error = LeaderboardError.notAuthenticated
             isLoading = false
             return
         }
+        print("[LeaderboardView] ✅ User authenticated: \(currentUser.uid)")
         
         do {
+            print("[LeaderboardView] Fetching leaderboard data from service")
             let (entries, total) = try await LeaderboardService.shared.getLeaderboard(
                 type: selectedType,
                 period: selectedPeriod
             )
             
+            print("[LeaderboardView] Received \(entries.count) entries, total users: \(total)")
+            
             // Update user position
             if let userId = FirebaseManager.shared.currentUserId {
                 userPosition = entries.firstIndex(where: { $0.id == userId })
+                print("[LeaderboardView] User position in leaderboard: \(userPosition ?? -1)")
+            }
+            
+            // Log some sample entries for debugging
+            if !entries.isEmpty {
+                print("[LeaderboardView] Sample entries:")
+                for (index, entry) in entries.prefix(3).enumerated() {
+                    print("[LeaderboardView] Entry \(index + 1):")
+                    print("  - Username: \(entry.username)")
+                    print("  - Score: \(entry.score)")
+                    print("  - Timestamp: \(entry.timestamp)")
+                }
             }
             
             leaderboardData = entries
             totalUsers = total
             lastUpdated = Date()
             isOffline = false
+            print("[LeaderboardView] ✅ Successfully loaded leaderboard data")
         } catch {
-            print("[LeaderboardView] Error loading leaderboard: \(error.localizedDescription)")
+            print("[LeaderboardView] ❌ Error loading leaderboard: \(error.localizedDescription)")
             // Only try to load cached data if we have a valid authentication state
             if Auth.auth().currentUser != nil,
                let cachedData = LeaderboardCache.shared.getCachedLeaderboard(type: selectedType, period: selectedPeriod) {
                 print("[LeaderboardView] Using cached data after error")
+                print("[LeaderboardView] Cached entries count: \(cachedData.count)")
                 leaderboardData = cachedData
                 totalUsers = cachedData.count
                 isOffline = true
             } else {
+                print("[LeaderboardView] ❌ No cached data available")
                 self.error = error
             }
         }
         
         isLoading = false
+        print("[LeaderboardView] Completed leaderboard data loading")
     }
 }
 

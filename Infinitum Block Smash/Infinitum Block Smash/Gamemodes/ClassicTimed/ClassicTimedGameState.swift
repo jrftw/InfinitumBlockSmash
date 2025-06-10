@@ -125,27 +125,15 @@ class ClassicTimedGameState: ObservableObject {
     
     private func saveBestTime() async {
         do {
-            guard let userID = UserDefaults.standard.string(forKey: "userID"),
-                  let username = UserDefaults.standard.string(forKey: "username") else {
-                print("[TimedMode] Error: Missing userID or username")
-                return
-            }
-            
-            // Check if user is authenticated
-            guard Auth.auth().currentUser != nil else {
-                print("[TimedMode] Error: User not authenticated")
-                return
-            }
-            
             // Calculate the time score (higher is better for timed mode)
             let timeScore = Int(getTimeLimit(for: gameState.level) - timeRemaining)
             
             // Save to leaderboard with correct type and score
             try await LeaderboardService.shared.updateLeaderboard(
-                type: .timed,
                 score: timeScore,
-                username: username,
-                userID: userID
+                level: gameState.level,
+                time: timeRemaining,
+                type: .timed
             )
             print("[TimedMode] Successfully saved time score to leaderboard: \(timeScore)")
         } catch {
@@ -224,4 +212,17 @@ class ClassicTimedGameState: ObservableObject {
     }
     
     private var cancellables = Set<AnyCancellable>()
+    
+    private func updateLeaderboard() async {
+        do {
+            try await LeaderboardService.shared.updateLeaderboard(
+                score: score,
+                level: level,
+                time: timeRemaining,
+                type: .timed
+            )
+        } catch {
+            print("[ClassicTimedGameState] Error updating leaderboard: \(error)")
+        }
+    }
 } 

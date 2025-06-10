@@ -78,11 +78,22 @@ enum FirebaseError: Error {
     case retryLimitExceeded
     case permissionDenied
     case invalidCredential
+    case updateFailed(Error)
 }
 
 @MainActor
 class FirebaseManager: ObservableObject {
     static let shared = FirebaseManager()
+    
+    // MARK: - Properties
+    private let auth = Auth.auth()
+    private let db = Firestore.firestore()
+    private let storage = Storage.storage()
+    private let functions = Functions.functions()
+    private var authStateListener: AuthStateDidChangeListenerHandle?
+    private var lastActiveUpdateTimer: Timer?
+    private var cachedProgress: GameProgress?
+    private let rtdb = Database.database().reference()
     
     @Published private(set) var isAuthenticated = false
     @Published private(set) var currentUser: User?
@@ -97,17 +108,29 @@ class FirebaseManager: ObservableObject {
     @Published private(set) var purchasedHints: Int = 0
     @Published var purchasedUndos: Int = 0
     
-    private let auth = Auth.auth()
-    private let db = Firestore.firestore()
-    private let storage = Storage.storage()
-    private var authStateListener: AuthStateDidChangeListenerHandle?
-    private var cachedProgress: GameProgress?
-    private var lastActiveUpdateTimer: Timer?
-    private let rtdb = Database.database().reference()
-    
     private init() {
         // Keep RTDB synced
         rtdb.keepSynced(true)
+        
+        print("[FirebaseManager] Initializing...")
+        setupAuthStateListener()
+        
+        if auth.currentUser == nil {
+            print("[FirebaseManager] No user signed in, attempting anonymous sign in...")
+            Task {
+                do {
+                    try await signInAnonymously()
+                    print("[FirebaseManager] Anonymous sign in successful")
+                } catch {
+                    print("[FirebaseManager] Error signing in anonymously: \(error)")
+                }
+            }
+        } else if let userId = auth.currentUser?.uid {
+            print("[FirebaseManager] User already signed in: \(userId)")
+            Task {
+                await loadUserData(userId: userId)
+            }
+        }
     }
     
     deinit {
@@ -157,7 +180,18 @@ class FirebaseManager: ObservableObject {
                 self?.isAuthenticated = user != nil
                 self?.currentUser = user
                 if let user = user {
+                    print("[FirebaseManager] User authenticated with ID: \(user.uid)")
+                    // Wait a short moment to ensure auth is fully processed
+                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
                     await self?.loadUserData(userId: user.uid)
+                } else {
+                    print("[FirebaseManager] No user authenticated")
+                    // Try to sign in anonymously if no user is present
+                    do {
+                        try await self?.signInAnonymously()
+                    } catch {
+                        print("[FirebaseManager] Error signing in anonymously: \(error)")
+                    }
                 }
             }
         }
@@ -165,8 +199,10 @@ class FirebaseManager: ObservableObject {
     
     func signInAnonymously() async throws {
         do {
+            print("[FirebaseManager] Starting anonymous sign in...")
             let result = try await auth.signInAnonymously()
             isGuest = true
+            print("[FirebaseManager] Anonymous sign in successful for user: \(result.user.uid)")
             
             // Create or update user document with proper timestamps
             let userData: [String: Any] = [
@@ -178,10 +214,16 @@ class FirebaseManager: ObservableObject {
                 "userId": result.user.uid
             ]
             
+            print("[FirebaseManager] Creating/updating user document...")
             try await db.collection("users").document(result.user.uid).setData(userData, merge: true)
+            print("[FirebaseManager] User document created/updated successfully")
+            
+            // Wait a short moment to ensure document is created
+            try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+            
             await loadUserData(userId: result.user.uid)
         } catch {
-            print("Error signing in anonymously: \(error)")
+            print("[FirebaseManager] Error in signInAnonymously: \(error)")
             throw error
         }
     }
@@ -231,35 +273,105 @@ class FirebaseManager: ObservableObject {
     
     // MARK: - User Data
     
+    private func migrateUserData(userId: String) async throws {
+        print("[FirebaseManager] Starting user data migration for: \(userId)")
+        let userRef = db.collection("users").document(userId)
+        let doc = try await userRef.getDocument()
+        
+        guard let data = doc.data() else {
+            print("[FirebaseManager] No user data found to migrate")
+            return
+        }
+        
+        var updates: [String: Any] = [:]
+        
+        // Check and add missing fields
+        if data["version"] == nil {
+            updates["version"] = 1
+        }
+        
+        if data["deviceId"] == nil {
+            updates["deviceId"] = generateDeviceId()
+        }
+        
+        if data["referralCode"] == nil {
+            updates["referralCode"] = generateReferralCode()
+        }
+        
+        if data["createdAt"] == nil {
+            updates["createdAt"] = FieldValue.serverTimestamp()
+        }
+        
+        // Check progress subcollection
+        let progressDoc = try await userRef.collection("progress").document("data").getDocument()
+        if !progressDoc.exists {
+            let progressData: [String: Any] = [
+                "blocksPlaced": data["blocksPlaced"] as? Int ?? 0,
+                "gamesCompleted": data["gamesCompleted"] as? Int ?? 0,
+                "gridSize": data["gridSize"] as? Int ?? 10,
+                "highScore": data["highScore"] as? Int ?? 0,
+                "highestLevel": data["highestLevel"] as? Int ?? 1,
+                "level": data["level"] as? Int ?? 1,
+                "linesCleared": data["linesCleared"] as? Int ?? 0,
+                "perfectLevels": data["perfectLevels"] as? Int ?? 0,
+                "score": data["score"] as? Int ?? 0,
+                "totalPlayTime": data["totalPlayTime"] as? Double ?? 0,
+                "lastSaveTime": FieldValue.serverTimestamp(),
+                "lastUpdated": FieldValue.serverTimestamp()
+            ]
+            
+            try await userRef.collection("progress").document("data").setData(progressData)
+            print("[FirebaseManager] Created progress subcollection")
+        }
+        
+        // Update main document if needed
+        if !updates.isEmpty {
+            try await userRef.updateData(updates)
+            print("[FirebaseManager] Updated user document with missing fields")
+        }
+        
+        print("[FirebaseManager] User data migration completed")
+    }
+    
     private func loadUserData(userId: String) async {
         do {
+            print("[FirebaseManager] Loading user data for ID: \(userId)")
             let docRef = db.collection("users").document(userId)
             let document = try await docRef.getDocument()
             
             if let data = document.data() {
+                print("[FirebaseManager] User data loaded successfully")
                 await MainActor.run {
-                    self.username = data["displayName"] as? String
+                    self.username = data["username"] as? String
                     self.referralCode = data["referralCode"] as? String
                     self.referredBy = data["referredBy"] as? String
                     self.purchasedHints = data["purchasedHints"] as? Int ?? 0
                     self.purchasedUndos = data["purchasedUndos"] as? Int ?? 0
                 }
+                
+                // Run migration if needed
+                if data["version"] as? Int != 1 {
+                    try await migrateUserData(userId: userId)
+                }
             } else {
+                print("[FirebaseManager] No user document found, creating new one...")
                 // Create new user document if it doesn't exist
                 let newUserData: [String: Any] = [
                     "deviceId": generateDeviceId(),
                     "referralCode": generateReferralCode(),
                     "createdAt": FieldValue.serverTimestamp(),
                     "lastActive": FieldValue.serverTimestamp(),
-                    "userId": userId
+                    "userId": userId,
+                    "version": 1
                 ]
                 try await docRef.setData(newUserData)
+                print("[FirebaseManager] New user document created")
                 
                 // Load the newly created data
                 await loadUserData(userId: userId)
             }
         } catch {
-            print("Error loading user data: \(error.localizedDescription)")
+            print("[FirebaseManager] Error loading user data: \(error.localizedDescription)")
         }
     }
     
@@ -466,55 +578,136 @@ class FirebaseManager: ObservableObject {
     
     // MARK: - Leaderboard
     
-    func submitScore(_ score: Int, level: Int) async throws {
-        guard let userId = currentUser?.uid,
-              let username = username else { 
-            throw FirebaseError.notAuthenticated 
+    func submitScore(_ score: Int, level: Int? = nil, time: TimeInterval? = nil, type: LeaderboardType = .score) async throws {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            print("[Firebase] ❌ No authenticated user found")
+            throw FirebaseError.notAuthenticated
         }
         
-        try validateUserId(userId)
+        // Get username from Firestore
+        let db = Firestore.firestore()
+        let userDoc = try await db.collection("users").document(userId).getDocument()
+        guard let username = userDoc.data()?["username"] as? String else {
+            print("[Firebase] ❌ No username found for user: \(userId)")
+            throw FirebaseError.invalidData
+        }
         
-        let scoreData: [String: Any] = [
-            "userId": userId,
-            "score": score,
-            "level": level,
-            "username": username,
-            "timestamp": FieldValue.serverTimestamp()
-        ]
+        print("[Firebase] 📊 Submitting score: \(score) for user: \(userId)")
         
-        // Submit to global leaderboard
-        try await db.collection("leaderboard").addDocument(data: scoreData)
+        // Use all periods
+        let periods = ["daily", "weekly", "monthly", "alltime"]
         
-        // Submit to daily leaderboard
-        try await db.collection("classic_leaderboard")
-            .document("daily")
-            .collection("scores")
-            .document(userId)
-            .setData(scoreData, merge: true)
+        for period in periods {
+            do {
+                print("[Firebase] 🔄 Attempting to update \(period) leaderboard for user \(userId)")
+                
+                let docRef = db.collection(type.collectionName)
+                    .document(period)
+                    .collection("scores")
+                    .document(userId)
+                
+                let snapshot = try await docRef.getDocument()
+                let currentScore = snapshot.data()?["score"] as? Int ?? 0
+                
+                if score <= currentScore {
+                    print("[Firebase] ⏭️ Skipping \(period) update - Score not better")
+                    continue
+                }
+                
+                // Include all required fields
+                var data: [String: Any] = [
+                    "username": username,
+                    "score": score,
+                    "timestamp": Timestamp(date: Date()),
+                    "lastUpdate": Timestamp(date: Date()),
+                    "userId": userId
+                ]
+                
+                if let level = level {
+                    data["level"] = level
+                }
+                
+                if let time = time {
+                    data["time"] = time
+                }
+                
+                print("[Firebase] 📝 Writing data to Firestore: \(data)")
+                
+                try await docRef.setData(data)
+                print("[Firebase] ✅ Successfully updated \(period) leaderboard")
+                
+            } catch {
+                print("[Firebase] ❌ Error updating \(period) leaderboard: \(error.localizedDescription)")
+                print("[Firebase] ❌ Error details: \(error)")
+                throw FirebaseError.updateFailed(error)
+            }
+        }
         
-        // Submit to weekly leaderboard
-        try await db.collection("classic_leaderboard")
-            .document("weekly")
-            .collection("scores")
-            .document(userId)
-            .setData(scoreData, merge: true)
+        print("[Firebase] ✅ Successfully submitted all scores")
+    }
+    
+    func submitTimedScore(_ score: Int, level: Int? = nil, time: TimeInterval? = nil) async throws {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            print("[Firebase] ❌ No authenticated user found")
+            throw FirebaseError.notAuthenticated
+        }
         
-        // Submit to monthly leaderboard
-        try await db.collection("classic_leaderboard")
-            .document("monthly")
-            .collection("scores")
-            .document(userId)
-            .setData(scoreData, merge: true)
+        // Get username from Firestore
+        let db = Firestore.firestore()
+        let userDoc = try await db.collection("users").document(userId).getDocument()
+        guard let username = userDoc.data()?["username"] as? String else {
+            print("[Firebase] ❌ No username found for user: \(userId)")
+            throw FirebaseError.invalidData
+        }
         
-        // Submit to Realtime Database
-        let rtdbRef = rtdb.child("leaderboards").childByAutoId()
-        try await rtdbRef.setValue([
-            "userId": userId,
-            "score": score,
-            "timestamp": ServerValue.timestamp()
-        ])
+        // Use all periods
+        let periods = ["daily", "weekly", "monthly", "alltime"]
         
-        print("[FirebaseManager] Successfully submitted score for user: \(userId)")
+        for period in periods {
+            do {
+                print("[Firebase] 🔄 Attempting to update \(period) leaderboard for user \(userId)")
+                
+                let docRef = db.collection("classic_timed_leaderboard")
+                    .document(period)
+                    .collection("scores")
+                    .document(userId)
+                
+                let snapshot = try await docRef.getDocument()
+                let currentScore = snapshot.data()?["score"] as? Int ?? 0
+                
+                if score <= currentScore {
+                    print("[Firebase] ⏭️ Skipping \(period) update - Score not better")
+                    continue
+                }
+                
+                // Include all required fields
+                var data: [String: Any] = [
+                    "username": username,
+                    "score": score,
+                    "timestamp": Timestamp(date: Date()),
+                    "lastUpdate": Timestamp(date: Date()),
+                    "userId": userId
+                ]
+                
+                if let level = level {
+                    data["level"] = level
+                }
+                
+                if let time = time {
+                    data["time"] = time
+                }
+                
+                print("[Firebase] 📝 Writing data to Firestore: \(data)")
+                
+                try await docRef.setData(data)
+                print("[Firebase] ✅ Successfully updated \(period) leaderboard")
+                
+            } catch {
+                print("[Firebase] ❌ Error updating \(period) leaderboard: \(error.localizedDescription)")
+                print("[Firebase] ❌ Error details: \(error)")
+                throw FirebaseError.updateFailed(error)
+            }
+        }
     }
     
     // Add function to submit achievement score
@@ -526,36 +719,13 @@ class FirebaseManager: ObservableObject {
         
         try validateUserId(userId)
         
-        let scoreData: [String: Any] = [
-            "userId": userId,
-            "score": score,
-            "achievementId": achievementId,
-            "username": username,
-            "timestamp": FieldValue.serverTimestamp()
-        ]
-        
-        // Submit to daily achievement leaderboard
-        try await db.collection("achievement_leaderboard")
-            .document("daily")
-            .collection("scores")
-            .document(userId)
-            .setData(scoreData, merge: true)
-        
-        // Submit to weekly achievement leaderboard
-        try await db.collection("achievement_leaderboard")
-            .document("weekly")
-            .collection("scores")
-            .document(userId)
-            .setData(scoreData, merge: true)
-        
-        // Submit to monthly achievement leaderboard
-        try await db.collection("achievement_leaderboard")
-            .document("monthly")
-            .collection("scores")
-            .document(userId)
-            .setData(scoreData, merge: true)
-        
-        print("[FirebaseManager] Successfully submitted achievement score for user: \(userId)")
+        // Submit to Firestore using LeaderboardService
+        try await LeaderboardService.shared.updateLeaderboard(
+            score: score,
+            type: .achievement,
+            username: username  // Pass the username to the updateLeaderboard function
+        )
+        print("[FirebaseManager] ✅ Successfully submitted achievement score for user: \(userId)")
     }
     
     // Add function to get current leaderboard timeframes
@@ -765,6 +935,7 @@ class FirebaseManager: ObservableObject {
         // Save to RTDB for real-time sync
         let rtdbRef = rtdb.child("users").child(userId)
             .child("progress")
+            .child("current")  // Add "current" to match Firestore structure
         try await rtdbRef.setValue(progressData)
         
         print("[Firebase] Game progress saved for user: \(userId)")
@@ -882,19 +1053,64 @@ class FirebaseManager: ObservableObject {
     private func createOrUpdateUserDocument(user: User) async throws {
         let userId = user.uid
         let userRef = db.collection("users").document(userId)
-        let userData: [String: Any] = [
+        
+        // Get existing document to check if it's a new user
+        let existingDoc = try await userRef.getDocument()
+        let isNewUser = !existingDoc.exists
+        
+        // Base user data
+        var userData: [String: Any] = [
             "email": user.email ?? "",
             "displayName": user.displayName ?? "",
             "photoURL": user.photoURL?.absoluteString ?? "",
             "lastLogin": FieldValue.serverTimestamp(),
             "lastActive": FieldValue.serverTimestamp(),
-            "createdAt": FieldValue.serverTimestamp(),
+            "createdAt": isNewUser ? FieldValue.serverTimestamp() : (existingDoc.data()?["createdAt"] as? Timestamp ?? FieldValue.serverTimestamp()),
             "userId": userId,
             "deviceId": generateDeviceId(),
-            "referralCode": generateReferralCode()
+            "referralCode": existingDoc.data()?["referralCode"] as? String ?? generateReferralCode(),
+            "version": 1
         ]
         
+        // If new user, add default game progress fields
+        if isNewUser {
+            userData.merge([
+                "blocksPlaced": 0,
+                "gamesCompleted": 0,
+                "gridSize": 10,
+                "highScore": 0,
+                "highestLevel": 1,
+                "level": 1,
+                "linesCleared": 0,
+                "perfectLevels": 0,
+                "score": 0,
+                "totalPlayTime": 0,
+                "lastSaveTime": FieldValue.serverTimestamp(),
+                "lastUpdated": FieldValue.serverTimestamp()
+            ]) { current, _ in current }
+        }
+        
         try await userRef.setData(userData, merge: true)
+        
+        // Create progress subcollection for new users
+        if isNewUser {
+            let progressData: [String: Any] = [
+                "blocksPlaced": 0,
+                "gamesCompleted": 0,
+                "gridSize": 10,
+                "highScore": 0,
+                "highestLevel": 1,
+                "level": 1,
+                "linesCleared": 0,
+                "perfectLevels": 0,
+                "score": 0,
+                "totalPlayTime": 0,
+                "lastSaveTime": FieldValue.serverTimestamp(),
+                "lastUpdated": FieldValue.serverTimestamp()
+            ]
+            
+            try await userRef.collection("progress").document("data").setData(progressData)
+        }
         
         // Load user data after creating/updating document
         await loadUserData(userId: userId)
@@ -1064,35 +1280,94 @@ class FirebaseManager: ObservableObject {
     }
     
     func getLeaderboardEntries(type: LeaderboardType, period: String) async throws -> [LeaderboardEntry] {
-        let db = Firestore.firestore()
+        print("[FirebaseManager] 🔄 Getting leaderboard entries for type: \(type), period: \(period)")
         
-        let snapshot = try await db.collection(type.collectionName)
+        // Get the collection name based on type
+        let collectionName = type.collectionName
+        print("[FirebaseManager] 📁 Using collection: \(collectionName)")
+        
+        // Get the score field based on type
+        let scoreField = type.scoreField
+        print("[FirebaseManager] 📊 Using score field: \(scoreField)")
+        
+        // Get the sort order based on type
+        let sortOrder = type.sortOrder
+        print("[FirebaseManager] 🔄 Using sort order: \(sortOrder)")
+        
+        // Calculate date filter
+        let calendar = Calendar.current
+        let now = Date()
+        let startOfDay = calendar.startOfDay(for: now)
+        var filterDate: Date?
+        
+        switch period {
+        case "daily":
+            filterDate = startOfDay
+        case "weekly":
+            filterDate = calendar.date(byAdding: .day, value: -7, to: startOfDay)
+        case "monthly":
+            filterDate = calendar.date(byAdding: .month, value: -1, to: startOfDay)
+        case "alltime":
+            filterDate = nil
+        default:
+            filterDate = startOfDay
+        }
+        
+        if let filterDate = filterDate {
+            print("[FirebaseManager] 📅 Filtering from date: \(filterDate)")
+        }
+        
+        // Get the entries
+        var query = db.collection(collectionName)
             .document(period)
             .collection("scores")
-            .order(by: type.scoreField, descending: type.sortOrder == "desc")
-            .limit(to: 20)  // Limit to top 20 entries
-            .getDocuments()
+            .order(by: scoreField, descending: sortOrder == "desc")
+            .limit(to: 20)
         
-        return snapshot.documents.compactMap { document in
+        if let filterDate = filterDate {
+            query = query.whereField("timestamp", isGreaterThanOrEqualTo: Timestamp(date: filterDate))
+        }
+        
+        print("[FirebaseManager] 🔍 Executing query")
+        let snapshot = try await query.getDocuments()
+        print("[FirebaseManager] 📊 Retrieved \(snapshot.documents.count) entries")
+        
+        // Parse the entries
+        let entries = snapshot.documents.compactMap { document -> LeaderboardEntry? in
             let data = document.data()
-            guard let username = data["username"] as? String,
-                  let score = data[type.scoreField] as? Int,
-                  let timestamp = (data["timestamp"] as? Timestamp)?.dateValue() else {
+            print("[FirebaseManager] 📄 Processing document: \(document.documentID)")
+            print("[FirebaseManager] 📄 Document data: \(data)")
+            
+            guard let username = data["username"] as? String else {
+                print("[FirebaseManager] ⚠️ Missing username in document")
                 return nil
             }
             
+            guard let score = data[scoreField] as? Int else {
+                print("[FirebaseManager] ⚠️ Missing score in document")
+                return nil
+            }
+            
+            let timestamp = (data["timestamp"] as? Timestamp)?.dateValue() ?? Date()
             let level = data["level"] as? Int
             let time = data["time"] as? TimeInterval
+            let documentUserId = data["userId"] as? String ?? document.documentID
             
-            return LeaderboardEntry(
-                id: document.documentID,
+            let entry = LeaderboardEntry(
+                id: documentUserId,
                 username: username,
                 score: score,
                 timestamp: timestamp,
                 level: level,
                 time: time
             )
+            
+            print("[FirebaseManager] ✅ Successfully parsed entry: \(entry.username) - \(entry.score)")
+            return entry
         }
+        
+        print("[FirebaseManager] 📊 Successfully parsed \(entries.count) entries")
+        return entries
     }
 }
 

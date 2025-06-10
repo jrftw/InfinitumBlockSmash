@@ -499,7 +499,11 @@ struct GameView: View {
             print("[GameView] Firebase error syncing game data: \(error)")
             switch error {
             case .notAuthenticated:
-                syncError = "Please sign in to sync your game data."
+                print("[GameView] ❌ User not authenticated")
+            case .invalidData:
+                print("[GameView] ❌ Invalid data")
+            case .updateFailed(let underlyingError):
+                print("[GameView] ❌ Update failed: \(underlyingError.localizedDescription)")
             case .networkError:
                 syncError = "Network error. Please check your connection and try again."
             case .permissionDenied:
@@ -508,8 +512,6 @@ struct GameView: View {
                 syncError = "You're currently offline. Changes will be saved locally."
             case .retryLimitExceeded:
                 syncError = "Too many sync attempts. Please try again later."
-            case .invalidData:
-                syncError = "Invalid data detected. Please restart the app."
             case .invalidCredential:
                 syncError = "Invalid credentials. Please sign in again."
             }

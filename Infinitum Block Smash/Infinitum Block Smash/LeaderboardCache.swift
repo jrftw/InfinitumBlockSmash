@@ -32,7 +32,7 @@ class LeaderboardCache {
     
     func getCachedLeaderboard(type: LeaderboardType, period: String) -> [FirebaseManager.LeaderboardEntry]? {
         guard Auth.auth().currentUser != nil else {
-            print("[LeaderboardCache] Not serving cached data - User not authenticated")
+            print("[LeaderboardCache] Not returning cached data - User not authenticated")
             return nil
         }
         
@@ -43,14 +43,30 @@ class LeaderboardCache {
         }
         
         // Check if cache is expired
-        if Date().timeIntervalSince(cachedData.timestamp) > cacheExpirationInterval {
+        let now = Date()
+        let isExpired = now.timeIntervalSince(cachedData.timestamp) > cacheExpirationInterval
+        
+        if isExpired {
             print("[LeaderboardCache] Cache expired for \(period) leaderboard")
             cache.removeObject(forKey: key)
             return nil
         }
         
-        print("[LeaderboardCache] Serving \(cachedData.entries.count) cached entries for \(period) leaderboard")
+        print("[LeaderboardCache] Returning \(cachedData.entries.count) cached entries for \(period) leaderboard")
         return cachedData.entries
+    }
+    
+    func invalidateCache(type: LeaderboardType? = nil, period: String? = nil) {
+        if let type = type, let period = period {
+            // Invalidate specific leaderboard
+            let key = "\(type.collectionName)_\(period)" as NSString
+            cache.removeObject(forKey: key)
+            print("[LeaderboardCache] Invalidated cache for \(period) leaderboard")
+        } else {
+            // Invalidate all caches
+            cache.removeAllObjects()
+            print("[LeaderboardCache] Invalidated all caches")
+        }
     }
     
     func clearCache() {

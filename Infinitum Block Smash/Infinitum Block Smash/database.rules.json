@@ -12,7 +12,7 @@
           ".write": "auth != null && auth.uid === $uid"
         },
         "progress": {
-          ".read": "auth != null && auth.uid === $uid",
+          ".read": "auth != null",
           ".write": "auth != null && auth.uid === $uid",
           "score": {
             ".validate": "newData.isNumber() && newData.val() >= 0"
@@ -113,6 +113,42 @@
       ".indexOn": ["score", "timestamp"]
     },
     "achievement_leaderboard": {
+      "$timeframe": {
+        "scores": {
+          "$uid": {
+            ".read": "auth != null",
+            ".write": "auth != null && auth.uid === $uid",
+            ".validate": "newData.hasChildren(['score', 'timestamp'])",
+            "score": {
+              ".validate": "newData.isNumber() && newData.val() >= 0"
+            },
+            "timestamp": {
+              ".validate": "newData.isNumber() && newData.val() <= now"
+            }
+          }
+        },
+        ".indexOn": ["score", "timestamp"]
+      }
+    },
+    "classic_leaderboard": {
+      "$timeframe": {
+        "scores": {
+          "$uid": {
+            ".read": "auth != null",
+            ".write": "auth != null && auth.uid === $uid",
+            ".validate": "newData.hasChildren(['score', 'timestamp'])",
+            "score": {
+              ".validate": "newData.isNumber() && newData.val() >= 0"
+            },
+            "timestamp": {
+              ".validate": "newData.isNumber() && newData.val() <= now"
+            }
+          }
+        },
+        ".indexOn": ["score", "timestamp"]
+      }
+    },
+    "classic_timed_leaderboard": {
       "$timeframe": {
         "scores": {
           "$uid": {

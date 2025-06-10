@@ -73,49 +73,55 @@ class AuthViewModel: ObservableObject {
         isLoading = true
         Auth.auth().createUser(withEmail: email, password: password) { [weak self] result, error in
             guard let self = self else { return }
-            self.isLoading = false
             
             if let error = error {
+                self.isLoading = false
                 self.handleAuthError(error)
                 return
             }
             
             guard let user = result?.user else {
                 self.errorMessage = "Failed to create user account."
+                self.isLoading = false
                 return
             }
             
-            self.userID = user.uid
-            self.storedUsername = self.username
-            self.saveUsername()
-            self.isGuest = false
-            
-            // Track account creation for this device
-            Task {
-                do {
-                    try await DeviceManager.shared.trackAccountCreation(userID: user.uid)
+            // Update the user's profile with username
+            let changeRequest = user.createProfileChangeRequest()
+            changeRequest.displayName = self.username
+            changeRequest.commitChanges { [weak self] error in
+                guard let self = self else { return }
+                
+                if let error = error {
+                    self.isLoading = false
+                    self.errorMessage = "Failed to set username: \(error.localizedDescription)"
+                    return
+                }
+                
+                // Save username to Firestore
+                let db = Firestore.firestore()
+                let userData: [String: Any] = [
+                    "username": self.username,
+                    "email": self.email,
+                    "timestamp": FieldValue.serverTimestamp(),
+                    "lastUsernameChange": FieldValue.serverTimestamp()
+                ]
+                
+                db.collection("users").document(user.uid).setData(userData) { [weak self] error in
+                    guard let self = self else { return }
+                    self.isLoading = false
                     
-                    // Handle referral code if provided
-                    if !self.referralCode.isEmpty {
-                        do {
-                            try await ReferralManager.shared.applyReferralCode(self.referralCode, forUserID: user.uid)
-                            print("Referral code applied successfully.")
-                        } catch {
-                            print("Failed to apply referral code: \(error.localizedDescription)")
-                            // Show error to user if it's not the device limit error
-                            if (error as NSError).code != 3 {
-                                await MainActor.run {
-                                    self.errorMessage = error.localizedDescription
-                                }
-                            }
-                        }
+                    if let error = error {
+                        self.errorMessage = "Failed to save user data: \(error.localizedDescription)"
+                        return
                     }
-                } catch {
-                    print("Failed to track account creation: \(error.localizedDescription)")
+                    
+                    self.userID = user.uid
+                    self.storedUsername = self.username
+                    self.isGuest = false
+                    self.handleSuccessfulAuth()
                 }
             }
-            
-            self.handleSuccessfulAuth()
         }
     }
     

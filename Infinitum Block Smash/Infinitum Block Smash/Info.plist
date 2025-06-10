@@ -276,7 +276,9 @@
 	<key>FirebaseAppCheckDebugEnabled</key>
 	<true/>
 	<key>FirebaseAppCheckDebugToken</key>
-	<string>2F8387F3-1DA9-46B8-9817-9EE434A923C5</string>
+	<string>CE67CA55-B0A6-4C0E-813D-ED8068E81657</string>
+	<key>FirebaseAppDelegateProxyEnabled</key>
+	<false/>
 	<key>FirebaseAutomaticScreenReportingEnabled</key>
 	<true/>
 	<key>FirebaseMessagingAutoInitEnabled</key>

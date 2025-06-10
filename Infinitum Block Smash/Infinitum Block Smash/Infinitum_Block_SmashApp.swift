@@ -13,29 +13,64 @@ import UserNotifications
 import BackgroundTasks
 import GameKit
 import FirebaseDatabase
+import FirebaseAnalytics
 
 // MARK: - AppDelegate
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
-        // Configure AppCheck first
+        // Configure AppCheck first with debug token
         #if DEBUG
+        // Set debug token in environment
+        let debugToken = "CE67CA55-B0A6-4C0E-813D-ED8068E81657"
+        let setenvResult = setenv("FIREBASE_APP_CHECK_DEBUG_TOKEN", debugToken, 1)
+        let setenvSuccess = setenvResult == 0
+        if !setenvSuccess {
+            print("[AppCheck] ⚠️ Failed to set debug token in environment")
+        }
+        
         let providerFactory = AppCheckDebugProviderFactory()
         AppCheck.setAppCheckProviderFactory(providerFactory)
-        print("[AppCheck] Using debug AppCheckProviderFactory with token: \(MyAppCheckProviderFactory.getDebugToken())")
+        print("[AppCheck] 🔍 Using debug provider with token: \(debugToken)")
+        
+        // Verify debug token is set
+        if let debugToken = ProcessInfo.processInfo.environment["FIREBASE_APP_CHECK_DEBUG_TOKEN"] {
+            print("[AppCheck] ✅ Debug token from environment: \(debugToken)")
+        } else if let debugToken = Bundle.main.object(forInfoDictionaryKey: "FirebaseAppCheckDebugToken") as? String {
+            print("[AppCheck] ✅ Debug token from Info.plist: \(debugToken)")
+        } else {
+            print("[AppCheck] ⚠️ WARNING: No debug token found!")
+        }
         #else
-        MyAppCheckProviderFactory.configureProductionProvider()
+        // For production builds, use App Attest
+        if #available(iOS 14.0, *) {
+            let providerFactory = AppAttestProviderFactory()
+            AppCheck.setAppCheckProviderFactory(providerFactory)
+            print("[AppCheck] ✅ Using App Attest provider")
+        } else {
+            let providerFactory = DeviceCheckProviderFactory()
+            AppCheck.setAppCheckProviderFactory(providerFactory)
+            print("[AppCheck] ✅ Using Device Check provider")
+        }
         #endif
         
         // Configure Firebase after AppCheck
         FirebaseApp.configure()
+        print("[Firebase] ✅ Firebase configured successfully")
+        
         
         // Configure Firestore settings before any Firestore operations
         let settings = FirestoreSettings()
         settings.cacheSettings = PersistentCacheSettings(sizeBytes: NSNumber(value: FirestoreCacheSizeUnlimited))
         Firestore.firestore().settings = settings
+        print("[Firebase] Firestore settings configured")
         
         // Now configure RTDB persistence
         Database.database().isPersistenceEnabled = true
+        print("[Firebase] RTDB persistence enabled")
+        
+        // Initialize FirebaseManager
+        _ = FirebaseManager.shared
+        print("[Firebase] FirebaseManager initialized")
         
         // Enable force logout
         ForceLogout.shared.isForceLogoutEnabled = true
@@ -74,6 +109,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                                 "lastLogin": FieldValue.serverTimestamp(),
                                 "lastActive": FieldValue.serverTimestamp()
                             ])
+                        print("[Firebase] Successfully updated last login time for user: \(user.uid)")
                     } catch {
                         print("[Firebase] Error updating last login: \(error)")
                     }
@@ -96,9 +132,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         
         // Check for updates immediately
         VersionCheckService.shared.checkForUpdates()
-        
-        // Configure Firebase Messaging
-        configureFirebaseMessaging(application)
         
         return true
     }
@@ -303,7 +336,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
     // MARK: - Analytics Configuration
     private func configureAnalytics() {
-        // Implementation of configureAnalytics method
+        // Configure Analytics
+        Analytics.setAnalyticsCollectionEnabled(true)
+        print("[Analytics] ✅ Analytics collection enabled")
+        
+        // Log app open event
+        Analytics.logEvent(AnalyticsEventAppOpen, parameters: nil)
+        print("[Analytics] ✅ Logged app open event")
     }
 
     // MARK: - Crashlytics Configuration

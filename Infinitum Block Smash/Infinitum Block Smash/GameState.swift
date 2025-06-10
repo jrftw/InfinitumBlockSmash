@@ -215,6 +215,11 @@ final class GameState: ObservableObject {
                 }
             }
         }
+        
+        // Retry any pending score submissions
+        Task {
+            await retryPendingScore()
+        }
     }
     
     deinit {
@@ -1026,18 +1031,38 @@ final class GameState: ObservableObject {
             // Check if this is a new leaderboard high score
             if score > leaderboardHighScore {
                 Task {
-                    // Update leaderboard
-                    if let currentUser = Auth.auth().currentUser,
-                       let username = UserDefaults.standard.string(forKey: "username") {
-                        try? await LeaderboardService.shared.updateLeaderboard(
-                            type: .score,
-                            score: score,
-                            username: username,
-                            userID: currentUser.uid
-                        )
+                    // Check network connectivity first
+                    guard NetworkMonitor.shared.isConnected else {
+                        print("[Leaderboard] No internet connection - will retry later")
+                        return
                     }
-                    // Refresh leaderboard high score
-                    await fetchLeaderboardHighScore()
+                    
+                    // Check if user is authenticated
+                    guard Auth.auth().currentUser != nil else {
+                        print("[Leaderboard] User not authenticated - will retry later")
+                        return
+                    }
+                    
+                    do {
+                        print("[Leaderboard] Updating leaderboard with new high score: \(score)")
+                        try await LeaderboardService.shared.updateLeaderboard(
+                            score: score,
+                            level: level,
+                            type: .score
+                        )
+                        print("[Leaderboard] Successfully updated leaderboard with new high score")
+                        
+                        // Refresh leaderboard high score
+                        await fetchLeaderboardHighScore()
+                        
+                        // Update Game Center leaderboard
+                        GameCenterManager.shared.submitScore(score, for: .score, period: "alltime")
+                    } catch {
+                        print("[Leaderboard] Error updating leaderboard: \(error.localizedDescription)")
+                        // Store the score for later update
+                        let pendingScore = PendingScore(score: score, timestamp: Date())
+                        userDefaults.set(try? JSONEncoder().encode(pendingScore), forKey: "pendingLeaderboardScore")
+                    }
                 }
             }
         }
@@ -1064,29 +1089,63 @@ final class GameState: ObservableObject {
         checkAchievements()
     }
     
-    func calculateRequiredScore() -> Int {
-        // Enhanced scoring system with dynamic thresholds
-        let baseScore = if level <= 5 {
-            level * 1000
-        } else if level <= 10 {
-            level * 2000
-        } else if level <= 50 {
-            level * 3000
-        } else if level <= 100 {
-            level * 5000
-        } else {
-            level * 10000
-        }
-        
-        // Add bonus for perfect levels
-        let perfectBonus = perfectLevels * 500
-        
-        // Add bonus for consecutive days played
-        let streakBonus = consecutiveDays * 200
-        
-        return baseScore + perfectBonus + streakBonus
+    // Add this struct at the top of the file
+    private struct PendingScore: Codable {
+        let score: Int
+        let timestamp: Date
     }
     
+    // Add this function to handle pending score updates
+    private func handlePendingScoreUpdates() {
+        guard let pendingScoreData = userDefaults.data(forKey: "pendingLeaderboardScore"),
+              let pendingScore = try? JSONDecoder().decode(PendingScore.self, from: pendingScoreData),
+              NetworkMonitor.shared.isConnected else {
+            return
+        }
+        
+        Task {
+            do {
+                print("[Leaderboard] Attempting to update pending score: \(pendingScore.score)")
+                try await LeaderboardService.shared.updateLeaderboard(
+                    score: pendingScore.score,
+                    type: .score
+                )
+                print("[Leaderboard] Successfully updated pending score")
+                userDefaults.removeObject(forKey: "pendingLeaderboardScore")
+            } catch {
+                print("[Leaderboard] Error updating pending score: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func updateLeaderboardAfterGameOver() {
+        Task {
+            do {
+                // Only update if score is greater than 0
+                if score > 0 {
+                    print("[Leaderboard] Attempting to update leaderboard with score: \(score)")
+                    try await LeaderboardService.shared.updateLeaderboard(
+                        score: score,
+                        level: level,
+                        type: .score
+                    )
+                    print("[Leaderboard] Successfully updated leaderboard")
+                    
+                    // Refresh leaderboard high score
+                    await fetchLeaderboardHighScore()
+                } else {
+                    print("[Leaderboard] Skipping update - score is 0")
+                }
+            } catch LeaderboardError.rateLimited {
+                print("[Leaderboard] Rate limited - skipping update")
+            } catch LeaderboardError.notAuthenticated {
+                print("[Leaderboard] User not authenticated - skipping update")
+            } catch {
+                print("[Leaderboard] Error updating leaderboard: \(error.localizedDescription)")
+            }
+        }
+    }
+
     func levelUp() {
         let requiredScore = calculateRequiredScore()
         guard score >= requiredScore else {
@@ -1177,53 +1236,38 @@ final class GameState: ObservableObject {
     }
     
     private func handleGameOver() {
-        // Ensure we only process game over once
-        guard !isGameOver else { return }
+        print("[GameState] 🎮 Game Over - Final Score: \(score)")
         
-        isGameOver = true
-        gamesCompleted += 1
+        // Update high score if needed
+        if score > highScore {
+            highScore = score
+            UserDefaults.standard.set(highScore, forKey: "highScore")
+            print("[GameState] 🏆 New High Score: \(highScore)")
+        }
+        
+        // Update leaderboard
+        Task {
+            do {
+                print("[GameState] 📊 Updating leaderboard with score: \(score)")
+                try await FirebaseManager.shared.submitScore(score, level: level, time: totalPlayTime)
+                print("[GameState] ✅ Leaderboard updated successfully")
+            } catch {
+                print("[GameState] ❌ Failed to update leaderboard: \(error.localizedDescription)")
+            }
+        }
         
         // Update achievements
+        print("[GameState] 🏅 Updating achievements")
         achievementsManager.updateAchievement(id: "games_10", value: gamesCompleted)
         achievementsManager.updateAchievement(id: "games_50", value: gamesCompleted)
         achievementsManager.updateAchievement(id: "games_100", value: gamesCompleted)
+        print("[GameState] ✅ Achievements updated successfully")
         
-        // Delete saved game and update leaderboard safely
-        deleteSavedGame()
-        if score > 0 {
-            updateLeaderboard()
-        }
+        // Reset game state
+        resetGame()
         
-        // Save last play date and check achievements
-        saveLastPlayDate()
-        checkAchievements()
-        
-        #if DEBUG
-        // In debug/simulator, skip ad
-        print("[GameOver] Debug mode - skipping ad")
-        delegate?.gameStateDidUpdate()
-        #else
-        // In production, check if we're in TestFlight
-        if Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt" {
-            print("[GameOver] TestFlight mode - skipping ad")
-            delegate?.gameStateDidUpdate()
-        } else {
-            // In production, check if ad is available before showing
-            Task {
-                if await AdManager.shared.isAdAvailable() {
-                    await AdManager.shared.showRewardedInterstitial(onReward: {
-                        self.continueGame()
-                    })
-                } else {
-                    // If ad is not available, proceed without showing ad
-                    self.continueGame()
-                }
-            }
-        }
-        #endif
-        
-        // Track game end
-        analyticsManager.trackEvent(.sessionEnd)
+        // Notify observers
+        NotificationCenter.default.post(name: .gameOver, object: nil)
     }
     
     private func hasValidMoves() -> Bool {
@@ -1302,44 +1346,27 @@ final class GameState: ObservableObject {
     }
     
     private func updateLeaderboard() {
-        // Check if user is a guest
-        if UserDefaults.standard.bool(forKey: "isGuest") {
-            print("[Leaderboard] Skipping leaderboard update for guest user")
-            return
-        }
-        
-        // Check if username is set
-        guard let username = UserDefaults.standard.string(forKey: "username"),
-              !username.isEmpty else {
-            print("[Leaderboard] Error: Username not set")
-            return
-        }
-        
         Task {
             do {
-                guard let userID = UserDefaults.standard.string(forKey: "userID") else {
-                    print("[Leaderboard] Error: Missing userID")
-                    return
-                }
-                
-                // Check if user is authenticated
-                guard Auth.auth().currentUser != nil else {
-                    print("[Leaderboard] Error: User not authenticated")
-                    return
-                }
-                
                 // Only update if score is greater than 0
                 if score > 0 {
+                    print("[Leaderboard] Attempting to update leaderboard with score: \(score)")
                     try await LeaderboardService.shared.updateLeaderboard(
-                        type: .score,
                         score: score,
-                        username: username,
-                        userID: userID
+                        level: level,
+                        type: .score
                     )
                     print("[Leaderboard] Successfully updated leaderboard")
+                    
+                    // Refresh leaderboard high score
+                    await fetchLeaderboardHighScore()
                 } else {
                     print("[Leaderboard] Skipping update - score is 0")
                 }
+            } catch LeaderboardError.rateLimited {
+                print("[Leaderboard] Rate limited - skipping update")
+            } catch LeaderboardError.notAuthenticated {
+                print("[Leaderboard] User not authenticated - skipping update")
             } catch {
                 print("[Leaderboard] Error updating leaderboard: \(error.localizedDescription)")
             }
@@ -1456,12 +1483,21 @@ final class GameState: ObservableObject {
             updatePlayTime() // Final update of play time
             try? await saveProgress()
             
-            // Update leaderboard if user is not guest and has a username
+            // Update leaderboard if user is not guest
             if !UserDefaults.standard.bool(forKey: "isGuest") {
-                if let username = UserDefaults.standard.string(forKey: "username"), !username.isEmpty {
-                    updateLeaderboard() // Removed await since it's not async
-                } else {
-                    print("[GameState] Cannot update leaderboard: Username not set")
+                do {
+                    print("[Leaderboard] Updating leaderboard after manual end - Score: \(score)")
+                    try await LeaderboardService.shared.updateLeaderboard(
+                        score: score,
+                        level: level,
+                        type: .score
+                    )
+                    print("[Leaderboard] Successfully updated leaderboard after manual end")
+                    
+                    // Refresh leaderboard high score
+                    await fetchLeaderboardHighScore()
+                } catch {
+                    print("[Leaderboard] Error updating leaderboard after manual end: \(error.localizedDescription)")
                 }
             }
         }
@@ -2346,7 +2382,183 @@ final class GameState: ObservableObject {
         await subscriptionManager.preloadSubscriptionStatus()
         await achievementsManager.preloadAchievements()
     }
+    
+    private func handleLevelComplete() {
+        print("[Level] Score threshold met for level \(level). Level complete!")
+        levelComplete = true
+        
+        // Update achievements
+        achievementsManager.updateAchievement(id: "level_complete", value: level)
+        achievementsManager.updateAchievement(id: "score_1000", value: score)
+        
+        // Update high scores
+        if score > highScore {
+            highScore = score
+            userDefaults.set(highScore, forKey: scoreKey)
+            achievementsManager.updateAchievement(id: "high_score", value: score)
+            print("[HighScore] New all-time high score: \(score)")
+        }
+        
+        // Update level high score
+        let levelHighScoreKey = "highScore_level_\(level)"
+        let prevLevelHigh = userDefaults.integer(forKey: levelHighScoreKey)
+        if score > prevLevelHigh {
+            userDefaults.set(score, forKey: levelHighScoreKey)
+            print("[HighScore] New high score for level \(level): \(score)")
+        }
+        
+        // Update leaderboard
+        Task {
+            do {
+                print("[Leaderboard] Updating leaderboard after level completion - Score: \(score)")
+                try await LeaderboardService.shared.updateLeaderboard(
+                    score: score,
+                    level: level,
+                    type: .score
+                )
+                print("[Leaderboard] Successfully updated leaderboard after level completion")
+                
+                // Refresh leaderboard high score
+                await fetchLeaderboardHighScore()
+                
+                // Post level completed notification
+                NotificationCenter.default.post(name: .levelCompleted, object: nil)
+            } catch {
+                print("[Leaderboard] Error updating leaderboard after level completion: \(error.localizedDescription)")
+            }
+        }
+        
+        // Notify delegate
+        delegate?.gameStateDidUpdate()
+    }
+    
+    private func saveGameState() async throws {
+        // ... existing save code ...
+        
+        do {
+            // Save to UserDefaults
+            let gameProgress = GameProgress(
+                score: score,
+                level: level,
+                blocksPlaced: blocksPlaced,
+                linesCleared: linesCleared,
+                gamesCompleted: gamesCompleted,
+                perfectLevels: perfectLevels,
+                totalPlayTime: totalPlayTime,
+                highScore: highScore,
+                highestLevel: highestLevel,
+                grid: grid,
+                tray: tray,
+                lastSaveTime: Date()
+            )
+            
+            let encoder = JSONEncoder()
+            let data = try encoder.encode(gameProgress)
+            userDefaults.set(data, forKey: progressKey)
+            userDefaults.set(true, forKey: hasSavedGameKey)
+            
+            // Post save success notification
+            NotificationCenter.default.post(name: .gameStateSaved, object: nil)
+        } catch {
+            print("[GameState] Error saving game state: \(error.localizedDescription)")
+            // Post save failure notification
+            NotificationCenter.default.post(name: .gameStateSaveFailed, object: nil)
+            throw GameError.saveFailed(error)
+        }
+    }
+    
+    private func loadGameState() async throws {
+        guard let data = userDefaults.data(forKey: progressKey) else {
+            print("[GameState] No saved game found")
+            // Post load failure notification
+            NotificationCenter.default.post(name: .gameStateLoadFailed, object: nil)
+            throw GameError.loadFailed(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "No saved game found"]))
+        }
+        
+        do {
+            let decoder = JSONDecoder()
+            let gameProgress = try decoder.decode(GameProgress.self, from: data)
+            
+            // Update game state
+            score = gameProgress.score
+            level = gameProgress.level
+            grid = gameProgress.grid.map { row in
+                row.map { colorString in
+                    BlockColor(rawValue: colorString)
+                }
+            }
+            tray = gameProgress.tray
+            blocksPlaced = gameProgress.blocksPlaced
+            linesCleared = gameProgress.linesCleared
+            gamesCompleted = gameProgress.gamesCompleted
+            perfectLevels = gameProgress.perfectLevels
+            totalPlayTime = gameProgress.totalPlayTime
+            highScore = gameProgress.highScore
+            highestLevel = gameProgress.highestLevel
+            
+            // Post load success notification
+            NotificationCenter.default.post(name: .gameStateLoaded, object: nil)
+        } catch {
+            print("[GameState] Error loading game state: \(error.localizedDescription)")
+            // Post load failure notification
+            NotificationCenter.default.post(name: .gameStateLoadFailed, object: nil)
+            throw GameError.loadFailed(error)
+        }
+    }
+    
+    private func checkForExistingSave() {
+        if userDefaults.bool(forKey: hasSavedGameKey) {
+            // Post save game warning notification
+            NotificationCenter.default.post(name: .showSaveGameWarning, object: nil)
+        }
+    }
+    
+    // ... existing code ...
+    private func retryPendingScore() async {
+        guard let pendingScoreData = userDefaults.data(forKey: "pendingLeaderboardScore"),
+              let pendingScore = try? JSONDecoder().decode(PendingScore.self, from: pendingScoreData) else {
+            return
+        }
+        
+        print("[Leaderboard] Attempting to retry pending score submission")
+        do {
+            try await LeaderboardService.shared.updateLeaderboard(
+                score: pendingScore.score,
+                type: .score
+            )
+            print("[Leaderboard] Successfully submitted pending score")
+            // Clear the pending score after successful submission
+            userDefaults.removeObject(forKey: "pendingLeaderboardScore")
+        } catch {
+            print("[Leaderboard] Failed to submit pending score: \(error.localizedDescription)")
+        }
+    }
+
+    func calculateRequiredScore() -> Int {
+        // Enhanced scoring system with dynamic thresholds
+        let baseScore = if level <= 5 {
+            level * 1000
+        } else if level <= 10 {
+            level * 2000
+        } else if level <= 50 {
+            level * 3000
+        } else if level <= 100 {
+            level * 5000
+        } else {
+            level * 10000
+        }
+        
+        // Add bonus for perfect levels
+        let perfectBonus = perfectLevels * 500
+        
+        // Add bonus for consecutive days played
+        let streakBonus = consecutiveDays * 200
+        
+        return baseScore + perfectBonus + streakBonus
+    }
 }
+
+// MARK: - Extensions and Supporting Types
 
 // Deterministic seeded random generator
 struct SeededGenerator: RandomNumberGenerator {
@@ -2356,8 +2568,9 @@ struct SeededGenerator: RandomNumberGenerator {
         state = state &* 6364136223846793005 &+ 1
         return state
     }
-} 
+}
 
+// MARK: - BlockColor Extension
 extension BlockColor {
     static func availableColors(for level: Int) -> [BlockColor] {
         return [.red, .blue, .green, .yellow, .purple, .orange, .pink, .cyan]
@@ -2388,7 +2601,7 @@ enum GameError: LocalizedError {
     }
 }
 
-// Add notification names
+// MARK: - Notification Names
 extension Notification.Name {
     static let gameStateSaved = Notification.Name("gameStateSaved")
     static let gameStateSaveFailed = Notification.Name("gameStateSaveFailed")
@@ -2396,4 +2609,5 @@ extension Notification.Name {
     static let gameStateLoadFailed = Notification.Name("gameStateLoadFailed")
     static let showSaveGameWarning = Notification.Name("showSaveGameWarning")
     static let levelCompleted = Notification.Name("levelCompleted")
+    static let gameOver = Notification.Name("gameOver")
 }

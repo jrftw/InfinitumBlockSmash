@@ -11,18 +11,15 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
     
-    function isValidScore() {
-      return (request.resource.data.score is number && request.resource.data.score >= 0) ||
-             (request.resource.data.points is number && request.resource.data.points >= 0);
+    function isValidScore(score) {
+      return score is number && score >= 0;
     }
     
     function isValidUsername() {
       let username = request.resource.data.username;
       return username is string 
         && username.size() >= 3 
-        && username.size() <= 20
-        && !username.matches('.*[^a-z0-9_].*')  // Only allow lowercase letters, numbers, and underscores
-        && !username.matches('.*(admin|moderator|support).*');  // Prevent impersonation
+        && username.size() <= 20;
     }
 
     function isValidGameProgress() {
@@ -37,107 +34,101 @@ service cloud.firestore {
              request.resource.data.highestLevel is number;
     }
 
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    function isValidPeriod(period) {
+      return period in ['daily', 'weekly', 'monthly', 'alltime'];
+    }
+
+    function isValidLeaderboardEntry() {
+      let data = request.resource.data;
+      let hasRequiredFields = data.keys().hasAll(['timestamp', 'username', 'userId']);
+      let hasValidScore = (data.score is number && data.score >= 0) || (data.points is number && data.points >= 0);
+      let timestampValid = isValidTimestamp(data.timestamp);
+      let usernameValid = isValidUsername();
+      let userIdValid = data.userId == request.auth.uid;
+      
+      return hasRequiredFields && hasValidScore && timestampValid && usernameValid && userIdValid;
+    }
+
     // Rate limiting functions
     function isNotRateLimited() {
       return !("lastUpdate" in resource.data) || request.time > resource.data.lastUpdate + duration.value(1, 'm');
     }
 
     function isNotLeaderboardRateLimited() {
-      return !("lastUpdate" in resource.data) || request.time > resource.data.lastUpdate + duration.value(5, 'm');
+      return !("lastUpdate" in resource.data) || 
+             request.time > resource.data.lastUpdate + duration.value(5, 'm') ||
+             !("lastUpdate" in resource.data);
     }
 
-    function isValidTimestamp() {
-      return request.resource.data.timestamp is timestamp &&
-             request.time.toMillis() - request.resource.data.timestamp.toMillis() < duration.value(1, 'h').toMillis();
-    }
-
-    // New function to validate timeframe
     function isValidTimeframe(timeframe) {
       let today = request.time.toDate().toISOString().split('T')[0];
       let yesterday = (request.time - duration.value(1, 'd')).toDate().toISOString().split('T')[0];
-      return timeframe == today || timeframe == yesterday;
+      let twoDaysAgo = (request.time - duration.value(2, 'd')).toDate().toISOString().split('T')[0];
+      return timeframe == today || timeframe == yesterday || timeframe == twoDaysAgo || timeframe == "alltime";
     }
 
-    // New function to check if entry is expired
     function isEntryExpired() {
-      return request.time.toMillis() - resource.data.timestamp.toMillis() > duration.value(2, 'd').toMillis();
+      return request.time.toMillis() - resource.data.timestamp.toMillis() > duration.value(7, 'd').toMillis();
     }
 
     // USERS COLLECTION
     match /users/{userId} {
-      allow read, write: if isOwner(userId);
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
 
-      // All subcollections under users
-      match /{document=**} {
+      // Progress subcollection
+      match /progress/{docId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId);
+      }
+
+      // Achievements subcollection
+      match /achievements/{achievementId} {
         allow read, write: if isOwner(userId);
       }
     }
 
-    // LEADERBOARD COLLECTION
-    match /leaderboard/{docId} {
-      allow read: if isAuthenticated();
-
-      allow create: if request.auth.uid == request.resource.data.userId && 
-                      isValidScore() &&
-                      request.resource.data.timestamp is timestamp;
-
-      allow update: if isAuthenticated() &&
-                      resource.data.userId == request.auth.uid &&
-                      request.resource.data.userId == request.auth.uid &&
-                      request.resource.data.score > resource.data.score &&
-                      isValidScore() &&
-                      isNotLeaderboardRateLimited() &&
-                      !isEntryExpired();
-
-      allow delete: if isAuthenticated() && isEntryExpired();
-    }
-
     // CLASSIC LEADERBOARD
-    match /classic_leaderboard/{timeframe} {
-      match /scores/{userId} {
-        allow read: if isAuthenticated();
-        allow write: if isAuthenticated() &&
-                       isValidScore() &&
-                       isNotLeaderboardRateLimited() &&
-                       isValidTimestamp() &&
-                       isValidTimeframe(timeframe);
-        allow delete: if isAuthenticated() && isEntryExpired();
-      }
+    match /classic_leaderboard/{period}/scores/{userId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isOwner(userId) &&
+                   isValidPeriod(period) &&
+                   isValidLeaderboardEntry();
+      allow delete: if false;
     }
 
     // ACHIEVEMENT LEADERBOARD
-    match /achievement_leaderboard/{timeframe} {
-      match /scores/{userId} {
-        allow read: if isAuthenticated();
-        allow write: if isAuthenticated() &&
-                       isValidScore() &&
-                       isNotLeaderboardRateLimited() &&
-                       isValidTimestamp() &&
-                       isValidTimeframe(timeframe);
-        allow delete: if isAuthenticated() && isEntryExpired();
-      }
+    match /achievement_leaderboard/{period}/scores/{userId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isOwner(userId) &&
+                   isValidPeriod(period) &&
+                   isValidLeaderboardEntry();
+      allow delete: if false;
     }
 
     // TIMED LEADERBOARD
-    match /classic_timed_leaderboard/{timeframe} {
-      match /scores/{userId} {
-        allow read: if isAuthenticated();
-        allow write: if isAuthenticated() &&
-                       isValidScore() &&
-                       isValidTimestamp() &&
-                       isValidTimeframe(timeframe);
-        allow delete: if isAuthenticated() && isEntryExpired();
-      }
+    match /classic_timed_leaderboard/{period}/scores/{userId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isOwner(userId) &&
+                   isValidPeriod(period) &&
+                   isValidLeaderboardEntry();
+      allow delete: if false;
     }
 
     // SETTINGS COLLECTION
     match /settings/{docId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
     }
 
     // ANALYTICS COLLECTION
     match /analytics/{docId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
     }
   }
 } 

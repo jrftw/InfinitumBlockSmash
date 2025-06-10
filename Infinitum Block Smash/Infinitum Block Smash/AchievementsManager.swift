@@ -330,7 +330,7 @@ class AchievementsManager: ObservableObject {
         let newTotal = achievements.values.filter { $0.unlocked }.reduce(0) { $0 + $1.points }
         if newTotal != totalPoints {
             totalPoints = newTotal
-            updateLeaderboard()
+            updateAchievementLeaderboard()
         }
     }
     
@@ -515,7 +515,7 @@ class AchievementsManager: ObservableObject {
         if achievement.progress >= achievement.goal && !achievement.unlocked {
             achievement.unlocked = true
             achievement.wasNotified = false  // Reset notification flag when newly unlocked
-            updateLeaderboard()
+            updateAchievementLeaderboard()
         }
         
         saveAchievement(achievement)
@@ -543,43 +543,62 @@ class AchievementsManager: ObservableObject {
         saveAchievement(achievement)
     }
     
-    private func updateLeaderboard() {
-        // Check if user is a guest
-        if UserDefaults.standard.bool(forKey: "isGuest") {
-            print("[Achievement Leaderboard] Skipping leaderboard update for guest user")
-            return
-        }
-        
-        // Only update if there are new achievements unlocked
-        let hasNewAchievements = achievements.values.contains { $0.unlocked && !$0.wasNotified }
-        guard hasNewAchievements else {
-            print("[Achievement Leaderboard] No new achievements to update")
-            return
-        }
-        
+    private func updateAchievementLeaderboard() {
         Task {
             do {
-                guard let userID = UserDefaults.standard.string(forKey: "userID"),
-                      let username = UserDefaults.standard.string(forKey: "username") else {
-                    print("[Achievement Leaderboard] Error: Missing userID or username")
+                print("[Achievement Leaderboard] 🔄 Starting leaderboard update")
+                print("[Achievement Leaderboard] 📊 Total points: \(totalPoints)")
+                
+                // Get username from user profile
+                guard let userId = Auth.auth().currentUser?.uid else {
+                    print("[Achievement Leaderboard] ❌ No authenticated user found")
                     return
                 }
                 
-                // Check if user is authenticated
-                guard Auth.auth().currentUser != nil else {
-                    print("[Achievement Leaderboard] Error: User not authenticated")
-                    return
+                let db = Firestore.firestore()
+                let userDoc = try await db.collection("users").document(userId).getDocument()
+                let username = userDoc.data()?["username"] as? String ?? Auth.auth().currentUser?.displayName ?? "Anonymous"
+                
+                print("[Achievement Leaderboard] 👤 Using username: \(username)")
+                
+                // Update all time periods
+                let periods = ["daily", "weekly", "monthly", "alltime"]
+                for period in periods {
+                    do {
+                        print("[Achievement Leaderboard] 📝 Updating \(period) leaderboard")
+                        let docRef = db.collection("achievement_leaderboard")
+                            .document(period)
+                            .collection("scores")
+                            .document(userId)
+                        
+                        // Get current score if it exists
+                        let currentDoc = try await docRef.getDocument()
+                        _ = currentDoc.data()?["points"] as? Int ?? 0
+                        
+                        // Always update achievement scores
+                        let data: [String: Any] = [
+                            "username": username,
+                            "points": totalPoints,
+                            "timestamp": FieldValue.serverTimestamp(),
+                            "userId": userId,
+                            "lastUpdate": FieldValue.serverTimestamp()
+                        ]
+                        
+                        print("[Achievement Leaderboard] 📝 Writing data to Firestore: \(data)")
+                        print("[Achievement Leaderboard] 📝 Writing to path: achievement_leaderboard/\(period)/scores/\(userId)")
+                        
+                        try await docRef.setData(data)
+                        print("[Achievement Leaderboard] ✅ Successfully updated \(period) leaderboard")
+                        
+                    } catch {
+                        print("[Achievement Leaderboard] ❌ Error updating \(period) leaderboard: \(error.localizedDescription)")
+                        print("[Achievement Leaderboard] ❌ Error details: \(error)")
+                    }
                 }
                 
-                try await LeaderboardService.shared.updateLeaderboard(
-                    type: .achievement,
-                    score: totalPoints,
-                    username: username,
-                    userID: userID
-                )
-                print("[Achievement Leaderboard] Successfully updated leaderboard")
+                print("[Achievement Leaderboard] ✅ Successfully updated all leaderboards")
             } catch {
-                print("[Achievement Leaderboard] Error updating leaderboard: \(error.localizedDescription)")
+                print("[Achievement Leaderboard] ❌ Error updating leaderboard: \(error.localizedDescription)")
             }
         }
     }
