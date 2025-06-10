@@ -28,16 +28,19 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
         // In debug/simulator, use debug provider
         let providerFactory = AppCheckDebugProviderFactory()
         AppCheck.setAppCheckProviderFactory(providerFactory)
+        print("[AppCheck] Using debug provider")
         #else
         // In production/TestFlight, use appropriate provider based on iOS version
         if #available(iOS 14.0, *) {
             // Use App Attest for iOS 14+
             let providerFactory = AppAttestProviderFactory()
             AppCheck.setAppCheckProviderFactory(providerFactory)
+            print("[AppCheck] Using App Attest provider")
         } else {
             // Fallback to DeviceCheck for older iOS versions
             let providerFactory = DeviceCheckProviderFactory()
             AppCheck.setAppCheckProviderFactory(providerFactory)
+            print("[AppCheck] Using DeviceCheck provider")
         }
         #endif
         

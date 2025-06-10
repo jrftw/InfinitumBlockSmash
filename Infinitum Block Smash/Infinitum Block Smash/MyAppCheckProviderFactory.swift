@@ -7,16 +7,16 @@ class MyAppCheckProviderFactory: NSObject, AppCheckProviderFactory {
     static func configureDebugProvider() {
         #if DEBUG
         // Set debug token in environment
-        let debugToken = "CE67CA55-B0A6-4C0E-813D-ED8068E81657"
-        let setenvResult = setenv("FIREBASE_APP_CHECK_DEBUG_TOKEN", debugToken, 1)
-        let setenvSuccess = setenvResult == 0
-        if !setenvSuccess {
-            print("[AppCheck] ⚠️ Failed to set debug token in environment")
+        if let debugToken = Bundle.main.object(forInfoDictionaryKey: "FirebaseAppCheckDebugToken") as? String {
+            let setenvResult = setenv("FIREBASE_APP_CHECK_DEBUG_TOKEN", debugToken, 1)
+            if setenvResult != 0 {
+                print("[AppCheck] ⚠️ Failed to set debug token in environment")
+            }
         }
         
         let providerFactory = AppCheckDebugProviderFactory()
         AppCheck.setAppCheckProviderFactory(providerFactory)
-        print("[AppCheck] 🔍 Using debug provider with token: \(debugToken)")
+        print("[AppCheck] 🔍 Using debug provider")
         #else
         print("[AppCheck] Debug provider not available in release build")
         #endif
@@ -34,12 +34,6 @@ class MyAppCheckProviderFactory: NSObject, AppCheckProviderFactory {
         print("[AppCheck] Using debug provider in simulator")
         return AppCheckDebugProvider(app: app)
         #else
-        // Check if we're in TestFlight
-        if Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt" {
-            print("[AppCheck] Using debug provider in TestFlight")
-            return AppCheckDebugProvider(app: app)
-        }
-        
         // In production, try App Attest first
         if #available(iOS 14.0, *) {
             do {
@@ -51,9 +45,9 @@ class MyAppCheckProviderFactory: NSObject, AppCheckProviderFactory {
             }
         }
         
-        // If all else fails, use debug provider
-        print("[AppCheck] Security providers not available, using debug provider")
-        return AppCheckDebugProvider(app: app)
+        // Fallback to DeviceCheck
+        print("[AppCheck] Using DeviceCheck provider")
+        return DCAppAttestProvider(app: app)
         #endif
     }
     

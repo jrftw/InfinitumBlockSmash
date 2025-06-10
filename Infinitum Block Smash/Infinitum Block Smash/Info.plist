@@ -263,10 +263,6 @@
 			<string>3qcr597p9d.skadnetwork</string>
 		</dict>
 	</array>
-	<key>FirebaseAppCheckDebugEnabled</key>
-	<true/>
-	<key>FirebaseAppCheckDebugToken</key>
-	<string>CE67CA55-B0A6-4C0E-813D-ED8068E81657</string>
 	<key>FirebaseAppDelegateProxyEnabled</key>
 	<false/>
 	<key>FirebaseAutomaticScreenReportingEnabled</key>
