@@ -204,19 +204,25 @@ class FirebaseManager: ObservableObject {
             isGuest = true
             print("[FirebaseManager] Anonymous sign in successful for user: \(result.user.uid)")
             
-            // Create or update user document with proper timestamps
+            // Create or update user document with proper timestamps and username
             let userData: [String: Any] = [
                 "deviceId": generateDeviceId(),
                 "referralCode": generateReferralCode(),
                 "createdAt": FieldValue.serverTimestamp(),
                 "lastLogin": FieldValue.serverTimestamp(),
                 "lastActive": FieldValue.serverTimestamp(),
-                "userId": result.user.uid
+                "userId": result.user.uid,
+                "username": "Guest_\(result.user.uid.prefix(6))" // Add a unique guest username
             ]
             
             print("[FirebaseManager] Creating/updating user document...")
             try await db.collection("users").document(result.user.uid).setData(userData, merge: true)
             print("[FirebaseManager] User document created/updated successfully")
+            
+            // Update the user's profile with username
+            let changeRequest = result.user.createProfileChangeRequest()
+            changeRequest.displayName = userData["username"] as? String
+            try await changeRequest.commitChanges()
             
             // Wait a short moment to ensure document is created
             try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds

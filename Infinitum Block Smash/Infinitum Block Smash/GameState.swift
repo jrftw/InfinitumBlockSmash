@@ -1238,6 +1238,9 @@ final class GameState: ObservableObject {
     private func handleGameOver() {
         print("[GameState] 🎮 Game Over - Final Score: \(score)")
         
+        // Set game over state first
+        isGameOver = true
+        
         // Update high score if needed
         if score > highScore {
             highScore = score
@@ -1245,15 +1248,19 @@ final class GameState: ObservableObject {
             print("[GameState] 🏆 New High Score: \(highScore)")
         }
         
-        // Update leaderboard
-        Task {
-            do {
-                print("[GameState] 📊 Updating leaderboard with score: \(score)")
-                try await FirebaseManager.shared.submitScore(score, level: level, time: totalPlayTime)
-                print("[GameState] ✅ Leaderboard updated successfully")
-            } catch {
-                print("[GameState] ❌ Failed to update leaderboard: \(error.localizedDescription)")
+        // Update leaderboard only if not a guest user
+        if !UserDefaults.standard.bool(forKey: "isGuest") {
+            Task {
+                do {
+                    print("[GameState] 📊 Updating leaderboard with score: \(score)")
+                    try await FirebaseManager.shared.submitScore(score, level: level, time: totalPlayTime)
+                    print("[GameState] ✅ Leaderboard updated successfully")
+                } catch {
+                    print("[GameState] ❌ Failed to update leaderboard: \(error.localizedDescription)")
+                }
             }
+        } else {
+            print("[GameState] 👤 Guest user - skipping leaderboard update")
         }
         
         // Update achievements
@@ -1262,9 +1269,6 @@ final class GameState: ObservableObject {
         achievementsManager.updateAchievement(id: "games_50", value: gamesCompleted)
         achievementsManager.updateAchievement(id: "games_100", value: gamesCompleted)
         print("[GameState] ✅ Achievements updated successfully")
-        
-        // Reset game state
-        resetGame()
         
         // Notify observers
         NotificationCenter.default.post(name: .gameOver, object: nil)
@@ -1346,6 +1350,12 @@ final class GameState: ObservableObject {
     }
     
     private func updateLeaderboard() {
+        // Skip if user is a guest
+        if UserDefaults.standard.bool(forKey: "isGuest") {
+            print("[Leaderboard] 👤 Guest user - skipping leaderboard update")
+            return
+        }
+        
         Task {
             do {
                 // Only update if score is greater than 0
@@ -2407,25 +2417,31 @@ final class GameState: ObservableObject {
             print("[HighScore] New high score for level \(level): \(score)")
         }
         
-        // Update leaderboard
-        Task {
-            do {
-                print("[Leaderboard] Updating leaderboard after level completion - Score: \(score)")
-                try await LeaderboardService.shared.updateLeaderboard(
-                    score: score,
-                    level: level,
-                    type: .score
-                )
-                print("[Leaderboard] Successfully updated leaderboard after level completion")
-                
-                // Refresh leaderboard high score
-                await fetchLeaderboardHighScore()
-                
-                // Post level completed notification
-                NotificationCenter.default.post(name: .levelCompleted, object: nil)
-            } catch {
-                print("[Leaderboard] Error updating leaderboard after level completion: \(error.localizedDescription)")
+        // Update leaderboard only if not a guest user
+        if !UserDefaults.standard.bool(forKey: "isGuest") {
+            Task {
+                do {
+                    print("[Leaderboard] Updating leaderboard after level completion - Score: \(score)")
+                    try await LeaderboardService.shared.updateLeaderboard(
+                        score: score,
+                        level: level,
+                        type: .score
+                    )
+                    print("[Leaderboard] Successfully updated leaderboard after level completion")
+                    
+                    // Refresh leaderboard high score
+                    await fetchLeaderboardHighScore()
+                    
+                    // Post level completed notification
+                    NotificationCenter.default.post(name: .levelCompleted, object: nil)
+                } catch {
+                    print("[Leaderboard] Error updating leaderboard after level completion: \(error.localizedDescription)")
+                }
             }
+        } else {
+            print("[Leaderboard] 👤 Guest user - skipping leaderboard update")
+            // Still post level completed notification
+            NotificationCenter.default.post(name: .levelCompleted, object: nil)
         }
         
         // Notify delegate
