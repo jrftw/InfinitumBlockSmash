@@ -14,6 +14,7 @@ import BackgroundTasks
 import GameKit
 import FirebaseDatabase
 import FirebaseAnalytics
+import DeviceCheck
 
 // MARK: - AppDelegate
 class AppDelegate: NSObject, UIApplicationDelegate {
