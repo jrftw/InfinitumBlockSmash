@@ -36,18 +36,14 @@ class MyAppCheckProviderFactory: NSObject, AppCheckProviderFactory {
         #else
         // In production, try App Attest first
         if #available(iOS 14.0, *) {
-            do {
-                let appAttestProvider = AppAttestProvider(app: app)
-                print("[AppCheck] Using App Attest provider")
-                return appAttestProvider
-            } catch {
-                print("[AppCheck] App Attest failed: \(error.localizedDescription)")
-            }
+            let appAttestProvider = AppAttestProvider(app: app)
+            print("[AppCheck] Using App Attest provider")
+            return appAttestProvider
         }
         
         // Fallback to DeviceCheck
         print("[AppCheck] Using DeviceCheck provider")
-        return DCAppAttestProvider(app: app)
+        return DeviceCheckProvider(app: app)
         #endif
     }
     

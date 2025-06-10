@@ -12,9 +12,9 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // App Check verification - attempt but allow if fails
+    // App Check verification
     function hasValidAppCheck() {
-      return request.auth.token.app_check.exists() ? request.auth.token.app_check == true : true;
+      return true; // Temporarily disable App Check for development
     }
 
     // Leaderboards - public read, authenticated write
@@ -37,6 +37,18 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow write: if isOwner(userId);
+      
+      // Achievements subcollection
+      match /achievements/{achievementId} {
+        allow read: if isAuthenticated();
+        allow write: if isOwner(userId);
+      }
+      
+      // Progress subcollection
+      match /progress/{progressId} {
+        allow read: if isAuthenticated();
+        allow write: if isOwner(userId);
+      }
     }
 
     // Game states - authenticated read, owner write

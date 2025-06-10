@@ -87,13 +87,14 @@ class FirebaseManager: ObservableObject {
     
     // MARK: - Properties
     private let auth = Auth.auth()
-    private let db = Firestore.firestore()
+    private let db: Firestore
     private let storage = Storage.storage()
     private let functions = Functions.functions()
     private var authStateListener: AuthStateDidChangeListenerHandle?
     private var lastActiveUpdateTimer: Timer?
     private var cachedProgress: GameProgress?
     private let rtdb = Database.database().reference()
+    private var appCheckToken: String?
     
     @Published private(set) var isAuthenticated = false
     @Published private(set) var currentUser: User?
@@ -109,6 +110,34 @@ class FirebaseManager: ObservableObject {
     @Published var purchasedUndos: Int = 0
     
     private init() {
+        // Configure Firestore settings first
+        let settings = FirestoreSettings()
+        settings.cacheSettings = PersistentCacheSettings(sizeBytes: NSNumber(value: FirestoreCacheSizeUnlimited))
+        self.db = Firestore.firestore()
+        self.db.settings = settings
+        
+        // Configure App Check
+        #if DEBUG
+        let providerFactory = AppCheckDebugProviderFactory()
+        AppCheck.setAppCheckProviderFactory(providerFactory)
+        print("[FirebaseManager] Using debug App Check provider")
+        #else
+        if #available(iOS 14.0, *) {
+            let providerFactory = AppAttestProviderFactory()
+            AppCheck.setAppCheckProviderFactory(providerFactory)
+            print("[FirebaseManager] Using App Attest provider")
+        } else {
+            let providerFactory = DeviceCheckProviderFactory()
+            AppCheck.setAppCheckProviderFactory(providerFactory)
+            print("[FirebaseManager] Using DeviceCheck provider")
+        }
+        #endif
+        
+        // Initialize App Check token
+        Task {
+            await refreshAppCheckToken()
+        }
+        
         // Keep RTDB synced
         rtdb.keepSynced(true)
         
@@ -1374,6 +1403,25 @@ class FirebaseManager: ObservableObject {
         
         print("[FirebaseManager] 📊 Successfully parsed \(entries.count) entries")
         return entries
+    }
+    
+    private func refreshAppCheckToken() async {
+        do {
+            let token = try await AppCheck.appCheck().token(forcingRefresh: true)
+            appCheckToken = token.token
+            print("[FirebaseManager] Successfully obtained new App Check token")
+            
+            // Set up token refresh
+            Task {
+                try? await Task.sleep(nanoseconds: 30 * 60 * 1_000_000_000) // 30 minutes
+                await refreshAppCheckToken()
+            }
+        } catch {
+            print("[FirebaseManager] Failed to get App Check token: \(error)")
+            // Retry after a short delay
+            try? await Task.sleep(nanoseconds: 5 * 1_000_000_000) // 5 seconds
+            await refreshAppCheckToken()
+        }
     }
 }
 
