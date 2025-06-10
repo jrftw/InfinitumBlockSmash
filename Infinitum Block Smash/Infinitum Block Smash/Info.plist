@@ -263,16 +263,6 @@
 			<string>3qcr597p9d.skadnetwork</string>
 		</dict>
 	</array>
-	<key>StoreKit</key>
-	<dict>
-		<key>Configuration</key>
-		<string>Configuration</string>
-	</dict>
-	<key>BGTaskSchedulerPermittedIdentifiers</key>
-	<array>
-		<string>com.infinitum.blocksmash.refresh</string>
-		<string>com.infinitum.blocksmash.sync</string>
-	</array>
 	<key>FirebaseAppCheckDebugEnabled</key>
 	<true/>
 	<key>FirebaseAppCheckDebugToken</key>

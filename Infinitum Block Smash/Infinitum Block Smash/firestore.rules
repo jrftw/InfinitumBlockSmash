@@ -2,133 +2,64 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper functions
+    // Basic authentication check
     function isAuthenticated() {
       return request.auth != null;
     }
     
+    // Ownership check for user-specific writes
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
-    
-    function isValidScore(score) {
-      return score is number && score >= 0;
-    }
-    
-    function isValidUsername() {
-      let username = request.resource.data.username;
-      return username is string 
-        && username.size() >= 3 
-        && username.size() <= 20;
+
+    // App Check verification - attempt but allow if fails
+    function hasValidAppCheck() {
+      return request.auth.token.app_check.exists() ? request.auth.token.app_check == true : true;
     }
 
-    function isValidGameProgress() {
-      return request.resource.data.score is number &&
-             request.resource.data.level is number &&
-             request.resource.data.blocksPlaced is number &&
-             request.resource.data.linesCleared is number &&
-             request.resource.data.gamesCompleted is number &&
-             request.resource.data.perfectLevels is number &&
-             request.resource.data.totalPlayTime is number &&
-             request.resource.data.highScore is number &&
-             request.resource.data.highestLevel is number;
+    // Leaderboards - public read, authenticated write
+    match /classic_leaderboard/{period}/scores/{userId} {
+      allow read: if true;
+      allow write: if isOwner(userId);
     }
 
-    function isValidTimestamp(ts) {
-      return ts is timestamp && ts <= request.time;
+    match /classic_timed_leaderboard/{period}/scores/{userId} {
+      allow read: if true;
+      allow write: if isOwner(userId);
     }
 
-    function isValidPeriod(period) {
-      return period in ['daily', 'weekly', 'monthly', 'alltime'];
+    match /achievement_leaderboard/{period}/scores/{userId} {
+      allow read: if true;
+      allow write: if isOwner(userId);
     }
 
-    function isValidLeaderboardEntry() {
-      let data = request.resource.data;
-      let hasRequiredFields = data.keys().hasAll(['timestamp', 'username', 'userId']);
-      let hasValidScore = (data.score is number && data.score >= 0) || (data.points is number && data.points >= 0);
-      let timestampValid = isValidTimestamp(data.timestamp);
-      let usernameValid = isValidUsername();
-      let userIdValid = data.userId == request.auth.uid;
-      
-      return hasRequiredFields && hasValidScore && timestampValid && usernameValid && userIdValid;
-    }
-
-    // Rate limiting functions
-    function isNotRateLimited() {
-      return !("lastUpdate" in resource.data) || request.time > resource.data.lastUpdate + duration.value(1, 'm');
-    }
-
-    function isNotLeaderboardRateLimited() {
-      return !("lastUpdate" in resource.data) || 
-             request.time > resource.data.lastUpdate + duration.value(5, 'm') ||
-             !("lastUpdate" in resource.data);
-    }
-
-    function isValidTimeframe(timeframe) {
-      let today = request.time.toDate().toISOString().split('T')[0];
-      let yesterday = (request.time - duration.value(1, 'd')).toDate().toISOString().split('T')[0];
-      let twoDaysAgo = (request.time - duration.value(2, 'd')).toDate().toISOString().split('T')[0];
-      return timeframe == today || timeframe == yesterday || timeframe == twoDaysAgo || timeframe == "alltime";
-    }
-
-    function isEntryExpired() {
-      return request.time.toMillis() - resource.data.timestamp.toMillis() > duration.value(7, 'd').toMillis();
-    }
-
-    // USERS COLLECTION
+    // User profiles - authenticated read, owner write
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow write: if isOwner(userId);
-
-      // Progress subcollection
-      match /progress/{docId} {
-        allow read: if isOwner(userId);
-        allow write: if isOwner(userId);
-      }
-
-      // Achievements subcollection
-      match /achievements/{achievementId} {
-        allow read, write: if isOwner(userId);
-      }
     }
 
-    // CLASSIC LEADERBOARD
-    match /classic_leaderboard/{period}/scores/{userId} {
+    // Game states - authenticated read, owner write
+    match /game_states/{userId} {
       allow read: if isAuthenticated();
-      allow create, update: if isOwner(userId) &&
-                   isValidPeriod(period) &&
-                   isValidLeaderboardEntry();
-      allow delete: if false;
+      allow write: if isOwner(userId);
     }
 
-    // ACHIEVEMENT LEADERBOARD
-    match /achievement_leaderboard/{period}/scores/{userId} {
+    // Settings - authenticated read, owner write
+    match /settings/{userId} {
       allow read: if isAuthenticated();
-      allow create, update: if isOwner(userId) &&
-                   isValidPeriod(period) &&
-                   isValidLeaderboardEntry();
-      allow delete: if false;
+      allow write: if isOwner(userId);
     }
 
-    // TIMED LEADERBOARD
-    match /classic_timed_leaderboard/{period}/scores/{userId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isOwner(userId) &&
-                   isValidPeriod(period) &&
-                   isValidLeaderboardEntry();
-      allow delete: if false;
-    }
-
-    // SETTINGS COLLECTION
-    match /settings/{docId} {
+    // Devices collection - for referral tracking
+    match /devices/{deviceId} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated();
     }
 
-    // ANALYTICS COLLECTION
-    match /analytics/{docId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+    // Default deny for all unknown paths
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 } 

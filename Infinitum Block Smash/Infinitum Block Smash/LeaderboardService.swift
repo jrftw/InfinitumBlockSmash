@@ -2,6 +2,7 @@ import Foundation
 import FirebaseFirestore
 import Combine
 import FirebaseAuth
+import FirebaseAppCheck
 
 @MainActor
 final class LeaderboardService: ObservableObject {
@@ -12,6 +13,9 @@ final class LeaderboardService: ObservableObject {
     private let estTimeZone = TimeZone(identifier: "America/New_York")!
     private let pageSize = 20
     private let leaderboardLimit = 20
+    private var listeners: [String: ListenerRegistration] = [:]
+    
+    @Published var leaderboardUpdates: [String: [FirebaseManager.LeaderboardEntry]] = [:]
     
     private init() {
         Task {
@@ -20,97 +24,25 @@ final class LeaderboardService: ObservableObject {
         }
     }
     
+    deinit {
+        // Remove all listeners when service is deallocated
+        listeners.values.forEach { $0.remove() }
+    }
+    
     private func setupResetTimer() {
-        // Calculate time until next reset in EST
-        let calendar = Calendar.current
-        let now = Date()
-        let estNow = now.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
-        
-        // Get next midnight in EST
-        var components = DateComponents()
-        components.hour = 0
-        components.minute = 0
-        components.second = 0
-        
-        guard let nextMidnight = calendar.nextDate(after: estNow,
-                                                 matching: components,
-                                                 matchingPolicy: .nextTime) else {
-            return
-        }
-        
-        // Convert back to local time for timer
-        let localNextMidnight = nextMidnight.addingTimeInterval(-TimeInterval(estTimeZone.secondsFromGMT()))
-        let timeInterval = localNextMidnight.timeIntervalSince(now)
-        
-        // Create timer that fires at next midnight
+        // Check for resets every minute
         resetTimer?.invalidate()
-        resetTimer = Timer.scheduledTimer(withTimeInterval: timeInterval, repeats: false) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                await self?.handleMidnightReset()
-                // Schedule next timer
-                self?.setupResetTimer()
-            }
-        }
-        
-        print("[Leaderboard] Next reset scheduled in \(timeInterval) seconds")
-    }
-    
-    private func handleMidnightReset() async {
-        print("[Leaderboard] Performing midnight EST reset")
-        let now = Date()
-        let estNow = now.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
-        print("[Leaderboard] Current EST time: \(estNow)")
-        
-        // Check if we need to perform any resets
-        let calendar = Calendar.current
-        
-        // Check daily reset
-        if let lastDailyReset = UserDefaults.standard.object(forKey: "lastDailyReset") as? Date {
-            let estLastReset = lastDailyReset.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
-            if !calendar.isDateInToday(estLastReset) {
-                print("[Leaderboard] Performing daily reset")
-                await resetPeriodScores(period: "daily", collection: "classic_leaderboard")
-                await resetPeriodScores(period: "daily", collection: "achievement_leaderboard")
-                await resetPeriodScores(period: "daily", collection: "classic_timed_leaderboard")
-                UserDefaults.standard.set(now, forKey: "lastDailyReset")
-            }
-        }
-        
-        // Check weekly reset (Sunday)
-        if calendar.component(.weekday, from: estNow) == 1 { // Sunday
-            if let lastWeeklyReset = UserDefaults.standard.object(forKey: "lastWeeklyReset") as? Date {
-                let estLastReset = lastWeeklyReset.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
-                if !calendar.isDate(estNow, equalTo: estLastReset, toGranularity: .weekOfYear) {
-                    print("[Leaderboard] Performing weekly reset")
-                    await resetPeriodScores(period: "weekly", collection: "classic_leaderboard")
-                    await resetPeriodScores(period: "weekly", collection: "achievement_leaderboard")
-                    await resetPeriodScores(period: "weekly", collection: "classic_timed_leaderboard")
-                    UserDefaults.standard.set(now, forKey: "lastWeeklyReset")
-                }
-            }
-        }
-        
-        // Check monthly reset
-        if calendar.component(.day, from: estNow) == 1 { // First day of month
-            if let lastMonthlyReset = UserDefaults.standard.object(forKey: "lastMonthlyReset") as? Date {
-                let estLastReset = lastMonthlyReset.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
-                if !calendar.isDate(estNow, equalTo: estLastReset, toGranularity: .month) {
-                    print("[Leaderboard] Performing monthly reset")
-                    await resetPeriodScores(period: "monthly", collection: "classic_leaderboard")
-                    await resetPeriodScores(period: "monthly", collection: "achievement_leaderboard")
-                    await resetPeriodScores(period: "monthly", collection: "classic_timed_leaderboard")
-                    UserDefaults.standard.set(now, forKey: "lastMonthlyReset")
-                }
+        resetTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            Task {
+                await self?.checkAndPerformResets()
             }
         }
     }
     
-    private func setupPeriodResets() async {
+    private func checkAndPerformResets() async {
         let calendar = Calendar.current
         let now = Date()
         let estNow = now.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
-        
-        print("[Leaderboard] Setting up period resets - Current EST time: \(estNow)")
         
         // Daily reset
         if let lastDailyReset = UserDefaults.standard.object(forKey: "lastDailyReset") as? Date {
@@ -173,6 +105,19 @@ final class LeaderboardService: ObservableObject {
             await resetPeriodScores(period: "monthly", collection: "classic_timed_leaderboard")
             UserDefaults.standard.set(now, forKey: "lastMonthlyReset")
         }
+    }
+    
+    private func setupPeriodResets() async {
+        let now = Date()
+        let estNow = now.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
+        
+        print("[Leaderboard] Setting up period resets - Current EST time: \(estNow)")
+        
+        // Setup periodic reset checks
+        setupResetTimer()
+        
+        // Perform initial reset checks
+        await checkAndPerformResets()
     }
     
     private func resetPeriodScores(period: String, collection: String) async {
@@ -248,6 +193,94 @@ final class LeaderboardService: ObservableObject {
         }
     }
     
+    private func setupRealTimeListener(type: LeaderboardType, period: String) {
+        let key = "\(type.collectionName)_\(period)"
+        
+        // Remove existing listener if any
+        listeners[key]?.remove()
+        
+        // Create new listener
+        let listener = db.collection(type.collectionName)
+            .document(period)
+            .collection("scores")
+            .order(by: type.scoreField, descending: type.sortOrder == "desc")
+            .limit(to: leaderboardLimit)
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let self = self else { return }
+                
+                if let error = error {
+                    print("[Leaderboard] ❌ Real-time listener error: \(error.localizedDescription)")
+                    return
+                }
+                
+                guard let documents = snapshot?.documents else {
+                    print("[Leaderboard] ❌ No documents in real-time update")
+                    return
+                }
+                
+                let entries = documents.compactMap { document -> FirebaseManager.LeaderboardEntry? in
+                    let data = document.data()
+                    guard let username = data["username"] as? String,
+                          let timestamp = (data["timestamp"] as? Timestamp)?.dateValue() else {
+                        return nil
+                    }
+                    
+                    // Handle different score fields based on leaderboard type
+                    let score: Int
+                    if type == .timed {
+                        // For timed leaderboard, convert time to milliseconds for consistent comparison
+                        if let time = data["time"] as? TimeInterval {
+                            score = Int(time * 1000)
+                        } else {
+                            return nil
+                        }
+                    } else {
+                        // For score and achievement leaderboards
+                        if let value = data[type.scoreField] as? Int {
+                            score = value
+                        } else {
+                            return nil
+                        }
+                    }
+                    
+                    return FirebaseManager.LeaderboardEntry(
+                        id: document.documentID,
+                        username: username,
+                        score: score,
+                        timestamp: timestamp
+                    )
+                }
+                
+                print("[Leaderboard] 📊 Real-time update received: \(entries.count) entries")
+                
+                // Only update if the data is newer than what we have
+                if let currentEntries = self.leaderboardUpdates[key],
+                   let currentLatestTimestamp = currentEntries.first?.timestamp,
+                   let newLatestTimestamp = entries.first?.timestamp,
+                   newLatestTimestamp <= currentLatestTimestamp {
+                    print("[Leaderboard] ⏭️ Skipping update - data is not newer")
+                    return
+                }
+                
+                self.leaderboardUpdates[key] = entries
+                
+                // Update cache with new data
+                LeaderboardCache.shared.cacheLeaderboard(entries, type: type, period: period)
+            }
+        
+        listeners[key] = listener
+    }
+    
+    func startListening(type: LeaderboardType, period: String) {
+        setupRealTimeListener(type: type, period: period)
+    }
+    
+    func stopListening(type: LeaderboardType, period: String) {
+        let key = "\(type.collectionName)_\(period)"
+        listeners[key]?.remove()
+        listeners.removeValue(forKey: key)
+    }
+    
     func updateLeaderboard(score: Int, level: Int? = nil, time: TimeInterval? = nil, type: LeaderboardType = .score, username: String? = nil) async throws {
         print("[Leaderboard] 🔄 Starting leaderboard update")
         print("[Leaderboard] 📊 Score: \(score), Level: \(level ?? -1), Type: \(type)")
@@ -296,7 +329,24 @@ final class LeaderboardService: ObservableObject {
             throw LeaderboardError.invalidData
         }
         
-        // Use all periods
+        // Check if we're in simulator or test flight
+        #if targetEnvironment(simulator)
+        print("[Leaderboard] 📱 Running in simulator - skipping security checks")
+        #else
+        if Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt" {
+            print("[Leaderboard] 📱 Running in TestFlight - skipping security checks")
+        } else {
+            // In production, try to verify App Check but don't fail if it's not available
+            do {
+                try await AppCheck.appCheck().token(forcingRefresh: false)
+                print("[Leaderboard] ✅ App Check verification successful")
+            } catch {
+                print("[Leaderboard] ⚠️ App Check verification failed, but continuing: \(error.localizedDescription)")
+            }
+        }
+        #endif
+        
+        // Update all periods
         let periods = ["daily", "weekly", "monthly", "alltime"]
         
         for period in periods {
@@ -352,6 +402,12 @@ final class LeaderboardService: ObservableObject {
                     do {
                         try await docRef.setData(data)
                         print("[Leaderboard] ✅ Successfully updated \(period) leaderboard")
+                        
+                        // Invalidate cache for this leaderboard
+                        LeaderboardCache.shared.invalidateCache(type: type, period: period)
+                        
+                        // Force refresh real-time listener
+                        setupRealTimeListener(type: type, period: period)
                     } catch let error as NSError {
                         print("[Leaderboard] ❌ Firestore error: \(error.localizedDescription)")
                         print("[Leaderboard] ❌ Error domain: \(error.domain)")
@@ -398,6 +454,23 @@ final class LeaderboardService: ObservableObject {
         }
         
         do {
+            // Check if we're in simulator or test flight
+            #if targetEnvironment(simulator)
+            print("[Leaderboard] 📱 Running in simulator - skipping security checks")
+            #else
+            if Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt" {
+                print("[Leaderboard] 📱 Running in TestFlight - skipping security checks")
+            } else {
+                // In production, try to verify App Check but don't fail if it's not available
+                do {
+                    try await AppCheck.appCheck().token(forcingRefresh: false)
+                    print("[Leaderboard] ✅ App Check verification successful")
+                } catch {
+                    print("[Leaderboard] ⚠️ App Check verification failed, but continuing: \(error.localizedDescription)")
+                }
+            }
+            #endif
+            
             let now = Date()
             let calendar = Calendar.current
             let startOfDay = calendar.startOfDay(for: now)
@@ -670,6 +743,20 @@ final class LeaderboardService: ObservableObject {
         }
         
         print("[Leaderboard] Leaderboard data validation complete")
+    }
+    
+    // For testing purposes
+    func forceResetPeriod(period: String) async {
+        print("[Leaderboard] 🔄 Force resetting \(period) leaderboards")
+        await resetPeriodScores(period: period, collection: "classic_leaderboard")
+        await resetPeriodScores(period: period, collection: "achievement_leaderboard")
+        await resetPeriodScores(period: period, collection: "classic_timed_leaderboard")
+        
+        // Update last reset time
+        UserDefaults.standard.set(Date(), forKey: "last\(period.capitalized)Reset")
+        
+        // Invalidate cache for all leaderboard types
+        LeaderboardCache.shared.invalidateCache(period: period)
     }
 }
 

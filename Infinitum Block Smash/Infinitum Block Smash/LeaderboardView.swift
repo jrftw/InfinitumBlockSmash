@@ -65,7 +65,6 @@ struct LeaderboardView: View {
         Picker("Leaderboard Type", selection: $selectedType) {
             Text("High Scores").tag(LeaderboardType.score)
             Text("Achievements").tag(LeaderboardType.achievement)
-            Text("Best Times").tag(LeaderboardType.timed)
         }
         .pickerStyle(SegmentedPickerStyle())
         .padding(.horizontal)

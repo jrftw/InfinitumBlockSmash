@@ -6,9 +6,17 @@ import DeviceCheck
 class MyAppCheckProviderFactory: NSObject, AppCheckProviderFactory {
     static func configureDebugProvider() {
         #if DEBUG
+        // Set debug token in environment
+        let debugToken = "CE67CA55-B0A6-4C0E-813D-ED8068E81657"
+        let setenvResult = setenv("FIREBASE_APP_CHECK_DEBUG_TOKEN", debugToken, 1)
+        let setenvSuccess = setenvResult == 0
+        if !setenvSuccess {
+            print("[AppCheck] ⚠️ Failed to set debug token in environment")
+        }
+        
         let providerFactory = AppCheckDebugProviderFactory()
         AppCheck.setAppCheckProviderFactory(providerFactory)
-        print("[AppCheck] Using debug AppCheckProviderFactory with token: \(getDebugToken())")
+        print("[AppCheck] 🔍 Using debug provider with token: \(debugToken)")
         #else
         print("[AppCheck] Debug provider not available in release build")
         #endif
@@ -21,19 +29,31 @@ class MyAppCheckProviderFactory: NSObject, AppCheckProviderFactory {
     }
     
     func createProvider(with app: FirebaseApp) -> AppCheckProvider? {
+        // Always use debug provider in simulator
         #if targetEnvironment(simulator)
-        // Use debug provider in simulator with explicit token
-        let debugProvider = AppCheckDebugProvider(app: app)
-        print("[AppCheck] Using debug provider in simulator with token: \(MyAppCheckProviderFactory.getDebugToken())")
-        return debugProvider
+        print("[AppCheck] Using debug provider in simulator")
+        return AppCheckDebugProvider(app: app)
         #else
-        if #available(iOS 14.0, *) {
-            // Use App Attest provider for iOS 14+ on real devices
-            return AppAttestProvider(app: app)
-        } else {
-            // Fallback to DeviceCheck provider for older iOS versions
-            return DeviceCheckProvider(app: app)
+        // Check if we're in TestFlight
+        if Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt" {
+            print("[AppCheck] Using debug provider in TestFlight")
+            return AppCheckDebugProvider(app: app)
         }
+        
+        // In production, try App Attest first
+        if #available(iOS 14.0, *) {
+            do {
+                let appAttestProvider = AppAttestProvider(app: app)
+                print("[AppCheck] Using App Attest provider")
+                return appAttestProvider
+            } catch {
+                print("[AppCheck] App Attest failed: \(error.localizedDescription)")
+            }
+        }
+        
+        // If all else fails, use debug provider
+        print("[AppCheck] Security providers not available, using debug provider")
+        return AppCheckDebugProvider(app: app)
         #endif
     }
     
@@ -55,29 +75,7 @@ class MyAppCheckProviderFactory: NSObject, AppCheckProviderFactory {
         
         // Fallback to default token
         print("[AppCheck] Using default debug token")
-        return "2F8387F3-1DA9-46B8-9817-9EE434A923C5"
-    }
-    
-    static func isDebugMode() -> Bool {
-        // Always return true in simulator
-        #if targetEnvironment(simulator)
-        return true
-        #else
-        // Check environment variable
-        if ProcessInfo.processInfo.environment["FIREBASE_APP_CHECK_DEBUG"] == "true" {
-            return true
-        }
-        // Check Info.plist
-        if let debugEnabled = Bundle.main.object(forInfoDictionaryKey: "FirebaseAppCheckDebugEnabled") as? Bool {
-            return debugEnabled
-        }
-        // Default to true in DEBUG builds
-        #if DEBUG
-        return true
-        #else
-        return false
-        #endif
-        #endif
+        return "CE67CA55-B0A6-4C0E-813D-ED8068E81657"
     }
     #endif
 } 

@@ -12,51 +12,80 @@ import FirebaseInAppMessaging
 import UserNotifications
 import BackgroundTasks
 import GameKit
-import FirebaseDatabase
 import FirebaseAnalytics
 import DeviceCheck
+import FirebaseRemoteConfig
+import FirebasePerformance
+import FirebaseMessaging
+import StoreKit
+import FirebaseDatabase
 
 // MARK: - AppDelegate
-class AppDelegate: NSObject, UIApplicationDelegate {
+class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNotificationCenterDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
-        // Configure AppCheck first with debug token
+        // Configure App Check based on environment
         #if DEBUG
-        // Set debug token in environment
-        let debugToken = "CE67CA55-B0A6-4C0E-813D-ED8068E81657"
-        let setenvResult = setenv("FIREBASE_APP_CHECK_DEBUG_TOKEN", debugToken, 1)
-        let setenvSuccess = setenvResult == 0
-        if !setenvSuccess {
-            print("[AppCheck] ⚠️ Failed to set debug token in environment")
-        }
-        
+        // In debug/simulator, use debug provider
         let providerFactory = AppCheckDebugProviderFactory()
         AppCheck.setAppCheckProviderFactory(providerFactory)
-        print("[AppCheck] 🔍 Using debug provider with token: \(debugToken)")
-        
-        // Verify debug token is set
-        if let debugToken = ProcessInfo.processInfo.environment["FIREBASE_APP_CHECK_DEBUG_TOKEN"] {
-            print("[AppCheck] ✅ Debug token from environment: \(debugToken)")
-        } else if let debugToken = Bundle.main.object(forInfoDictionaryKey: "FirebaseAppCheckDebugToken") as? String {
-            print("[AppCheck] ✅ Debug token from Info.plist: \(debugToken)")
-        } else {
-            print("[AppCheck] ⚠️ WARNING: No debug token found!")
-        }
         #else
-        // For production builds, use Device Check as fallback
-        let providerFactory = DeviceCheckProviderFactory()
-        AppCheck.setAppCheckProviderFactory(providerFactory)
-        print("[AppCheck] ✅ Using Device Check provider")
+        // In production/TestFlight, use appropriate provider based on iOS version
+        if #available(iOS 14.0, *) {
+            // Use App Attest for iOS 14+
+            let providerFactory = AppAttestProviderFactory()
+            AppCheck.setAppCheckProviderFactory(providerFactory)
+        } else {
+            // Fallback to DeviceCheck for older iOS versions
+            let providerFactory = DeviceCheckProviderFactory()
+            AppCheck.setAppCheckProviderFactory(providerFactory)
+        }
         #endif
         
-        // Configure Firebase after AppCheck
+        // Configure Firebase
         FirebaseApp.configure()
-        print("[Firebase] ✅ Firebase configured successfully")
         
+        // Configure Firebase Analytics
+        Analytics.setAnalyticsCollectionEnabled(true)
+        
+        // Configure Firebase Performance
+        Performance.sharedInstance().isDataCollectionEnabled = true
+        
+        // Configure Firebase Remote Config
+        let remoteConfig = RemoteConfig.remoteConfig()
+        let settings = RemoteConfigSettings()
+        settings.minimumFetchInterval = 0
+        remoteConfig.configSettings = settings
+        
+        // Configure Firebase Messaging
+        Messaging.messaging().delegate = self
+        UNUserNotificationCenter.current().delegate = self
+        
+        // Request notification permissions
+        let authOptions: UNAuthorizationOptions = [.alert, .badge, .sound]
+        UNUserNotificationCenter.current().requestAuthorization(
+            options: authOptions,
+            completionHandler: { _, _ in }
+        )
+        
+        application.registerForRemoteNotifications()
+        
+        // Configure Game Center
+        GKLocalPlayer.local.authenticateHandler = { viewController, error in
+            if let viewController = viewController {
+                // Present the view controller if needed
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let rootViewController = windowScene.windows.first?.rootViewController {
+                    rootViewController.present(viewController, animated: true)
+                }
+            } else if let error = error {
+                print("Game Center authentication error: \(error.localizedDescription)")
+            }
+        }
         
         // Configure Firestore settings before any Firestore operations
-        let settings = FirestoreSettings()
-        settings.cacheSettings = PersistentCacheSettings(sizeBytes: NSNumber(value: FirestoreCacheSizeUnlimited))
-        Firestore.firestore().settings = settings
+        let settingsFirestore = FirestoreSettings()
+        settingsFirestore.cacheSettings = PersistentCacheSettings(sizeBytes: NSNumber(value: FirestoreCacheSizeUnlimited))
+        Firestore.firestore().settings = settingsFirestore
         print("[Firebase] Firestore settings configured")
         
         // Now configure RTDB persistence
@@ -72,9 +101,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         
         // Configure In-App Messaging
         configureInAppMessaging()
-        
-        // Configure Game Center
-        configureGameCenter()
         
         // Configure Firebase Messaging
         configureFirebaseMessaging(application)
@@ -356,6 +382,29 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         }
         
         print("[Crashlytics] Crash reporting is \(UserDefaults.standard.bool(forKey: "allowCrashReports") ? "enabled" : "disabled")")
+    }
+
+    func application(_ application: UIApplication,
+                    didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        Messaging.messaging().apnsToken = deviceToken
+    }
+    
+    // MARK: - MessagingDelegate
+    func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
+        print("Firebase registration token: \(String(describing: fcmToken))")
+    }
+    
+    // MARK: - UNUserNotificationCenterDelegate
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                              willPresent notification: UNNotification,
+                              withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([[.banner, .sound]])
+    }
+    
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                              didReceive response: UNNotificationResponse,
+                              withCompletionHandler completionHandler: @escaping () -> Void) {
+        completionHandler()
     }
 }
 

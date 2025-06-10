@@ -4,7 +4,7 @@ import FirebaseAuth
 class LeaderboardCache {
     static let shared = LeaderboardCache()
     private let cache = NSCache<NSString, CachedLeaderboard>()
-    private let cacheExpirationInterval: TimeInterval = 300 // 5 minutes
+    private let cacheExpirationInterval: TimeInterval = 30 // Reduced from 300 to 30 seconds
     
     private init() {}
     
