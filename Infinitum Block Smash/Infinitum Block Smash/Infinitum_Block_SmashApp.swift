@@ -42,16 +42,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             print("[AppCheck] ⚠️ WARNING: No debug token found!")
         }
         #else
-        // For production builds, use App Attest
-        if #available(iOS 14.0, *) {
-            let providerFactory = AppAttestProviderFactory()
-            AppCheck.setAppCheckProviderFactory(providerFactory)
-            print("[AppCheck] ✅ Using App Attest provider")
-        } else {
-            let providerFactory = DeviceCheckProviderFactory()
-            AppCheck.setAppCheckProviderFactory(providerFactory)
-            print("[AppCheck] ✅ Using Device Check provider")
-        }
+        // For production builds, use Device Check as fallback
+        let providerFactory = DeviceCheckProviderFactory()
+        AppCheck.setAppCheckProviderFactory(providerFactory)
+        print("[AppCheck] ✅ Using Device Check provider")
         #endif
         
         // Configure Firebase after AppCheck
