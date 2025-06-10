@@ -2,7 +2,7 @@ import Foundation
 
 struct AppVersion {
     static let version = "1.0.3"
-    static let build = "5"
+    static let build = "6"
     
     static var fullVersion: String {
         return "\(version) (\(build))"
@@ -21,6 +21,9 @@ struct AppVersion {
     }
     
     static let changelog: [String: [String]] = [
+        "1.0.3 (Build 6)": [
+            "Bug fixes and improvements"
+        ],
         "1.0.3 (Build 5)": [
             "Fixed game over screen not appearing",
             "Prevented guest users from writing to leaderboard",
