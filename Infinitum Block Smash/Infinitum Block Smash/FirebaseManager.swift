@@ -123,7 +123,7 @@ class FirebaseManager: ObservableObject {
         print("[FirebaseManager] Using debug App Check provider")
         #else
         if #available(iOS 14.0, *) {
-            let providerFactory = AppAttestProviderFactory()
+            let providerFactory = DCAppAttestProviderFactory()
             AppCheck.setAppCheckProviderFactory(providerFactory)
             print("[FirebaseManager] Using App Attest provider")
         } else {
