@@ -23,21 +23,31 @@ import FirebaseDatabase
 // MARK: - AppDelegate
 class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNotificationCenterDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
-        // Configure App Check based on environment
-        #if DEBUG
-        // In debug/simulator, use debug provider
+        // First, configure Firebase
+        FirebaseApp.configure()
+        print("[Firebase] Successfully configured Firebase")
+        
+        // Then configure App Check based on environment
+        #if targetEnvironment(simulator)
+        // Use debug provider in Simulator
         let providerFactory = AppCheckDebugProviderFactory()
         AppCheck.setAppCheckProviderFactory(providerFactory)
-        print("[AppCheck] Using debug provider")
+        print("[AppCheck] Using debug provider for simulator")
         #else
-        // In production/TestFlight, use DeviceCheck provider
+        // Use App Attest for iOS 14+ devices, fallback to DeviceCheck
+        if #available(iOS 14.0, *) {
+            let providerFactory = AppAttestProviderFactory()
+            AppCheck.setAppCheckProviderFactory(providerFactory)
+            print("[AppCheck] Using App Attest provider")
+        } else {
             let providerFactory = DeviceCheckProviderFactory()
             AppCheck.setAppCheckProviderFactory(providerFactory)
-        print("[AppCheck] Using DeviceCheck provider")
+            print("[AppCheck] Using DeviceCheck provider")
+        }
         #endif
         
-        // Configure Firebase
-        FirebaseApp.configure()
+        // Enable token auto-refresh
+        AppCheck.appCheck().isTokenAutoRefreshEnabled = true
         
         // Configure Firebase Analytics
         Analytics.setAnalyticsCollectionEnabled(true)
@@ -108,8 +118,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
         
         // Configure background tasks
         configureBackgroundTasks()
-        
-        print("[Firebase] Successfully configured Firebase")
         
         // Add auth state listener
         _ = Auth.auth().addStateDidChangeListener { auth, user in
