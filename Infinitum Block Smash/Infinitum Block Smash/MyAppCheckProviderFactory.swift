@@ -8,9 +8,9 @@ class MyAppCheckProviderFactory: NSObject, AppCheckProviderFactory {
         #if DEBUG
         // Set debug token in environment
         if let debugToken = Bundle.main.object(forInfoDictionaryKey: "FirebaseAppCheckDebugToken") as? String {
-            let setenvResult = setenv("FIREBASE_APP_CHECK_DEBUG_TOKEN", debugToken, 1)
+        let setenvResult = setenv("FIREBASE_APP_CHECK_DEBUG_TOKEN", debugToken, 1)
             if setenvResult != 0 {
-                print("[AppCheck] ⚠️ Failed to set debug token in environment")
+            print("[AppCheck] ⚠️ Failed to set debug token in environment")
             }
         }
         
@@ -36,9 +36,9 @@ class MyAppCheckProviderFactory: NSObject, AppCheckProviderFactory {
         #else
         // In production, try App Attest first
         if #available(iOS 14.0, *) {
-            let appAttestProvider = AppAttestProvider(app: app)
-            print("[AppCheck] Using App Attest provider")
-            return appAttestProvider
+                let appAttestProvider = AppAttestProvider(app: app)
+                print("[AppCheck] Using App Attest provider")
+                return appAttestProvider
         }
         
         // Fallback to DeviceCheck

@@ -180,8 +180,21 @@ class AuthViewModel: ObservableObject {
         // Handle view controller presentation separately
         let presentViewController = { (vc: UIViewController) in
             if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-               let window = windowScene.windows.first {
-                window.rootViewController?.present(vc, animated: true)
+               let window = windowScene.windows.first,
+               let rootViewController = window.rootViewController {
+                // Find the top-most presented view controller
+                var topController = rootViewController
+                while let presentedController = topController.presentedViewController {
+                    topController = presentedController
+                }
+                
+                // Configure the presentation style for iPad
+                if UIDevice.current.userInterfaceIdiom == .pad {
+                    vc.modalPresentationStyle = .formSheet
+                    vc.preferredContentSize = CGSize(width: 400, height: 600)
+                }
+                
+                topController.present(vc, animated: true)
             }
         }
         

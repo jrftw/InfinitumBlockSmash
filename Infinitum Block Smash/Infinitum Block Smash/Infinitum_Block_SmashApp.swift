@@ -31,8 +31,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
         print("[AppCheck] Using debug provider")
         #else
         // In production/TestFlight, use DeviceCheck provider
-        let providerFactory = DeviceCheckProviderFactory()
-        AppCheck.setAppCheckProviderFactory(providerFactory)
+            let providerFactory = DeviceCheckProviderFactory()
+            AppCheck.setAppCheckProviderFactory(providerFactory)
         print("[AppCheck] Using DeviceCheck provider")
         #endif
         
@@ -212,39 +212,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
     }
     
     private func checkNotificationPermissions() {
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            DispatchQueue.main.async {
-                switch settings.authorizationStatus {
-                case .notDetermined:
-                    // Request notification permission if not determined
-                    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
-                        if granted {
-                            DispatchQueue.main.async {
-                                UIApplication.shared.registerForRemoteNotifications()
-                                // Set all notification preferences to true by default
-                                UserDefaults.standard.set(true, forKey: "notificationsEnabled")
-                                UserDefaults.standard.set(true, forKey: "eventNotifications")
-                                UserDefaults.standard.set(true, forKey: "updateNotifications")
-                                UserDefaults.standard.set(true, forKey: "reminderNotifications")
-                                NotificationManager.shared.scheduleDailyReminder()
-                            }
-                        }
-                    }
-                case .denied:
-                    // If notifications were denied, we'll show the permission request on next login
-                    UserDefaults.standard.set(false, forKey: "notificationsEnabled")
-                case .authorized, .provisional, .ephemeral:
-                    // If notifications are authorized, ensure preferences are set to true
-                    UserDefaults.standard.set(true, forKey: "notificationsEnabled")
-                    UserDefaults.standard.set(true, forKey: "eventNotifications")
-                    UserDefaults.standard.set(true, forKey: "updateNotifications")
-                    UserDefaults.standard.set(true, forKey: "reminderNotifications")
-                    NotificationManager.shared.scheduleDailyReminder()
-                @unknown default:
-                    break
-                }
-            }
-        }
+        // Let NotificationService handle the permission check
+        NotificationService.shared.checkNotificationStatus()
     }
     
     private func configureBackgroundTasks() {

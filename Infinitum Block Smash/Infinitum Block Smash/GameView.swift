@@ -46,6 +46,37 @@ struct GameView: View {
             scoreAnimator
             bannerAdView
             
+            // Add notification permission request
+            if notificationService.shouldShowPermissionRequest {
+                VStack {
+                    Text("Enable Notifications")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    
+                    Text("Get notified about new high scores and daily reminders!")
+                        .font(.subheadline)
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                        .padding(.vertical, 8)
+                    
+                    HStack(spacing: 16) {
+                        Button("Not Now") {
+                            notificationService.shouldShowPermissionRequest = false
+                        }
+                        .buttonStyle(.bordered)
+                        
+                        Button("Enable") {
+                            notificationService.requestNotificationPermission()
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
+                .padding()
+                .background(Color.black.opacity(0.8))
+                .cornerRadius(16)
+                .padding()
+            }
+            
             // Add sync status indicator
             if isSyncing {
                 VStack {
@@ -251,16 +282,14 @@ struct GameView: View {
     }
     
     private var scoreView: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(NSLocalizedString("Score", comment: "Score label"))
-                .font(.caption)
-                .foregroundColor(.white.opacity(0.9))
-            Text("\(gameState.score)")
-                .font(.system(size: 36, weight: .bold, design: .rounded))
+        VStack(spacing: 4) {
+            Text("Score")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.white.opacity(0.7))
+            Text("\(gameState.isGameOver ? gameState.score : gameState.temporaryScore)")
+                .font(.system(size: 24, weight: .bold))
                 .foregroundColor(.white)
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(String(format: NSLocalizedString("%d points", comment: "Score accessibility label"), gameState.score))
     }
     
     private var undoButtonView: some View {

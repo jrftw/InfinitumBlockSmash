@@ -5,14 +5,21 @@ struct ModernButtonStyle: ButtonStyle {
     var filled: Bool = true
     var accent: Color = Color.accentColor
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     func makeBody(configuration: Configuration) -> some View {
         let backgroundColor: Color = filled ? accent : Color(UIColor.systemBackground).opacity(0.85)
         let foregroundColor: Color = filled ? Color(UIColor.systemBackground) : accent
         let borderColor: Color = filled ? .clear : accent
+        
+        // Adjust padding based on device type
+        let verticalPadding: CGFloat = horizontalSizeClass == .regular ? 16 : 14
+        let horizontalPadding: CGFloat = horizontalSizeClass == .regular ? 32 : 24
 
         return configuration.label
-            .padding(.vertical, 14)
+            .padding(.vertical, verticalPadding)
+            .padding(.horizontal, horizontalPadding)
+            .frame(maxWidth: horizontalSizeClass == .regular ? 400 : .infinity)
             .background(backgroundColor.opacity(configuration.isPressed ? 0.7 : 1))
             .foregroundColor(foregroundColor)
             .overlay(
@@ -22,6 +29,13 @@ struct ModernButtonStyle: ButtonStyle {
             .cornerRadius(16)
             .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.4 : 0.15), radius: filled ? 8 : 2, x: 0, y: 4)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .contentShape(Rectangle())
+            .onChange(of: configuration.isPressed) { isPressed in
+                print("[ModernButtonStyle] Button pressed state changed: \(isPressed)")
+            }
+            .onAppear {
+                print("[ModernButtonStyle] Button appeared with size class: \(horizontalSizeClass == .regular ? "regular" : "compact")")
+            }
     }
 }
 
@@ -206,44 +220,153 @@ struct AdditionalInfoFormView: View {
     }
 }
 
+// MARK: - Custom Button
+struct CustomButton: UIViewRepresentable {
+    let title: String
+    let icon: String
+    let color: UIColor
+    let isFilled: Bool
+    let action: () -> Void
+    
+    func makeUIView(context: Context) -> UIButton {
+        let button = UIButton(type: .system)
+        button.addTarget(context.coordinator, action: #selector(Coordinator.buttonTapped), for: .touchUpInside)
+        
+        // Configure button appearance
+        button.backgroundColor = isFilled ? color : .clear
+        button.layer.cornerRadius = 16
+        button.layer.borderWidth = isFilled ? 0 : 2
+        button.layer.borderColor = color.cgColor
+        
+        // Create button configuration
+        var configuration = UIButton.Configuration.plain()
+        configuration.image = UIImage(systemName: icon)?
+            .withConfiguration(UIImage.SymbolConfiguration(pointSize: 20, weight: .semibold))
+            .withTintColor(isFilled ? .white : color, renderingMode: .alwaysOriginal)
+        configuration.imagePadding = 8
+        configuration.imagePlacement = .leading
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16)
+        
+        // Configure title
+        configuration.attributedTitle = AttributedString(
+            title,
+            attributes: AttributeContainer([
+                .font: UIFont.systemFont(ofSize: 17, weight: .semibold),
+                .foregroundColor: isFilled ? UIColor.white : color
+            ])
+        )
+        
+        button.configuration = configuration
+        
+        // Add shadow
+        button.layer.shadowColor = UIColor.black.cgColor
+        button.layer.shadowOffset = CGSize(width: 0, height: 4)
+        button.layer.shadowRadius = isFilled ? 8 : 2
+        button.layer.shadowOpacity = 0.15
+        
+        // Ensure the button is user interaction enabled
+        button.isUserInteractionEnabled = true
+        
+        // Add a tap gesture recognizer as a backup
+        let tapGesture = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.buttonTapped))
+        tapGesture.cancelsTouchesInView = false
+        button.addGestureRecognizer(tapGesture)
+        
+        return button
+    }
+    
+    func updateUIView(_ uiView: UIButton, context: Context) {
+        // Update button if needed
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(action: action)
+    }
+    
+    class Coordinator: NSObject {
+        let action: () -> Void
+        
+        init(action: @escaping () -> Void) {
+            self.action = action
+        }
+        
+        @objc func buttonTapped() {
+            print("[CustomButton] Button tapped: \(String(describing: action))")
+            DispatchQueue.main.async {
+                self.action()
+            }
+        }
+    }
+}
+
 // MARK: - Main Auth Buttons View
 struct MainAuthButtonsView: View {
     @ObservedObject var viewModel: AuthViewModel
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     
     var body: some View {
-        VStack(spacing: 18) {
-            Button(action: { viewModel.showSignIn = true }) {
-                Label("Sign In", systemImage: "person.crop.circle")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 40)
+        VStack(spacing: horizontalSizeClass == .regular ? 16 : 12) {
+            // Sign In Button
+            CustomButton(
+                title: "Sign In",
+                icon: "person.crop.circle",
+                color: .systemBlue,
+                isFilled: true
+            ) {
+                print("[MainAuthButtonsView] Sign In button tapped")
+                viewModel.showSignIn = true
             }
-            .buttonStyle(ModernButtonStyle())
-
-            Button(action: { viewModel.showSignUp = true }) {
-                Label("Sign Up with Email", systemImage: "envelope.fill")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
+            .frame(maxWidth: horizontalSizeClass == .regular ? 400 : .infinity)
+            .frame(height: 50)
+            .contentShape(Rectangle())
+            
+            // Sign Up Button
+            CustomButton(
+                title: "Sign Up with Email",
+                icon: "envelope.fill",
+                color: .systemBlue,
+                isFilled: false
+            ) {
+                print("[MainAuthButtonsView] Sign Up button tapped")
+                viewModel.showSignUp = true
             }
-            .buttonStyle(ModernButtonStyle(filled: false))
-
-            Button(action: { viewModel.signInWithGameCenter() }) {
-                Label("Sign In with Game Center", systemImage: "gamecontroller.fill")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
+            .frame(maxWidth: horizontalSizeClass == .regular ? 400 : .infinity)
+            .frame(height: 50)
+            .contentShape(Rectangle())
+            
+            // Game Center Button
+            CustomButton(
+                title: "Sign In with Game Center",
+                icon: "gamecontroller.fill",
+                color: .systemGreen,
+                isFilled: false
+            ) {
+                print("[MainAuthButtonsView] Game Center button tapped")
+                viewModel.signInWithGameCenter()
             }
-            .buttonStyle(ModernButtonStyle(filled: false, accent: .green))
-
-            Button(action: {
+            .frame(maxWidth: horizontalSizeClass == .regular ? 400 : .infinity)
+            .frame(height: 50)
+            .contentShape(Rectangle())
+            
+            // Guest Button
+            CustomButton(
+                title: "Continue as Guest",
+                icon: "person.fill",
+                color: .systemGray,
+                isFilled: false
+            ) {
+                print("[MainAuthButtonsView] Guest button tapped")
                 viewModel.userID = UUID().uuidString
                 viewModel.isGuest = true
                 viewModel.dismiss()
-            }) {
-                Label("Continue as Guest", systemImage: "person.fill.questionmark")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(ModernButtonStyle(filled: false, accent: .gray))
+            .frame(maxWidth: horizontalSizeClass == .regular ? 400 : .infinity)
+            .frame(height: 50)
+            .contentShape(Rectangle())
+        }
+        .frame(maxWidth: horizontalSizeClass == .regular ? 400 : .infinity)
+        .onAppear {
+            print("[MainAuthButtonsView] View appeared with size class: \(horizontalSizeClass == .regular ? "regular" : "compact")")
         }
     }
 }

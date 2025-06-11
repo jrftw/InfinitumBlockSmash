@@ -25,6 +25,7 @@ protocol GameStateDelegate: AnyObject {
 final class GameState: ObservableObject {
     // MARK: - Published Properties
     @Published private(set) var score: Int = 0
+    @Published private(set) var temporaryScore: Int = 0  // Add temporary score for tracking during gameplay
     @Published private(set) var level: Int = 1
     @Published private(set) var isGameOver: Bool = false
     @Published private(set) var grid: [[BlockColor?]] = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
@@ -265,6 +266,7 @@ final class GameState: ObservableObject {
         refillTray()
         level = 1
         score = 0
+        temporaryScore = 0
         isGameOver = false
         levelComplete = false
         canUndo = false
@@ -343,6 +345,7 @@ final class GameState: ObservableObject {
             await MainActor.run {
                 // Only reset current game state, preserve statistics
                 self.score = 0
+                self.temporaryScore = 0
                 self.level = 1
                 self.isGameOver = false
                 self.grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
@@ -1004,32 +1007,32 @@ final class GameState: ObservableObject {
         // Don't add score if level is already complete
         guard !levelComplete else { return }
         
-        let oldScore = score
-        score += points
-        print("[Score] Added \(points) points (from \(oldScore) to \(score))")
+        let oldScore = temporaryScore
+        temporaryScore += points
+        print("[Score] Added \(points) points (from \(oldScore) to \(temporaryScore))")
         
         // Track score event
-        analyticsManager.trackEvent(.levelComplete(level: level, score: score))
+        analyticsManager.trackEvent(.levelComplete(level: level, score: temporaryScore))
         
         // Show score animation if position is provided
         if let position = position {
             delegate?.showScoreAnimation(points: points, at: position)
         }
         
-        achievementsManager.updateAchievement(id: "score_1000", value: score)
+        achievementsManager.updateAchievement(id: "score_1000", value: temporaryScore)
         
         // Update high scores locally and check against leaderboard
-        if score > highScore {
-            highScore = score
+        if temporaryScore > highScore {
+            highScore = temporaryScore
             userDefaults.set(highScore, forKey: scoreKey)
-            achievementsManager.updateAchievement(id: "high_score", value: score)
-            print("[HighScore] New all-time high score: \(score)")
+            achievementsManager.updateAchievement(id: "high_score", value: temporaryScore)
+            print("[HighScore] New all-time high score: \(temporaryScore)")
             
             // Update high score achievement
             achievementsManager.increment(id: "high_score")
             
             // Check if this is a new leaderboard high score
-            if score > leaderboardHighScore {
+            if temporaryScore > leaderboardHighScore {
                 Task {
                     // Check network connectivity first
                     guard NetworkMonitor.shared.isConnected else {
@@ -1044,9 +1047,9 @@ final class GameState: ObservableObject {
                     }
                     
                     do {
-                        print("[Leaderboard] Updating leaderboard with new high score: \(score)")
+                        print("[Leaderboard] Updating leaderboard with new high score: \(temporaryScore)")
                         try await LeaderboardService.shared.updateLeaderboard(
-                            score: score,
+                            score: temporaryScore,
                             level: level,
                             type: .score
                         )
@@ -1056,11 +1059,11 @@ final class GameState: ObservableObject {
                         await fetchLeaderboardHighScore()
                         
                         // Update Game Center leaderboard
-                        GameCenterManager.shared.submitScore(score, for: .score, period: "alltime")
+                        GameCenterManager.shared.submitScore(temporaryScore, for: .score, period: "alltime")
                     } catch {
                         print("[Leaderboard] Error updating leaderboard: \(error.localizedDescription)")
                         // Store the score for later update
-                        let pendingScore = PendingScore(score: score, timestamp: Date())
+                        let pendingScore = PendingScore(score: temporaryScore, timestamp: Date())
                         userDefaults.set(try? JSONEncoder().encode(pendingScore), forKey: "pendingLeaderboardScore")
                     }
                 }
@@ -1070,23 +1073,18 @@ final class GameState: ObservableObject {
         // Update level high score
         let levelHighScoreKey = "highScore_level_\(level)"
         let prevLevelHigh = userDefaults.integer(forKey: levelHighScoreKey)
-        if score > prevLevelHigh {
-            userDefaults.set(score, forKey: levelHighScoreKey)
-            print("[HighScore] New high score for level \(level): \(score)")
+        if temporaryScore > prevLevelHigh {
+            userDefaults.set(temporaryScore, forKey: levelHighScoreKey)
+            print("[HighScore] New high score for level \(level): \(temporaryScore)")
         }
         
         delegate?.gameStateDidUpdate()
         
         // Check for level up after every score change
         let requiredScore = calculateRequiredScore()
-        if score >= requiredScore && !levelComplete {
-            print("[DEBUG] Setting levelComplete = true due to score threshold. Score: \(score), Required: \(requiredScore)")
-            print("[Level] Score threshold met for level \(level). Level complete!")
-            levelComplete = true
-            // Don't automatically advance - wait for user interaction
-            delegate?.gameStateDidUpdate()
+        if temporaryScore >= requiredScore && !levelComplete {
+            handleLevelComplete()
         }
-        checkAchievements()
     }
     
     // Add this struct at the top of the file
@@ -1236,10 +1234,13 @@ final class GameState: ObservableObject {
     }
     
     private func handleGameOver() {
-        print("[GameState] 🎮 Game Over - Final Score: \(score)")
+        print("[GameState] 🎮 Game Over - Final Score: \(temporaryScore)")
         
         // Set game over state first
         isGameOver = true
+        
+        // Update the actual score with the temporary score
+        score = temporaryScore
         
         // Update high score if needed
         if score > highScore {
@@ -1873,6 +1874,7 @@ final class GameState: ObservableObject {
         grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
         tray = []
         score = 0
+        temporaryScore = 0
         level = 1
         isGameOver = false
         isPaused = false

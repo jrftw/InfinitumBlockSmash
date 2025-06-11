@@ -9,8 +9,10 @@ class NotificationService: ObservableObject {
     
     @Published var currentHighScoreNotification: HighScoreNotification?
     @Published var showHighScoreBanner = false
+    @Published var shouldShowPermissionRequest = false
     
     private let lastShownHighScoreKey = "lastShownHighScore"
+    private let hasRequestedNotificationsKey = "hasRequestedNotifications"
     
     struct HighScoreNotification: Identifiable {
         let id = UUID()
@@ -21,6 +23,33 @@ class NotificationService: ObservableObject {
     
     private init() {
         setupNotificationListener()
+        checkNotificationStatus()
+    }
+    
+    func checkNotificationStatus() {
+        UNUserNotificationCenter.current().getNotificationSettings { [weak self] settings in
+            guard let self = self else { return }
+            DispatchQueue.main.async {
+                switch settings.authorizationStatus {
+                case .notDetermined:
+                    // Always show permission request if not determined
+                    self.shouldShowPermissionRequest = true
+                case .denied:
+                    // Always show permission request if denied
+                    self.shouldShowPermissionRequest = true
+                case .authorized, .provisional, .ephemeral:
+                    self.shouldShowPermissionRequest = false
+                    // Ensure notification preferences are set
+                    UserDefaults.standard.set(true, forKey: "notificationsEnabled")
+                    UserDefaults.standard.set(true, forKey: "eventNotifications")
+                    UserDefaults.standard.set(true, forKey: "updateNotifications")
+                    UserDefaults.standard.set(true, forKey: "reminderNotifications")
+                    NotificationManager.shared.scheduleDailyReminder()
+                @unknown default:
+                    self.shouldShowPermissionRequest = false
+                }
+            }
+        }
     }
     
     private func setupNotificationListener() {
@@ -103,11 +132,27 @@ class NotificationService: ObservableObject {
     }
     
     func requestNotificationPermission() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
-            if granted {
-                print("[NotificationService] Notification permission granted")
-            } else if let error = error {
-                print("[NotificationService] Error requesting notification permission: \(error.localizedDescription)")
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { [weak self] granted, error in
+            guard let self = self else { return }
+            DispatchQueue.main.async {
+                if granted {
+                    print("[NotificationService] Notification permission granted")
+                    UIApplication.shared.registerForRemoteNotifications()
+                    // Set all notification preferences to true by default
+                    UserDefaults.standard.set(true, forKey: "notificationsEnabled")
+                    UserDefaults.standard.set(true, forKey: "eventNotifications")
+                    UserDefaults.standard.set(true, forKey: "updateNotifications")
+                    UserDefaults.standard.set(true, forKey: "reminderNotifications")
+                    NotificationManager.shared.scheduleDailyReminder()
+                } else {
+                    print("[NotificationService] Notification permission denied")
+                    // Reset notification preferences
+                    UserDefaults.standard.set(false, forKey: "notificationsEnabled")
+                    UserDefaults.standard.set(false, forKey: "eventNotifications")
+                    UserDefaults.standard.set(false, forKey: "updateNotifications")
+                    UserDefaults.standard.set(false, forKey: "reminderNotifications")
+                }
+                self.shouldShowPermissionRequest = false
             }
         }
     }
