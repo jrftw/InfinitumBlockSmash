@@ -34,16 +34,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
         AppCheck.setAppCheckProviderFactory(providerFactory)
         print("[AppCheck] Using debug provider for simulator")
         #else
-        // Use App Attest for iOS 14+ devices, fallback to DeviceCheck
-        if #available(iOS 14.0, *) {
-            let providerFactory = AppAttestProviderFactory()
-            AppCheck.setAppCheckProviderFactory(providerFactory)
-            print("[AppCheck] Using App Attest provider")
-        } else {
-            let providerFactory = DeviceCheckProviderFactory()
-            AppCheck.setAppCheckProviderFactory(providerFactory)
-            print("[AppCheck] Using DeviceCheck provider")
-        }
+        // Use DeviceCheck provider for all non-simulator environments
+        let providerFactory = DeviceCheckProviderFactory()
+        AppCheck.setAppCheckProviderFactory(providerFactory)
+        print("[AppCheck] Using DeviceCheck provider")
         #endif
         
         // Enable token auto-refresh

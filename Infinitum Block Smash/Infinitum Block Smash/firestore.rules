@@ -14,59 +14,59 @@ service cloud.firestore {
 
     // App Check verification
     function hasValidAppCheck() {
-      return true; // Temporarily disable App Check for development
+      return request.app != null;
     }
 
-    // Leaderboards - public read, authenticated write
+    // Leaderboards - public read, authenticated write with App Check
     match /classic_leaderboard/{period}/scores/{userId} {
       allow read: if true;
-      allow write: if isOwner(userId);
+      allow write: if isOwner(userId) && hasValidAppCheck();
     }
 
     match /classic_timed_leaderboard/{period}/scores/{userId} {
       allow read: if true;
-      allow write: if isOwner(userId);
+      allow write: if isOwner(userId) && hasValidAppCheck();
     }
 
     match /achievement_leaderboard/{period}/scores/{userId} {
       allow read: if true;
-      allow write: if isOwner(userId);
+      allow write: if isOwner(userId) && hasValidAppCheck();
     }
 
-    // User profiles - authenticated read, owner write
+    // User profiles - authenticated read, owner write with App Check
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isOwner(userId);
+      allow read: if isAuthenticated() && hasValidAppCheck();
+      allow write: if isOwner(userId) && hasValidAppCheck();
       
       // Achievements subcollection
       match /achievements/{achievementId} {
-        allow read: if isAuthenticated();
-        allow write: if isOwner(userId);
+        allow read: if isAuthenticated() && hasValidAppCheck();
+        allow write: if isOwner(userId) && hasValidAppCheck();
       }
       
       // Progress subcollection
       match /progress/{progressId} {
-        allow read: if isAuthenticated();
-        allow write: if isOwner(userId);
+        allow read: if isAuthenticated() && hasValidAppCheck();
+        allow write: if isOwner(userId) && hasValidAppCheck();
       }
     }
 
-    // Game states - authenticated read, owner write
+    // Game states - authenticated read, owner write with App Check
     match /game_states/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isOwner(userId);
+      allow read: if isAuthenticated() && hasValidAppCheck();
+      allow write: if isOwner(userId) && hasValidAppCheck();
     }
 
-    // Settings - authenticated read, owner write
+    // Settings - authenticated read, owner write with App Check
     match /settings/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isOwner(userId);
+      allow read: if isAuthenticated() && hasValidAppCheck();
+      allow write: if isOwner(userId) && hasValidAppCheck();
     }
 
     // Devices collection - for referral tracking
     match /devices/{deviceId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read: if isAuthenticated() && hasValidAppCheck();
+      allow write: if isAuthenticated() && hasValidAppCheck();
     }
 
     // Default deny for all unknown paths
