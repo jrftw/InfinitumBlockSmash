@@ -755,6 +755,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         if gameState.tryPlaceBlockFromTray(draggingBlock, at: gridPoint) {
             // Update last placement time
             lastPlacementTime = currentTime
+            
+            // Force a complete grid redraw to ensure all blocks are properly rendered
+            renderGrid(gridNode: gridNode, gameState: gameState, blockSize: GameConstants.blockSize)
+            
             // Play placement sound
             AudioManager.shared.playPlacementSound()
         } else {
@@ -762,15 +766,22 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             AudioManager.shared.playFailSound()
         }
         
-        // Clean up
+        // Clean up all temporary nodes
         dragNode.removeFromParent()
         previewNode?.removeFromParent()
-        // Remove any highlight containers
+        
+        // Remove any highlight containers and ensure all block nodes are properly cleaned up
         gridNode.children.forEach { node in
             if node.zPosition == 10 { // Highlight container z-position
                 node.removeFromParent()
             }
+            // Clean up any stray block nodes
+            if node.name?.starts(with: "block_") == true {
+                node.removeFromParent()
+            }
         }
+        
+        // Reset all state
         self.dragNode = nil
         self.draggingBlock = nil
         self.previewNode = nil

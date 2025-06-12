@@ -21,6 +21,12 @@ struct AppVersion {
     }
     
     static let changelog: [String: [String]] = [
+        
+        "1.0.3 (Build 8)": [
+            "Fixed score issues",
+            "Fixed Need score issues"
+        ],
+        
         "1.0.3 (Build 7)": [
             "Added App Check security",
             "Enhanced Firestore rules",
