@@ -320,7 +320,7 @@ struct GameView: View {
                     .foregroundColor(.white.opacity(0.9))
             }
             
-            Text(String(format: NSLocalizedString("Need: %d", comment: "Required score"), gameState.calculateRequiredScore() - gameState.score))
+            Text(String(format: NSLocalizedString("Need: %d", comment: "Required score"), gameState.calculateRequiredScore() - gameState.temporaryScore))
                 .font(.caption2)
                 .foregroundColor(.white.opacity(0.9))
         }

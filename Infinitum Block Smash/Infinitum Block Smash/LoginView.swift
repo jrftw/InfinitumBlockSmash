@@ -82,9 +82,41 @@ struct LoginView: View {
     }
     
     private func signIn() {
+        guard !email.isEmpty else {
+            errorMessage = "Please enter your email address."
+            showingError = true
+            return
+        }
+        
+        guard !password.isEmpty else {
+            errorMessage = "Please enter your password."
+            showingError = true
+            return
+        }
+        
         Auth.auth().signIn(withEmail: email, password: password) { result, error in
             if let error = error {
-                errorMessage = error.localizedDescription
+                let errorCode = (error as NSError).code
+                switch errorCode {
+                case AuthErrorCode.invalidEmail.rawValue:
+                    errorMessage = "Please enter a valid email address."
+                case AuthErrorCode.wrongPassword.rawValue:
+                    errorMessage = "Incorrect password. Please try again or use 'Forgot Password' if you've forgotten it."
+                case AuthErrorCode.userNotFound.rawValue:
+                    errorMessage = "No account found with this email. Please check your email or create a new account."
+                case AuthErrorCode.networkError.rawValue:
+                    errorMessage = "Unable to connect to the server. Please check your internet connection and try again."
+                case AuthErrorCode.tooManyRequests.rawValue:
+                    errorMessage = "Too many attempts. Please try again in a few minutes."
+                case AuthErrorCode.operationNotAllowed.rawValue:
+                    errorMessage = "This sign-in method is not enabled. Please try a different method."
+                case AuthErrorCode.invalidCredential.rawValue:
+                    errorMessage = "Invalid login credentials. Please check your email and password."
+                case AuthErrorCode.requiresRecentLogin.rawValue:
+                    errorMessage = "For security reasons, please sign in again to continue."
+                default:
+                    errorMessage = "An unexpected error occurred. Please try again later."
+                }
                 showingError = true
             } else {
                 isAuthenticated = true

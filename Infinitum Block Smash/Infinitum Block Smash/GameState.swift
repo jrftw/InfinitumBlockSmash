@@ -2399,6 +2399,9 @@ final class GameState: ObservableObject {
         print("[Level] Score threshold met for level \(level). Level complete!")
         levelComplete = true
         
+        // Transfer temporary score to main score
+        score = temporaryScore
+        
         // Update achievements
         achievementsManager.updateAchievement(id: "level_complete", value: level)
         achievementsManager.updateAchievement(id: "score_1000", value: score)

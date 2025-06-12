@@ -157,19 +157,29 @@ class AuthViewModel: ObservableObject {
         let errorCode = (error as NSError).code
         switch errorCode {
         case AuthErrorCode.invalidEmail.rawValue:
-            errorMessage = "Invalid email address."
+            errorMessage = "Please enter a valid email address."
         case AuthErrorCode.weakPassword.rawValue:
-            errorMessage = "Password is too weak. Please use a stronger password."
+            errorMessage = "Your password is too weak. Please use at least 6 characters with a mix of letters, numbers, and symbols."
         case AuthErrorCode.emailAlreadyInUse.rawValue:
-            errorMessage = "This email is already in use."
+            errorMessage = "This email is already registered. Please try signing in or use a different email."
         case AuthErrorCode.wrongPassword.rawValue:
-            errorMessage = "Incorrect password."
+            errorMessage = "Incorrect password. Please try again or use 'Forgot Password' if you've forgotten it."
         case AuthErrorCode.userNotFound.rawValue:
-            errorMessage = "No account found with this email."
+            errorMessage = "No account found with this email. Please check your email or create a new account."
         case AuthErrorCode.networkError.rawValue:
-            errorMessage = "Network error. Please check your connection."
+            errorMessage = "Unable to connect to the server. Please check your internet connection and try again."
+        case AuthErrorCode.tooManyRequests.rawValue:
+            errorMessage = "Too many attempts. Please try again in a few minutes."
+        case AuthErrorCode.operationNotAllowed.rawValue:
+            errorMessage = "This sign-in method is not enabled. Please try a different method."
+        case AuthErrorCode.invalidCredential.rawValue:
+            errorMessage = "Invalid login credentials. Please check your email and password."
+        case AuthErrorCode.accountExistsWithDifferentCredential.rawValue:
+            errorMessage = "An account already exists with this email using a different sign-in method."
+        case AuthErrorCode.requiresRecentLogin.rawValue:
+            errorMessage = "For security reasons, please sign in again to continue."
         default:
-            errorMessage = error.localizedDescription
+            errorMessage = "An unexpected error occurred. Please try again later."
         }
     }
     

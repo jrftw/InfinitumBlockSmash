@@ -74,8 +74,38 @@ struct SignUpView: View {
     }
     
     private func createAccount() async {
+        guard !email.isEmpty else {
+            errorMessage = "Please enter your email address."
+            showingError = true
+            return
+        }
+        
+        guard !username.isEmpty else {
+            errorMessage = "Please choose a username."
+            showingError = true
+            return
+        }
+        
+        guard !password.isEmpty else {
+            errorMessage = "Please enter a password."
+            showingError = true
+            return
+        }
+        
         guard password == confirmPassword else {
-            errorMessage = "Passwords do not match"
+            errorMessage = "Passwords do not match. Please make sure both passwords are the same."
+            showingError = true
+            return
+        }
+        
+        guard password.count >= 6 else {
+            errorMessage = "Password must be at least 6 characters long."
+            showingError = true
+            return
+        }
+        
+        guard ProfanityFilter.isAppropriate(username) else {
+            errorMessage = "Username contains inappropriate language. Please choose a different username."
             showingError = true
             return
         }
@@ -98,7 +128,7 @@ struct SignUpView: View {
                 do {
                     try await ReferralManager.shared.applyReferralCode(referralCode, forUserID: user.uid)
                 } catch {
-                    referralErrorMessage = error.localizedDescription
+                    referralErrorMessage = "Unable to apply referral code. Please try again later."
                     showReferralError = true
                 }
             }
@@ -110,7 +140,21 @@ struct SignUpView: View {
             }
         } catch {
             await MainActor.run {
-                errorMessage = error.localizedDescription
+                let errorCode = (error as NSError).code
+                switch errorCode {
+                case AuthErrorCode.invalidEmail.rawValue:
+                    errorMessage = "Please enter a valid email address."
+                case AuthErrorCode.weakPassword.rawValue:
+                    errorMessage = "Your password is too weak. Please use at least 6 characters with a mix of letters, numbers, and symbols."
+                case AuthErrorCode.emailAlreadyInUse.rawValue:
+                    errorMessage = "This email is already registered. Please try signing in or use a different email."
+                case AuthErrorCode.networkError.rawValue:
+                    errorMessage = "Unable to connect to the server. Please check your internet connection and try again."
+                case AuthErrorCode.operationNotAllowed.rawValue:
+                    errorMessage = "This sign-in method is not enabled. Please try a different method."
+                default:
+                    errorMessage = "An unexpected error occurred. Please try again later."
+                }
                 showingError = true
             }
         }
