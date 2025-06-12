@@ -1,3 +1,4 @@
+// MARK: - CacheManager.swift
 import Foundation
 import Compression
 
@@ -9,28 +10,23 @@ final class CacheManager {
     private let cacheDirectory: URL
     private let maxCacheSize: Int64 = 100 * 1024 * 1024 // 100MB
     private let cacheExpirationInterval: TimeInterval = 3600 // 1 hour
-    private let compressionQueue = DispatchQueue(label: "com.infinitum.blocksmash.compression")
-    private let cacheQueue = DispatchQueue(label: "com.infinitum.blocksmash.cache")
+    private let compressionQueue = DispatchQueue(label: "com.infinitum.blocksmash.compression", qos: .utility)
+    private let cacheQueue = DispatchQueue(label: "com.infinitum.blocksmash.cache", qos: .utility)
     
-    // Cache statistics
-    private var cacheHits: Int = 0
-    private var cacheMisses: Int = 0
-    private var lastCleanupTime: Date = Date()
+    // MARK: - Cache Stats
+    private var cacheHits = 0
+    private var cacheMisses = 0
+    private var lastCleanupTime = Date()
     private let cleanupInterval: TimeInterval = 300 // 5 minutes
     
     private init() {
-        // Configure memory cache with better defaults
-        memoryCache.countLimit = 200 // Increased from 100
-        memoryCache.totalCostLimit = 75 * 1024 * 1024 // 75MB, increased from 50MB
+        memoryCache.countLimit = 200
+        memoryCache.totalCostLimit = 75 * 1024 * 1024
         
-        // Setup cache directory
         let cachesDirectory = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
         cacheDirectory = cachesDirectory.appendingPathComponent("GameCache")
-        
-        // Create cache directory if it doesn't exist
         try? fileManager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
         
-        // Start periodic cleanup
         startPeriodicCleanup()
     }
     
@@ -44,11 +40,7 @@ final class CacheManager {
     
     func getMemoryCache<T: AnyObject>(forKey key: String) -> T? {
         let result = memoryCache.object(forKey: key as NSString) as? T
-        if result != nil {
-            cacheHits += 1
-        } else {
-            cacheMisses += 1
-        }
+        result != nil ? (cacheHits += 1) : (cacheMisses += 1)
         return result
     }
     
@@ -61,23 +53,13 @@ final class CacheManager {
     // MARK: - Disk Cache
     
     func setDiskCache<T: Encodable>(_ object: T, forKey key: String, expiration: TimeInterval? = nil, compress: Bool = true) throws {
-        let cacheEntry = CacheEntry(
-            data: try JSONEncoder().encode(object),
-            expirationDate: Date().addingTimeInterval(expiration ?? cacheExpirationInterval)
-        )
+        let expirationDate = Date().addingTimeInterval(expiration ?? cacheExpirationInterval)
+        let encodedData = try JSONEncoder().encode(object)
+        let cacheEntry = try JSONEncoder().encode(CacheEntry(data: encodedData, expirationDate: expirationDate))
         
-        var data = try JSONEncoder().encode(cacheEntry)
+        let finalData = compress ? try compressionQueue.sync { try compressData(cacheEntry) } : cacheEntry
+        try finalData.write(to: cacheDirectory.appendingPathComponent(key))
         
-        if compress {
-            data = try compressionQueue.sync {
-                try compressData(data)
-            }
-        }
-        
-        let fileURL = cacheDirectory.appendingPathComponent(key)
-        try data.write(to: fileURL)
-        
-        // Cleanup if needed
         try cleanupCache()
     }
     
@@ -86,27 +68,21 @@ final class CacheManager {
         guard fileManager.fileExists(atPath: fileURL.path) else { return nil }
         
         var data = try Data(contentsOf: fileURL)
-        
         if decompress {
-            data = try compressionQueue.sync {
-                try decompressData(data)
-            }
+            data = try compressionQueue.sync { try decompressData(data) }
         }
         
-        let cacheEntry = try JSONDecoder().decode(CacheEntry.self, from: data)
-        
-        // Check expiration
-        if cacheEntry.expirationDate < Date() {
+        let entry = try JSONDecoder().decode(CacheEntry.self, from: data)
+        guard entry.expirationDate > Date() else {
             try? fileManager.removeItem(at: fileURL)
             return nil
         }
         
-        return try JSONDecoder().decode(T.self, from: cacheEntry.data)
+        return try JSONDecoder().decode(T.self, from: entry.data)
     }
     
     func removeDiskCache(forKey key: String) {
-        let fileURL = cacheDirectory.appendingPathComponent(key)
-        try? fileManager.removeItem(at: fileURL)
+        try? fileManager.removeItem(at: cacheDirectory.appendingPathComponent(key))
     }
     
     // MARK: - Cache Management
@@ -120,49 +96,40 @@ final class CacheManager {
     
     private func cleanupCache() throws {
         let now = Date()
-        
-        // Only cleanup if enough time has passed
-        guard now.timeIntervalSince(lastCleanupTime) >= cleanupInterval else {
-            return
-        }
-        
+        guard now.timeIntervalSince(lastCleanupTime) >= cleanupInterval else { return }
         lastCleanupTime = now
         
-        let contents = try fileManager.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey])
-        
-        // Remove expired files and calculate total size
+        let files = try fileManager.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey])
         var totalSize: Int64 = 0
-        var filesToRemove: [URL] = []
+        var expiredFiles: [URL] = []
         
-        for fileURL in contents {
-            let attributes = try fileManager.attributesOfItem(atPath: fileURL.path)
-            if let modificationDate = attributes[.modificationDate] as? Date,
-               now.timeIntervalSince(modificationDate) > cacheExpirationInterval {
-                filesToRemove.append(fileURL)
-            } else if let fileSize = attributes[.size] as? Int64 {
-                totalSize += fileSize
+        for file in files {
+            let attributes = try fileManager.attributesOfItem(atPath: file.path)
+            let modDate = attributes[.modificationDate] as? Date ?? .distantPast
+            let size = attributes[.size] as? Int64 ?? 0
+            
+            if now.timeIntervalSince(modDate) > cacheExpirationInterval {
+                expiredFiles.append(file)
+            } else {
+                totalSize += size
             }
         }
         
-        // Remove expired files
-        for fileURL in filesToRemove {
-            try? fileManager.removeItem(at: fileURL)
+        for file in expiredFiles {
+            try? fileManager.removeItem(at: file)
         }
         
-        // If total size exceeds limit, remove oldest files
         if totalSize > maxCacheSize {
-            let sortedFiles = try contents.sorted { file1, file2 in
-                let date1 = try fileManager.attributesOfItem(atPath: file1.path)[.modificationDate] as? Date ?? Date.distantPast
-                let date2 = try fileManager.attributesOfItem(atPath: file2.path)[.modificationDate] as? Date ?? Date.distantPast
+            let sorted = try files.sorted {
+                let date1 = try fileManager.attributesOfItem(atPath: $0.path)[.modificationDate] as? Date ?? .distantPast
+                let date2 = try fileManager.attributesOfItem(atPath: $1.path)[.modificationDate] as? Date ?? .distantPast
                 return date1 < date2
             }
             
-            for fileURL in sortedFiles {
-                if totalSize <= maxCacheSize { break }
-                if let fileSize = try fileManager.attributesOfItem(atPath: fileURL.path)[.size] as? Int64 {
-                    try? fileManager.removeItem(at: fileURL)
-                    totalSize -= fileSize
-                }
+            for file in sorted where totalSize > maxCacheSize {
+                let size = try fileManager.attributesOfItem(atPath: file.path)[.size] as? Int64 ?? 0
+                try? fileManager.removeItem(at: file)
+                totalSize -= size
             }
         }
     }
@@ -181,51 +148,37 @@ final class CacheManager {
     // MARK: - Compression
     
     private func compressData(_ data: Data) throws -> Data {
-        let sourceSize = data.count
-        let destinationSize = sourceSize * 2 // Worst case scenario
+        let srcSize = data.count
+        let destSize = srcSize * 2
+        let dest = UnsafeMutablePointer<UInt8>.allocate(capacity: destSize)
+        defer { dest.deallocate() }
         
-        let destination = UnsafeMutablePointer<UInt8>.allocate(capacity: destinationSize)
-        defer { destination.deallocate() }
-        
-        let algorithm = COMPRESSION_ZLIB
-        
-        let compressedSize = data.withUnsafeBytes { rawBufferPointer in
-            guard let baseAddress = rawBufferPointer.baseAddress else { return 0 }
-            let source = baseAddress.assumingMemoryBound(to: UInt8.self)
-            return compression_encode_buffer(destination, destinationSize,
-                                          source, sourceSize,
-                                          nil, algorithm)
+        let compressedSize = data.withUnsafeBytes {
+            compression_encode_buffer(dest, destSize, $0.baseAddress!.assumingMemoryBound(to: UInt8.self), srcSize, nil, COMPRESSION_ZLIB)
         }
         
         guard compressedSize > 0 else {
             throw NSError(domain: "CacheManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Compression failed"])
         }
         
-        return Data(bytes: destination, count: compressedSize)
+        return Data(bytes: dest, count: compressedSize)
     }
     
     private func decompressData(_ data: Data) throws -> Data {
-        let sourceSize = data.count
-        let destinationSize = sourceSize * 4 // Worst case scenario
+        let srcSize = data.count
+        let destSize = srcSize * 4
+        let dest = UnsafeMutablePointer<UInt8>.allocate(capacity: destSize)
+        defer { dest.deallocate() }
         
-        let destination = UnsafeMutablePointer<UInt8>.allocate(capacity: destinationSize)
-        defer { destination.deallocate() }
-        
-        let algorithm = COMPRESSION_ZLIB
-        
-        let decompressedSize = data.withUnsafeBytes { rawBufferPointer in
-            guard let baseAddress = rawBufferPointer.baseAddress else { return 0 }
-            let source = baseAddress.assumingMemoryBound(to: UInt8.self)
-            return compression_decode_buffer(destination, destinationSize,
-                                          source, sourceSize,
-                                          nil, algorithm)
+        let decompressedSize = data.withUnsafeBytes {
+            compression_decode_buffer(dest, destSize, $0.baseAddress!.assumingMemoryBound(to: UInt8.self), srcSize, nil, COMPRESSION_ZLIB)
         }
         
         guard decompressedSize > 0 else {
             throw NSError(domain: "CacheManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Decompression failed"])
         }
         
-        return Data(bytes: destination, count: decompressedSize)
+        return Data(bytes: dest, count: decompressedSize)
     }
 }
 
@@ -234,4 +187,4 @@ final class CacheManager {
 private struct CacheEntry: Codable {
     let data: Data
     let expirationDate: Date
-} 
+}
