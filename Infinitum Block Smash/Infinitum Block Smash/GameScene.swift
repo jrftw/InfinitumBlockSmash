@@ -576,6 +576,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             dragNode?.alpha = 0.7
             dragNode?.zPosition = 50
             addChild(dragNode!)
+            
+            // Remove the shape from the tray immediately
+            gameState.removeBlockFromTray(block)
+            // Update the tray display
+            trayNode.updateBlocks(gameState.tray, blockSize: GameConstants.blockSize)
         }
     }
     
@@ -761,9 +766,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             
             // Play placement sound
             AudioManager.shared.playPlacementSound()
+            
+            // Refill tray after successful placement
+            if gameState.tray.count < 3 {
+                gameState.refillTray()
+            }
         } else {
             // Play error sound
             AudioManager.shared.playFailSound()
+            
+            // Return the block to the tray
+            gameState.addBlockToTray(draggingBlock)
         }
         
         // Clean up all temporary nodes
@@ -772,16 +785,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Remove any highlight containers and ensure all block nodes are properly cleaned up
         gridNode.children.forEach { node in
-            if node.zPosition == 10 { // Highlight container z-position
-                node.removeFromParent()
-            }
-            // Clean up any stray block nodes
-            if node.name?.starts(with: "block_") == true {
+            if node.name?.hasPrefix("highlight_") == true {
                 node.removeFromParent()
             }
         }
         
-        // Reset all state
         self.dragNode = nil
         self.draggingBlock = nil
         self.previewNode = nil
@@ -1539,7 +1547,7 @@ extension GameScene: GameStateDelegate {
         blockContainer.zPosition = 1
         gridNode.addChild(blockContainer)
         
-        // Draw all placed blocks
+        // Add blocks to the grid
         for row in 0..<gridSize {
             for col in 0..<gridSize {
                 if let color = gameState.grid[row][col] {
@@ -1563,7 +1571,7 @@ extension GameScene: GameStateDelegate {
                     cellNode.addChild(shadowNode)
                     // Border
                     cellNode.strokeColor = .white
-                    cellNode.lineWidth = 1
+                    cellNode.lineWidth = 2
                     // Shine
                     let shineNode = SKShapeNode(rectOf: CGSize(width: blockSize * 0.3, height: blockSize * 0.3))
                     shineNode.fillColor = .white
@@ -1582,11 +1590,6 @@ extension GameScene: GameStateDelegate {
         }
         
         print("[DEBUG] trayNode in parent after update: \(trayNode.parent != nil)")
-        
-        // Refill tray if needed (after UI update)
-        if gameState.tray.count < 3 {
-            gameState.refillTray()
-        }
     }
     
     func gameStateDidClearLines(at positions: [(Int, Int)]) {

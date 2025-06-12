@@ -2581,6 +2581,22 @@ final class GameState: ObservableObject {
         
         return baseScore + perfectBonus + streakBonus
     }
+    
+    // MARK: - Tray Management
+    func removeBlockFromTray(_ block: Block) {
+        if let index = tray.firstIndex(where: { $0.id == block.id }) {
+            tray.remove(at: index)
+            delegate?.gameStateDidUpdate()
+        }
+    }
+    
+    func addBlockToTray(_ block: Block) {
+        // Only add if we have less than 3 shapes
+        if tray.count < 3 {
+            tray.append(block)
+            delegate?.gameStateDidUpdate()
+        }
+    }
 }
 
 // MARK: - Extensions and Supporting Types
