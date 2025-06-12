@@ -1520,29 +1520,31 @@ extension GameScene: GameStateDelegate {
         // Update tray
         setupTray()
         
+        // Clean up all existing nodes first
+        gridNode.children.forEach { node in
+            if node.name != "gridLine" && node.name != "gridBackground" {
+                node.removeFromParent()
+            }
+        }
+        
         // Update grid
         let blockSize = GameConstants.blockSize
         let gridSize = GameConstants.gridSize
         let totalWidth = CGFloat(gridSize) * blockSize
         let totalHeight = CGFloat(gridSize) * blockSize
         
-        // Find or create block container
-        var blockContainer = gridNode.childNode(withName: "blockContainer")
-        if blockContainer == nil {
-            blockContainer = SKNode()
-            blockContainer?.name = "blockContainer"
-            blockContainer?.zPosition = 1
-            gridNode.addChild(blockContainer!)
-        }
-        
-        // Remove existing blocks
-        blockContainer?.removeAllChildren()
+        // Create new block container
+        let blockContainer = SKNode()
+        blockContainer.name = "blockContainer"
+        blockContainer.zPosition = 1
+        gridNode.addChild(blockContainer)
         
         // Draw all placed blocks
         for row in 0..<gridSize {
             for col in 0..<gridSize {
                 if let color = gameState.grid[row][col] {
                     let cellNode = SKShapeNode(rectOf: CGSize(width: blockSize, height: blockSize), cornerRadius: blockSize * 0.18)
+                    cellNode.name = "block_\(row)_\(col)"
                     // Gradient fill
                     let colors = [color.gradientColors.start, color.gradientColors.end]
                     let locations: [CGFloat] = [0.0, 1.0]
@@ -1574,7 +1576,7 @@ extension GameScene: GameStateDelegate {
                     let x = -totalWidth / 2 + CGFloat(col) * blockSize + blockSize / 2
                     let y = -totalHeight / 2 + CGFloat(row) * blockSize + blockSize / 2
                     cellNode.position = CGPoint(x: x, y: y)
-                    blockContainer?.addChild(cellNode)
+                    blockContainer.addChild(cellNode)
                 }
             }
         }

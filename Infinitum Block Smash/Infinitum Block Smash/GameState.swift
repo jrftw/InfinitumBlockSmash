@@ -1206,12 +1206,16 @@ final class GameState: ObservableObject {
     }
     
     func advanceToNextLevel() {
+        // Clear the grid immediately and notify delegate
+        self.grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
+        self.delegate?.gameStateDidUpdate()
+        
         // Add a small delay before advancing to ensure the level complete overlay is visible
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self = self else { return }
             self.level += 1
             print("[Level] Advancing to level \(self.level)")
             self.setSeed(for: self.level)
-            self.grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
             self.tray = []
             if self.level > UserDefaults.standard.integer(forKey: self.levelKey) {
                 self.achievementsManager.updateAchievement(id: "highest_level", value: self.level)
