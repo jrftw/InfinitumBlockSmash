@@ -302,6 +302,33 @@ private struct VolumeControlView: View {
     }
 }
 
+private struct NotificationSettingsSection: View {
+    @AppStorage("notificationsEnabled") private var notificationsEnabled = true
+    @AppStorage("announcementNotificationsEnabled") private var announcementNotificationsEnabled = true
+    @AppStorage("bugNotificationsEnabled") private var bugNotificationsEnabled = true
+    @AppStorage("leaderboardNotificationsEnabled") private var leaderboardNotificationsEnabled = true
+    
+    var body: some View {
+        Section(header: Text("Notifications")) {
+            Toggle("Enable All Notifications", isOn: $notificationsEnabled)
+            Toggle("Announcement Notifications", isOn: $announcementNotificationsEnabled)
+            Toggle("Bug Notifications", isOn: $bugNotificationsEnabled)
+            Toggle("Leaderboard Notifications", isOn: $leaderboardNotificationsEnabled)
+        }
+        .onChange(of: notificationsEnabled) { value in
+            if !value {
+                announcementNotificationsEnabled = false
+                bugNotificationsEnabled = false
+                leaderboardNotificationsEnabled = false
+            } else {
+                announcementNotificationsEnabled = true
+                bugNotificationsEnabled = true
+                leaderboardNotificationsEnabled = true
+            }
+        }
+    }
+}
+
 private struct StatsForNerdsSection: View {
     @ObservedObject var gameState: GameState
     @StateObject private var fpsManager = FPSManager.shared
@@ -712,6 +739,12 @@ struct SettingsView: View {
                     }
                     .onAppear { loadSection("audioSettings") }
                 }
+
+                // Notification settings section
+                Group {
+                    NotificationSettingsSection()
+                }
+                .onAppear { loadSection("notificationSettings") }
                 
                 if loadedSections.contains("gameProgress") {
                     Group {
