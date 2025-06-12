@@ -75,7 +75,7 @@ class TrayNode: SKNode {
         let totalSpacing = availableWidth - totalShapesWidth
         let spacingBetweenShapes = max(minSpacing, totalSpacing / CGFloat(blocks.count + 1))
 
-        // 6. Position shapes with proper spacing
+        // 6. Position shapes with proper spacing and z-ordering
         var xOffset: CGFloat = -availableWidth / 2 + spacingBetweenShapes
         for (i, block) in blocks.enumerated() {
             let shapeWidth = scaledShapeWidths[i]
@@ -87,7 +87,7 @@ class TrayNode: SKNode {
             node.position = CGPoint(x: xOffset + shapeWidth / 2, y: verticalOffset)
             node.setScale(1.0)
             node.name = "trayShape_\(block.id.uuidString)"
-            node.zPosition = CGFloat(i)
+            node.zPosition = CGFloat(i) // Ensure proper z-ordering
             addChild(node)
             blockNodes.append(node)
             
