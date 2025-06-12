@@ -18,6 +18,7 @@ struct ContentView: View {
     @State private var showingNewGameConfirmation = false
     @State private var showingStore = false
     @State private var showingClassicTimedView = false
+    @State private var showingAnnouncements = false
     @StateObject private var authViewModel = AuthViewModel()
     @State private var onlineUsersCount = 0
     @State private var dailyPlayersCount = 0
@@ -108,6 +109,10 @@ struct ContentView: View {
                             showingStore = true
                         }
                         
+                        MenuButton(title: "Announcements", icon: "bell.fill") {
+                            showingAnnouncements = true
+                        }
+                        
                         MenuButton(title: "Settings", icon: "gear") {
                             showingSettings = true
                         }
@@ -180,6 +185,9 @@ struct ContentView: View {
         }
         .fullScreenCover(isPresented: $showingClassicTimedView) {
             ClassicTimedGameView()
+        }
+        .sheet(isPresented: $showingAnnouncements) {
+            AnnouncementsView()
         }
         .sheet(isPresented: $showingNewGameConfirmation) {
             // ... existing code ...
