@@ -1,0 +1,18 @@
+[
+  {
+    "id": "shape_overlap_001",
+    "title": "Shape Overlapping Issue",
+    "description": "Some shapes may occasionally overlap during gameplay. This is a known issue that we are actively working on. If you encounter this issue, please report it to support@infinitumlive.com with details about when it occurred and any steps to reproduce it.",
+    "date": "2025-06-11",
+    "status": "Under Investigation",
+    "priority": 2
+  },
+  {
+    "id": "report_bugs_001",
+    "title": "How to Report Bugs",
+    "description": "If you encounter any issues while playing Infinitum Block Smash, please report them to our support team at support@infinitumlive.com. Please include as much detail as possible, such as:\n\n• When the issue occurred\n• What you were doing when it happened\n• Steps to reproduce the issue\n• Screenshots or videos if possible\n\nYour feedback helps us improve the game for everyone!",
+    "date": "2025-06-11",
+    "status": "Information",
+    "priority": 1
+  }
+] 

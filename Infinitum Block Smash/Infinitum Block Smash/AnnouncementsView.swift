@@ -3,6 +3,7 @@ import SwiftUI
 struct AnnouncementsView: View {
     @StateObject private var announcementsService = AnnouncementsService()
     @Environment(\.dismiss) private var dismiss
+    @State private var selectedTab = 0
     
     var body: some View {
         NavigationView {
@@ -18,60 +19,22 @@ struct AnnouncementsView: View {
                 )
                 .ignoresSafeArea()
                 
-                if announcementsService.isLoading {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        .scaleEffect(1.5)
-                } else if let error = announcementsService.error {
-                    VStack(spacing: 20) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 50))
-                            .foregroundColor(.yellow)
-                        
-                        Text("Failed to load announcements")
-                            .font(.title2)
-                            .foregroundColor(.white)
-                        
-                        Text(error.localizedDescription)
-                            .font(.body)
-                            .foregroundColor(.white.opacity(0.8))
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
-                        
-                        Button("Try Again") {
-                            Task {
-                                await announcementsService.fetchAnnouncements()
-                            }
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(.white)
+                VStack(spacing: 0) {
+                    Picker("Section", selection: $selectedTab) {
+                        Text("Announcements").tag(0)
+                        Text("Bugs").tag(1)
                     }
-                } else if announcementsService.announcements.isEmpty {
-                    VStack(spacing: 20) {
-                        Image(systemName: "bell.slash.fill")
-                            .font(.system(size: 50))
-                            .foregroundColor(.white.opacity(0.8))
-                        
-                        Text("No Announcements")
-                            .font(.title2)
-                            .foregroundColor(.white)
-                        
-                        Text("Check back later for updates!")
-                            .font(.body)
-                            .foregroundColor(.white.opacity(0.8))
-                    }
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 16) {
-                            ForEach(announcementsService.announcements) { announcement in
-                                AnnouncementCard(announcement: announcement)
-                            }
-                        }
-                        .padding()
+                    .pickerStyle(.segmented)
+                    .padding()
+                    
+                    if selectedTab == 0 {
+                        announcementsContent
+                    } else {
+                        BugsView()
                     }
                 }
             }
-            .navigationTitle("Announcements")
+            .navigationTitle(selectedTab == 0 ? "Announcements" : "Known Bugs")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -83,6 +46,63 @@ struct AnnouncementsView: View {
         }
         .task {
             await announcementsService.fetchAnnouncements()
+        }
+    }
+    
+    private var announcementsContent: some View {
+        Group {
+            if announcementsService.isLoading {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    .scaleEffect(1.5)
+            } else if let error = announcementsService.error {
+                VStack(spacing: 20) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 50))
+                        .foregroundColor(.yellow)
+                    
+                    Text("Failed to load announcements")
+                        .font(.title2)
+                        .foregroundColor(.white)
+                    
+                    Text(error.localizedDescription)
+                        .font(.body)
+                        .foregroundColor(.white.opacity(0.8))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                    
+                    Button("Try Again") {
+                        Task {
+                            await announcementsService.fetchAnnouncements()
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.white)
+                }
+            } else if announcementsService.announcements.isEmpty {
+                VStack(spacing: 20) {
+                    Image(systemName: "bell.slash.fill")
+                        .font(.system(size: 50))
+                        .foregroundColor(.white.opacity(0.8))
+                    
+                    Text("No Announcements")
+                        .font(.title2)
+                        .foregroundColor(.white)
+                    
+                    Text("Check back later for updates!")
+                        .font(.body)
+                        .foregroundColor(.white.opacity(0.8))
+                }
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 16) {
+                        ForEach(announcementsService.announcements) { announcement in
+                            AnnouncementCard(announcement: announcement)
+                        }
+                    }
+                    .padding()
+                }
+            }
         }
     }
 }
