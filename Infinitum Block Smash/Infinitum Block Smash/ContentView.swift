@@ -41,40 +41,43 @@ struct ContentView: View {
             .ignoresSafeArea()
             
             if isLoggedIn {
-                VStack(spacing: 20) {
+                VStack(spacing: 12) {
                     // App Icon
                     Image("AppIcon")
                         .resizable()
-                        .frame(width: 120, height: 120)
-                        .clipShape(RoundedRectangle(cornerRadius: 30))
+                        .frame(width: 100, height: 100)
+                        .clipShape(RoundedRectangle(cornerRadius: 25))
                         .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 5)
+                        .padding(.top, 8)
                     
                     // App Title
-                    VStack(spacing: 4) {
+                    VStack(spacing: 2) {
                         Text("Infinitum Block Smash")
-                            .font(.system(size: 32, weight: .bold, design: .rounded))
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                             .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 2)
+                            .minimumScaleFactor(0.8)
+                            .lineLimit(1)
                         
-                        HStack(spacing: 16) {
+                        HStack(spacing: 12) {
                             Text(onlineUsersCountText)
-                                .font(.system(size: 14, weight: .medium, design: .rounded))
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
                                 .foregroundColor(.white.opacity(0.8))
                                 .shadow(color: .black.opacity(0.2), radius: 1, x: 0, y: 1)
                             
                             Text("•")
-                                .font(.system(size: 14, weight: .medium))
+                                .font(.system(size: 13, weight: .medium))
                                 .foregroundColor(.white.opacity(0.6))
                             
                             Text(dailyPlayersCountText)
-                                .font(.system(size: 14, weight: .medium, design: .rounded))
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
                                 .foregroundColor(.white.opacity(0.8))
                                 .shadow(color: .black.opacity(0.2), radius: 1, x: 0, y: 1)
                         }
                     }
                     
                     // Menu Buttons
-                    VStack(spacing: 15) {
+                    VStack(spacing: 12) {
                         if gameState.hasSavedGame() {
                             MenuButton(title: "Resume Game", icon: "play.fill", onDelete: {
                                 gameState.deleteSavedGame()
