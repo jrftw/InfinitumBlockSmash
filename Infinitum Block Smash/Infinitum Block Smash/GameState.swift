@@ -145,11 +145,8 @@ final class GameState: ObservableObject {
             if let topScore = result.entries.first?.score {
                 await MainActor.run {
                     self.leaderboardHighScore = topScore
-                    // Update highScore if leaderboard score is higher
-                    if topScore > self.highScore {
-                        self.highScore = topScore
-                        self.userDefaults.set(topScore, forKey: self.scoreKey)
-                    }
+                    // Only update the leaderboard high score, not the user's personal high score
+                    print("[GameState] Updated leaderboard high score: \(topScore)")
                 }
             }
         } catch {
@@ -1570,7 +1567,7 @@ final class GameState: ObservableObject {
     private func loadStatistics() {
         print("[GameState] Loading statistics from UserDefaults")
         
-        // Load statistics from UserDefaults
+        // Load statistics from UserDefaults, defaulting to 0 if not found
         blocksPlaced = userDefaults.integer(forKey: blocksPlacedKey)
         linesCleared = userDefaults.integer(forKey: linesClearedKey)
         gamesCompleted = userDefaults.integer(forKey: gamesCompletedKey)
@@ -1592,12 +1589,12 @@ final class GameState: ObservableObject {
                     // Only update if Firebase data is more recent
                     if let localLastSave = userDefaults.object(forKey: "lastSaveTime") as? Date,
                        progress.lastSaveTime > localLastSave {
-                        // Update local statistics with Firebase data
-                        blocksPlaced = progress.blocksPlaced
-                        linesCleared = progress.linesCleared
-                        gamesCompleted = progress.gamesCompleted
-                        perfectLevels = progress.perfectLevels
-                        totalPlayTime = progress.totalPlayTime
+                        // Update local statistics with Firebase data, taking the maximum of local and cloud values
+                        blocksPlaced = max(blocksPlaced, progress.blocksPlaced)
+                        linesCleared = max(linesCleared, progress.linesCleared)
+                        gamesCompleted = max(gamesCompleted, progress.gamesCompleted)
+                        perfectLevels = max(perfectLevels, progress.perfectLevels)
+                        totalPlayTime = max(totalPlayTime, progress.totalPlayTime)
                         
                         // Only update high score if Firebase has a higher score
                         if progress.highScore > highScore {
@@ -1651,6 +1648,20 @@ final class GameState: ObservableObject {
     @MainActor
     private func saveStatistics() {
         print("[GameState] Saving statistics to UserDefaults")
+        
+        // Get current values from UserDefaults to ensure we're accumulating
+        let currentBlocksPlaced = userDefaults.integer(forKey: blocksPlacedKey)
+        let currentLinesCleared = userDefaults.integer(forKey: linesClearedKey)
+        let currentGamesCompleted = userDefaults.integer(forKey: gamesCompletedKey)
+        let currentPerfectLevels = userDefaults.integer(forKey: perfectLevelsKey)
+        let currentTotalPlayTime = userDefaults.double(forKey: totalPlayTimeKey)
+        
+        // Update statistics by adding new values to existing ones
+        blocksPlaced = currentBlocksPlaced + blocksPlaced
+        linesCleared = currentLinesCleared + linesCleared
+        gamesCompleted = currentGamesCompleted + gamesCompleted
+        perfectLevels = currentPerfectLevels + perfectLevels
+        totalPlayTime = currentTotalPlayTime + totalPlayTime
         
         // Save all statistics to UserDefaults
         saveStatisticsToUserDefaults()

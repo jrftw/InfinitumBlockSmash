@@ -462,10 +462,6 @@ struct GameView: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Pause Menu")
             
-            if showingAchievements {
-                AchievementsView(achievementsManager: gameState.achievementsManager)
-            }
-            
             if showingStats {
                 StatsView(gameState: gameState)
             }
