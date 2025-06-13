@@ -48,7 +48,7 @@ class ClassicTimedGameState: ObservableObject {
     
     private func setupObservers() {
         // Observe score changes from the main game state
-        gameState.$score
+        gameState.$temporaryScore
             .receive(on: RunLoop.main)
             .sink { [weak self] newScore in
                 self?.score = newScore
@@ -94,6 +94,11 @@ class ClassicTimedGameState: ObservableObject {
         timeRemaining = getTimeLimit(for: gameState.level)
         isTimeRunning = true
         startTimer()
+        
+        // Ensure score is properly initialized
+        if gameState.level == 1 {
+            gameState.addScore(-gameState.temporaryScore) // Reset score to 0 by subtracting current score
+        }
     }
     
     private func startTimer() {

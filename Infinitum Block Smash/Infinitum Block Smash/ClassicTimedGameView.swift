@@ -164,12 +164,12 @@ struct ClassicTimedGameView: View {
             Text(NSLocalizedString("Score", comment: "Score label"))
                 .font(.caption)
                 .foregroundColor(.white.opacity(0.9))
-            Text("\(gameState.score)")
+            Text("\(gameState.temporaryScore)")
                 .font(.system(size: 36, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(String(format: NSLocalizedString("%d points", comment: "Score accessibility label"), gameState.score))
+        .accessibilityLabel(String(format: NSLocalizedString("%d points", comment: "Score accessibility label"), gameState.temporaryScore))
     }
     
     private var timerView: some View {

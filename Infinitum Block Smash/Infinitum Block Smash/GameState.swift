@@ -25,7 +25,7 @@ protocol GameStateDelegate: AnyObject {
 final class GameState: ObservableObject {
     // MARK: - Published Properties
     @Published private(set) var score: Int = 0
-    @Published private(set) var temporaryScore: Int = 0  // Add temporary score for tracking during gameplay
+    @Published private(set) var temporaryScore: Int = 0
     @Published private(set) var level: Int = 1
     @Published private(set) var isGameOver: Bool = false
     @Published private(set) var grid: [[BlockColor?]] = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
