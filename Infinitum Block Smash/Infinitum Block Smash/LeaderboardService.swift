@@ -181,6 +181,46 @@ final class LeaderboardService: ObservableObject {
                     if shouldReset {
                         print("[Leaderboard] Resetting \(period) score for user \(document.documentID) - Timestamp: \(estTimestamp)")
                         try await document.reference.delete()
+                        
+                        // After deletion, check if we need to regenerate the score
+                        let documentData = document.data()
+                        if let userId = documentData["userId"] as? String,
+                           let username = documentData["username"] as? String {
+                            // Get the latest score from the alltime leaderboard
+                            let alltimeDoc = try await db.collection(collection)
+                                .document("alltime")
+                                .collection("scores")
+                                .document(userId)
+                                .getDocument()
+                            
+                            if let alltimeData = alltimeDoc.data() {
+                                // Regenerate the score for the current period
+                                var newData: [String: Any] = [
+                                    "username": username,
+                                    "timestamp": FieldValue.serverTimestamp(),
+                                    "userId": userId,
+                                    "lastUpdate": FieldValue.serverTimestamp()
+                                ]
+                                
+                                // Handle different score fields based on collection type
+                                if collection == "achievement_leaderboard" {
+                                    if let points = alltimeData["points"] as? Int {
+                                        newData["points"] = points
+                                    }
+                                } else if collection == "classic_timed_leaderboard" {
+                                    if let time = alltimeData["time"] as? Int {
+                                        newData["time"] = time
+                                    }
+                                } else {
+                                    if let score = alltimeData["score"] as? Int {
+                                        newData["score"] = score
+                                    }
+                                }
+                                
+                                try await document.reference.setData(newData)
+                                print("[Leaderboard] Regenerated \(period) score for user \(userId)")
+                            }
+                        }
                     }
                 } else {
                     // For backward compatibility - if no timestamp exists, delete the entry
@@ -362,8 +402,8 @@ final class LeaderboardService: ObservableObject {
                 let currentScore = currentDoc.data()?[type.scoreField] as? Int ?? 0
                 
                 // For achievement leaderboard, always update
-                // For other leaderboards, only update if score is better
-                if type == .achievement || score > currentScore {
+                // For other leaderboards, only update if score is better or no score exists
+                if type == .achievement || score > currentScore || !currentDoc.exists {
                     // Create base data dictionary
                     var data: [String: Any] = [
                         "username": username,

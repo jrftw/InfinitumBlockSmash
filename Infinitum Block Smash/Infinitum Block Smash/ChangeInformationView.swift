@@ -120,6 +120,18 @@ struct ChangeInformationView: View {
                 }
                 
                 Section {
+                    if let userId = Auth.auth().currentUser?.uid {
+                        HStack {
+                            Text("User ID")
+                            Spacer()
+                            Text(userId)
+                                .foregroundColor(.secondary)
+                                .font(.system(.body, design: .monospaced))
+                        }
+                    }
+                }
+                
+                Section {
                     Button("Delete Profile") {
                         showingDeleteConfirmation = true
                     }
