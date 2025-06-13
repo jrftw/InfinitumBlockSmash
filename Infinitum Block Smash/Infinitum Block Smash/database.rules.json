@@ -1,182 +1,70 @@
-{
-  "rules": {
-    "users": {
-      "$uid": {
-        ".read": "auth != null",
-        ".write": "auth != null && auth.uid === $uid",
-        "username": {
-          ".validate": "newData.isString() && newData.val().length >= 3 && newData.val().length <= 20"
-        },
-        "settings": {
-          ".read": "auth != null && auth.uid === $uid",
-          ".write": "auth != null && auth.uid === $uid"
-        },
-        "progress": {
-          ".read": "auth != null",
-          ".write": "auth != null && auth.uid === $uid",
-          "score": {
-            ".validate": "newData.isNumber() && newData.val() >= 0"
-          },
-          "level": {
-            ".validate": "newData.isNumber() && newData.val() >= 1"
-          },
-          "blocksPlaced": {
-            ".validate": "newData.isNumber() && newData.val() >= 0"
-          },
-          "linesCleared": {
-            ".validate": "newData.isNumber() && newData.val() >= 0"
-          },
-          "gamesCompleted": {
-            ".validate": "newData.isNumber() && newData.val() >= 0"
-          },
-          "perfectLevels": {
-            ".validate": "newData.isNumber() && newData.val() >= 0"
-          },
-          "totalPlayTime": {
-            ".validate": "newData.isNumber() && newData.val() >= 0"
-          },
-          "highScore": {
-            ".validate": "newData.isNumber() && newData.val() >= 0"
-          },
-          "highestLevel": {
-            ".validate": "newData.isNumber() && newData.val() >= 1"
-          },
-          "lastSaveTime": {
-            ".validate": "newData.isNumber() && newData.val() >= 0"
-          }
-        },
-        "achievements": {
-          ".read": "auth != null && auth.uid === $uid",
-          ".write": "auth != null && auth.uid === $uid"
-        }
-      },
-      ".read": "auth != null",
-      ".write": "auth != null",
-      ".indexOn": ["lastLogin", "lastActive"]
-    },
-    "game_states": {
-      "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
-        ".write": "auth != null && auth.uid === $uid",
-        ".validate": "newData.hasChildren(['score', 'level', 'lastUpdate'])",
-        "score": {
-          ".validate": "newData.isNumber() && newData.val() >= 0"
-        },
-        "level": {
-          ".validate": "newData.isNumber() && newData.val() >= 1"
-        },
-        "grid": {
-          ".validate": "newData.hasChildren()"
-        },
-        "tray": {
-          ".validate": "newData.hasChildren()"
-        },
-        "lastUpdate": {
-          ".validate": "newData.isNumber() && newData.val() <= now"
-        },
-        "lastSaveTime": {
-          ".validate": "newData.isNumber() && newData.val() >= 0"
-        }
-      },
-      ".indexOn": ["lastSaveTime", "lastUpdate"]
-    },
-    "online_users": {
-      ".read": true,
-      "$uid": {
-        ".write": "auth != null && auth.uid === $uid",
-        ".validate": "newData.isBoolean()"
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // ✅ Classic Leaderboard
+    match /classic_leaderboard/{period}/scores/{userId} {
+      allow read: if true;
+      allow write: if isOwner(userId);
+    }
+
+    // ✅ Timed Leaderboard
+    match /classic_timed_leaderboard/{period}/scores/{userId} {
+      allow read: if true;
+      allow write: if isOwner(userId);
+    }
+
+    // ✅ Achievement Leaderboard
+    match /achievement_leaderboard/{period}/scores/{userId} {
+      allow read: if true;
+      allow write: if isOwner(userId);
+    }
+
+    // ✅ Users & Subcollections
+    match /users/{userId} {
+      // Allow reading the collection for counting purposes
+      allow list: if true;
+      // Allow reading individual documents only to owners
+      allow get: if isOwner(userId);
+      // Allow writing only to owners
+      allow write: if isOwner(userId);
+
+      match /achievements/{achievementId} {
+        allow read, write: if isOwner(userId);
       }
-    },
-    "daily_stats": {
-      ".read": true,
-      "players_today": {
-        ".write": "auth != null",
-        ".validate": "newData.isNumber()"
-      },
-      "last_reset": {
-        ".write": "auth != null",
-        ".validate": "newData.isNumber() && newData.val() <= now"
+
+      match /progress/{progressId} {
+        allow read, write: if isOwner(userId);
       }
-    },
-    "leaderboards": {
-      ".read": "auth != null",
-      "$leaderboardId": {
-        ".write": "auth != null && (!data.exists() || data.child('userId').val() === auth.uid)",
-        ".validate": "newData.hasChildren(['score', 'timestamp'])",
-        "score": {
-          ".validate": "newData.isNumber() && newData.val() >= 0"
-        },
-        "timestamp": {
-          ".validate": "newData.isNumber() && newData.val() <= now"
-        }
-      },
-      ".indexOn": ["score", "timestamp"]
-    },
-    "achievement_leaderboard": {
-      "$timeframe": {
-        "scores": {
-          "$uid": {
-            ".read": "auth != null",
-            ".write": "auth != null && auth.uid === $uid",
-            ".validate": "newData.hasChildren(['score', 'timestamp'])",
-            "score": {
-              ".validate": "newData.isNumber() && newData.val() >= 0"
-            },
-            "timestamp": {
-              ".validate": "newData.isNumber() && newData.val() <= now"
-            }
-          }
-        },
-        ".indexOn": ["score", "timestamp"]
-      }
-    },
-    "classic_leaderboard": {
-      "$timeframe": {
-        "scores": {
-          "$uid": {
-            ".read": "auth != null",
-            ".write": "auth != null && auth.uid === $uid",
-            ".validate": "newData.hasChildren(['score', 'timestamp'])",
-            "score": {
-              ".validate": "newData.isNumber() && newData.val() >= 0"
-            },
-            "timestamp": {
-              ".validate": "newData.isNumber() && newData.val() <= now"
-            }
-          }
-        },
-        ".indexOn": ["score", "timestamp"]
-      }
-    },
-    "classic_timed_leaderboard": {
-      "$timeframe": {
-        "scores": {
-          "$uid": {
-            ".read": "auth != null",
-            ".write": "auth != null && auth.uid === $uid",
-            ".validate": "newData.hasChildren(['score', 'timestamp'])",
-            "score": {
-              ".validate": "newData.isNumber() && newData.val() >= 0"
-            },
-            "timestamp": {
-              ".validate": "newData.isNumber() && newData.val() <= now"
-            }
-          }
-        },
-        ".indexOn": ["score", "timestamp"]
-      }
-    },
-    "settings": {
-      "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
-        ".write": "auth != null && auth.uid === $uid"
-      }
-    },
-    "leaderboard": {
-      ".read": true,
-      ".write": "auth != null",
-      ".validate": "newData.hasChildren(['score', 'timestamp'])",
-      ".indexOn": ["score", "timestamp"]
+    }
+
+    // ✅ Game states
+    match /game_states/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // ✅ Settings
+    match /settings/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // ✅ Devices
+    match /devices/{deviceId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // ❌ Deny everything else
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 } 

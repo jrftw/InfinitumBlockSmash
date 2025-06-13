@@ -154,6 +154,9 @@ class FirebaseManager: ObservableObject {
                 await loadUserData(userId: userId)
             }
         }
+        
+        // Start the lastActive timer
+        startLastActiveUpdates()
     }
     
     deinit {
@@ -579,30 +582,43 @@ class FirebaseManager: ObservableObject {
     func getDailyPlayersCount() async throws -> Int {
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: Date())
+        let startOfDayTimestamp = Timestamp(date: startOfDay)
         
         print("[FirebaseManager] Getting daily players count since: \(startOfDay)")
         
-        let query = db.collection("users")
-            .whereField("lastActive", isGreaterThan: startOfDay)
-        
-        let snapshot = try await query.count.getAggregation(source: .server)
-        let count = Int(truncating: snapshot.count)
-        print("[FirebaseManager] Daily players count: \(count)")
-        return count
+        do {
+            let query = db.collection("users")
+                .whereField("lastActive", isGreaterThan: startOfDayTimestamp)
+            
+            let snapshot = try await query.count.getAggregation(source: .server)
+            let count = Int(truncating: snapshot.count)
+            print("[FirebaseManager] Daily players count: \(count)")
+            return count
+        } catch {
+            print("[FirebaseManager] Error getting daily players count: \(error)")
+            // Return 0 if there's an error, but log it
+            return 0
+        }
     }
     
     func getOnlineUsersCount() async throws -> Int {
         let fiveMinutesAgo = Timestamp(date: Date().addingTimeInterval(-300))
         print("[FirebaseManager] Getting online users count since: \(fiveMinutesAgo.dateValue())")
         
-        let snapshot = try await db.collection("users")
-            .whereField("lastActive", isGreaterThan: fiveMinutesAgo)
-            .count
-            .getAggregation(source: .server)
-        
-        let count = Int(truncating: snapshot.count)
-        print("[FirebaseManager] Online users count: \(count)")
-        return count
+        do {
+            let snapshot = try await db.collection("users")
+                .whereField("lastActive", isGreaterThan: fiveMinutesAgo)
+                .count
+                .getAggregation(source: .server)
+            
+            let count = Int(truncating: snapshot.count)
+            print("[FirebaseManager] Online users count: \(count)")
+            return count
+        } catch {
+            print("[FirebaseManager] Error getting online users count: \(error)")
+            // Return 0 if there's an error, but log it
+            return 0
+        }
     }
     
     // MARK: - Leaderboard
