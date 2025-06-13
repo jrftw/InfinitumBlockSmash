@@ -86,14 +86,27 @@ struct ContentView: View {
                             }
                         }
                         
-                        MenuButton(title: "Classic", icon: "gamecontroller.fill") {
-                            UserDefaults.standard.set(false, forKey: "isTimedMode")
-                            showingGameView = true
-                        }
-                        
-                        MenuButton(title: "Classic Timed", icon: "timer") {
-                            UserDefaults.standard.set(true, forKey: "isTimedMode")
-                            showingClassicTimedView = true
+                        // Game Modes Menu
+                        MenuButton(title: "Game Modes", icon: "gamecontroller.fill") {
+                            // Show game modes menu
+                            let alert = UIAlertController(title: "Select Game Mode", message: nil, preferredStyle: .actionSheet)
+                            
+                            alert.addAction(UIAlertAction(title: "Classic", style: .default) { _ in
+                                UserDefaults.standard.set(false, forKey: "isTimedMode")
+                                showingGameView = true
+                            })
+                            
+                            alert.addAction(UIAlertAction(title: "Classic Timed", style: .default) { _ in
+                                UserDefaults.standard.set(true, forKey: "isTimedMode")
+                                showingClassicTimedView = true
+                            })
+                            
+                            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+                            
+                            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                               let viewController = windowScene.windows.first?.rootViewController {
+                                viewController.present(alert, animated: true)
+                            }
                         }
                         
                         MenuButton(title: "Leaderboard", icon: "trophy.fill") {
