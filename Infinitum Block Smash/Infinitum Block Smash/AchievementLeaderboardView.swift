@@ -114,13 +114,33 @@ struct AchievementLeaderboardView: View {
     private var leaderboardList: some View {
         ScrollView {
             LazyVStack(spacing: 8) {
-                ForEach(filteredData) { entry in
-                    LeaderboardRow(
-                        entry: entry,
-                        position: leaderboardData.firstIndex(where: { $0.id == entry.id }) ?? 0,
-                        isCurrentUser: entry.id == FirebaseManager.shared.currentUserId,
-                        type: .achievement
-                    )
+                ForEach(Array(filteredData.enumerated()), id: \.element.id) { index, entry in
+                    HStack {
+                        Text("\(index + 1)")
+                            .font(.headline)
+                            .frame(width: 40)
+                        
+                        Image(systemName: "person.circle.fill")
+                            .resizable()
+                            .frame(width: 40, height: 40)
+                            .foregroundColor(.gray)
+                        
+                        VStack(alignment: .leading) {
+                            Text(entry.username)
+                                .font(.headline)
+                            if let level = entry.level {
+                                Text("Level \(level)")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
+                        }
+                        
+                        Spacer()
+                        
+                        Text("\(entry.score)")
+                            .font(.headline)
+                    }
+                    .padding(.vertical, 4)
                 }
             }
             .padding(.horizontal)

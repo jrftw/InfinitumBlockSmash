@@ -28,6 +28,9 @@ struct GameView: View {
     @StateObject private var notificationService = NotificationService.shared
     @State private var showingSaveWarning = false
     @State private var isSettingsLoading = false
+    @State private var showingAchievementProgress = false
+    @State private var currentAchievementProgress: (id: String, progress: Double)?
+    @State private var achievementTimer: Timer?
     
     private enum SettingsAction {
         case resume
@@ -165,6 +168,30 @@ struct GameView: View {
                         .padding()
                     )
             }
+            
+            // Achievement progress overlay
+            if showingAchievementProgress, let achievement = currentAchievementProgress {
+                VStack {
+                    if let description = GameCenterManager.shared.getAchievementDescription(id: achievement.id) {
+                        HStack {
+                            Image(systemName: description.icon)
+                                .font(.title2)
+                            Text(description.title)
+                                .font(.headline)
+                        }
+                        ProgressView(value: achievement.progress, total: 100)
+                            .progressViewStyle(LinearProgressViewStyle())
+                            .tint(.blue)
+                        Text("\(Int(achievement.progress))%")
+                            .font(.caption)
+                    }
+                }
+                .padding()
+                .background(Color.black.opacity(0.8))
+                .cornerRadius(10)
+                .padding()
+                .transition(.move(edge: .top))
+            }
         }
         .sheet(isPresented: $showingSettings) {
             if isSettingsLoading {
@@ -207,6 +234,8 @@ struct GameView: View {
             ) { _ in
                 showingSaveWarning = true
             }
+            
+            setupAchievementTracking()
         }
         .onChange(of: gameState.levelComplete) { isComplete in
             if isComplete {
@@ -239,6 +268,8 @@ struct GameView: View {
             
             // Remove observer
             NotificationCenter.default.removeObserver(self)
+            
+            achievementTimer?.invalidate()
         }
     }
     
@@ -549,6 +580,46 @@ struct GameView: View {
             print("[GameView] Error syncing game data: \(error.localizedDescription)")
             syncError = error.localizedDescription
             isSyncing = false
+        }
+    }
+    
+    private func setupAchievementTracking() {
+        // Start a timer to check achievement progress
+        achievementTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
+            Task {
+                await checkAchievementProgress()
+            }
+        }
+    }
+    
+    private func checkAchievementProgress() async {
+        // Check score achievements
+        let scoreProgress = await GameCenterManager.shared.getAchievementProgress(id: "score_\(gameState.score)")
+        if scoreProgress > 0 {
+            showAchievementProgress(id: "score_\(gameState.score)", progress: scoreProgress)
+        }
+        
+        // Check level achievements
+        let levelProgress = await GameCenterManager.shared.getAchievementProgress(id: "level_\(gameState.level)")
+        if levelProgress > 0 {
+            showAchievementProgress(id: "level_\(gameState.level)", progress: levelProgress)
+        }
+        
+        // Check other achievements as needed
+        // ...
+    }
+    
+    private func showAchievementProgress(id: String, progress: Double) {
+        withAnimation {
+            currentAchievementProgress = (id: id, progress: progress)
+            showingAchievementProgress = true
+            
+            // Hide the progress after 3 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                withAnimation {
+                    showingAchievementProgress = false
+                }
+            }
         }
     }
 }

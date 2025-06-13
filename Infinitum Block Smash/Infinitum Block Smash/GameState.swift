@@ -2597,6 +2597,128 @@ final class GameState: ObservableObject {
             delegate?.gameStateDidUpdate()
         }
     }
+
+    private func handleAchievement(id: String, value: Double) {
+        // Update local achievement
+        achievementsManager.updateAchievement(id: id, value: Int(value))
+        
+        // Update Game Center achievement
+        Task {
+            // Get current progress
+            let currentProgress = await GameCenterManager.shared.getAchievementProgress(id: id)
+            
+            // Only update if the new value is higher
+            if value > currentProgress {
+                // Report to Game Center
+                GameCenterManager.shared.reportAchievement(id: id, percentComplete: value)
+                
+                // Show notification if achievement is complete
+                if value >= 100 {
+                    GameCenterManager.shared.showAchievementUnlockNotification(id: id)
+                }
+            }
+        }
+    }
+    
+    private func handleScoreAchievement(score: Int) {
+        // Score achievements
+        if score >= 1000 {
+            handleAchievement(id: "score_1000", value: min(100, Double(score) / 1000 * 100))
+        }
+        if score >= 5000 {
+            handleAchievement(id: "score_5000", value: min(100, Double(score) / 5000 * 100))
+        }
+        if score >= 10000 {
+            handleAchievement(id: "score_10000", value: min(100, Double(score) / 10000 * 100))
+        }
+        if score >= 50000 {
+            handleAchievement(id: "score_50000", value: min(100, Double(score) / 50000 * 100))
+        }
+    }
+    
+    private func handleLevelAchievement(level: Int) {
+        // Level achievements
+        if level >= 5 {
+            handleAchievement(id: "level_5", value: min(100, Double(level) / 5 * 100))
+        }
+        if level >= 10 {
+            handleAchievement(id: "level_10", value: min(100, Double(level) / 10 * 100))
+        }
+        if level >= 20 {
+            handleAchievement(id: "level_20", value: min(100, Double(level) / 20 * 100))
+        }
+        if level >= 50 {
+            handleAchievement(id: "level_50", value: min(100, Double(level) / 50 * 100))
+        }
+    }
+    
+    private func handleLineClearAchievement(linesCleared: Int) {
+        // Line clear achievements
+        if linesCleared >= 1 {
+            handleAchievement(id: "first_clear", value: 100)
+        }
+        if linesCleared >= 10 {
+            handleAchievement(id: "clear_10", value: min(100, Double(linesCleared) / 10 * 100))
+        }
+        if linesCleared >= 50 {
+            handleAchievement(id: "clear_50", value: min(100, Double(linesCleared) / 50 * 100))
+        }
+        if linesCleared >= 100 {
+            handleAchievement(id: "clear_100", value: min(100, Double(linesCleared) / 100 * 100))
+        }
+    }
+    
+    private func handleComboAchievement(combo: Int) {
+        // Combo achievements
+        if combo >= 3 {
+            handleAchievement(id: "combo_3", value: min(100, Double(combo) / 3 * 100))
+        }
+        if combo >= 5 {
+            handleAchievement(id: "combo_5", value: min(100, Double(combo) / 5 * 100))
+        }
+        if combo >= 10 {
+            handleAchievement(id: "combo_10", value: min(100, Double(combo) / 10 * 100))
+        }
+    }
+    
+    private func handleBlockPlacementAchievement(blocksPlaced: Int) {
+        // Block placement achievements
+        if blocksPlaced >= 100 {
+            handleAchievement(id: "place_100", value: min(100, Double(blocksPlaced) / 100 * 100))
+        }
+        if blocksPlaced >= 500 {
+            handleAchievement(id: "place_500", value: min(100, Double(blocksPlaced) / 500 * 100))
+        }
+        if blocksPlaced >= 1000 {
+            handleAchievement(id: "place_1000", value: min(100, Double(blocksPlaced) / 1000 * 100))
+        }
+    }
+    
+    private func handleGroupAchievement(groupsCreated: Int) {
+        // Group achievements
+        if groupsCreated >= 10 {
+            handleAchievement(id: "group_10", value: min(100, Double(groupsCreated) / 10 * 100))
+        }
+        if groupsCreated >= 20 {
+            handleAchievement(id: "group_20", value: min(100, Double(groupsCreated) / 20 * 100))
+        }
+        if groupsCreated >= 30 {
+            handleAchievement(id: "group_30", value: min(100, Double(groupsCreated) / 30 * 100))
+        }
+    }
+    
+    private func handlePerfectLevelAchievement(perfectLevels: Int) {
+        // Perfect level achievements
+        if perfectLevels >= 1 {
+            handleAchievement(id: "perfect_level", value: 100)
+        }
+        if perfectLevels >= 3 {
+            handleAchievement(id: "perfect_levels_3", value: min(100, Double(perfectLevels) / 3 * 100))
+        }
+        if perfectLevels >= 5 {
+            handleAchievement(id: "perfect_levels_5", value: min(100, Double(perfectLevels) / 5 * 100))
+        }
+    }
 }
 
 // MARK: - Extensions and Supporting Types

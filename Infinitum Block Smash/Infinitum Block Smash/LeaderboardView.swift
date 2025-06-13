@@ -1,11 +1,12 @@
 import SwiftUI
 import FirebaseFirestore
 import FirebaseAuth
+import GameKit
 
 struct LeaderboardView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedType: LeaderboardType = .score
-    @State private var selectedPeriod: String = "daily"
+    @State private var selectedPeriod: String = "alltime"
     @State private var leaderboardData: [FirebaseManager.LeaderboardEntry] = []
     @State private var totalUsers: Int = 0
     @State private var userPosition: Int?
@@ -14,6 +15,10 @@ struct LeaderboardView: View {
     @State private var searchText = ""
     @State private var lastUpdated: Date?
     @State private var isOffline = false
+    @State private var entries: [GKLeaderboard.Entry] = []
+    @State private var currentPage = 1
+    @State private var hasMorePages = true
+    private let pageSize = 20
     
     private let periods = ["daily", "weekly", "monthly", "alltime"]
     
@@ -46,6 +51,13 @@ struct LeaderboardView: View {
                         dismiss()
                     }
                 }
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        GameCenterManager.shared.presentGameCenterUI()
+                    }) {
+                        Image(systemName: "gamecontroller.fill")
+                    }
+                }
             }
         }
         .modifier(SheetPresentationModifier())
@@ -59,35 +71,29 @@ struct LeaderboardView: View {
                 await loadLeaderboardData()
             }
         }
+        .onChange(of: selectedPeriod) { _ in
+            resetAndLoad()
+        }
     }
     
     private var typeSelector: some View {
         Picker("Leaderboard Type", selection: $selectedType) {
             Text("High Scores").tag(LeaderboardType.score)
             Text("Achievements").tag(LeaderboardType.achievement)
+            Text("Timed").tag(LeaderboardType.timed)
         }
         .pickerStyle(SegmentedPickerStyle())
-        .padding(.horizontal)
+        .padding()
     }
     
     private var periodSelector: some View {
-        HStack {
-            ForEach(periods, id: \.self) { period in
-                Button(action: {
-                    selectedPeriod = period
-                    Task {
-                        await loadLeaderboardData()
-                    }
-                }) {
-                    Text(period.capitalized)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(selectedPeriod == period ? Color.blue : Color.gray.opacity(0.2))
-                        .foregroundColor(selectedPeriod == period ? .white : .primary)
-                        .cornerRadius(8)
-                }
-            }
+        Picker("Time Period", selection: $selectedPeriod) {
+            Text("Daily").tag("daily")
+            Text("Weekly").tag("weekly")
+            Text("Monthly").tag("monthly")
+            Text("All Time").tag("alltime")
         }
+        .pickerStyle(SegmentedPickerStyle())
         .padding(.horizontal)
     }
     
@@ -147,18 +153,18 @@ struct LeaderboardView: View {
     }
     
     private var leaderboardList: some View {
-        ScrollView {
-            LazyVStack(spacing: 8) {
-                ForEach(filteredLeaderboardData) { entry in
-                    LeaderboardRow(
-                        entry: entry,
-                        position: leaderboardData.firstIndex(where: { $0.id == entry.id }) ?? 0,
-                        isCurrentUser: entry.id == FirebaseManager.shared.currentUserId,
-                        type: selectedType
-                    )
-                }
+        List {
+            ForEach(Array(displayedLeaderboardData.enumerated()), id: \.element.id) { index, entry in
+                FirebaseLeaderboardRow(entry: entry, rank: index + 1)
             }
-            .padding(.horizontal)
+        }
+    }
+    
+    private var displayedLeaderboardData: [FirebaseManager.LeaderboardEntry] {
+        if searchText.isEmpty {
+            return Array(filteredLeaderboardData.prefix(10))
+        } else {
+            return filteredLeaderboardData
         }
     }
     
@@ -197,7 +203,11 @@ struct LeaderboardView: View {
             // Update user position
             if let userId = FirebaseManager.shared.currentUserId {
                 userPosition = entries.firstIndex(where: { $0.id == userId })
-                print("[LeaderboardView] User position in leaderboard: \(userPosition ?? -1)")
+                if let position = userPosition {
+                    print("[LeaderboardView] User position in leaderboard: \(position)")
+                } else {
+                    print("[LeaderboardView] User not found in leaderboard")
+                }
             }
             
             // Log some sample entries for debugging
@@ -235,76 +245,82 @@ struct LeaderboardView: View {
         isLoading = false
         print("[LeaderboardView] Completed leaderboard data loading")
     }
+    
+    private func resetAndLoad() {
+        currentPage = 1
+        hasMorePages = true
+        Task {
+            await loadLeaderboardData()
+        }
+    }
+    
+    private func loadMoreEntries() {
+        guard !isLoading else { return }
+        Task {
+            await loadLeaderboardData()
+        }
+    }
 }
 
-struct LeaderboardRow: View {
+struct FirebaseLeaderboardRow: View {
     let entry: FirebaseManager.LeaderboardEntry
-    let position: Int
-    let isCurrentUser: Bool
-    let type: LeaderboardType
-    
+    let rank: Int
+
+    var rankColor: Color {
+        switch rank {
+        case 1: return .yellow
+        case 2: return .gray
+        case 3: return .orange
+        default: return .primary
+        }
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                // Position
-                Text("#\(position + 1)")
+        HStack {
+            ZStack {
+                Circle()
+                    .fill(rankColor.opacity(rank <= 3 ? 0.2 : 0))
+                    .frame(width: 32, height: 32)
+                Text("\(rank)")
                     .font(.headline)
-                    .foregroundColor(positionColor)
-                    .frame(width: 40)
-                
-                // Username
+                    .foregroundColor(rankColor)
+            }
+            .frame(width: 40)
+
+            VStack(alignment: .leading) {
                 Text(entry.username)
-                    .font(.body)
-                    .foregroundColor(isCurrentUser ? .blue : .primary)
-                
-                Spacer()
-                
-                // Score/Time
-                if type == .timed, let time = entry.time {
-                    Text(formatTime(time))
-                        .font(.body)
-                        .foregroundColor(.green)
-                } else {
-                    Text("\(entry.score)")
-                        .font(.body)
-                        .foregroundColor(.primary)
-                }
-                
-                // Level (if available)
+                    .font(.headline)
                 if let level = entry.level {
-                    Text("Lvl \(level)")
+                    Text("Level \(level)")
                         .font(.caption)
                         .foregroundColor(.gray)
-                        .padding(.leading, 8)
                 }
             }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 12)
-            .background(isCurrentUser ? Color.blue.opacity(0.1) : Color.clear)
-            
-            // Divider line
-            Divider()
-                .padding(.horizontal, 12)
+
+            Spacer()
+
+            Text("\(entry.score)")
+                .font(.headline)
         }
+        .padding(.vertical, 6)
+        .background(
+            Group {
+                if rank <= 3 {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(rankColor.opacity(0.08))
+                } else {
+                    Color.clear
+                }
+            }
+        )
     }
-    
-    private var positionColor: Color {
-        switch position {
-        case 0:
-            return .yellow // Gold
-        case 1:
-            return .red // Red for second place
-        case 2:
-            return Color(red: 0.8, green: 0.5, blue: 0.2) // Bronze
-        default:
-            return .gray
-        }
-    }
-    
-    private func formatTime(_ timeInterval: TimeInterval) -> String {
-        let minutes = Int(timeInterval) / 60
-        let seconds = Int(timeInterval) % 60
-        return String(format: "%d:%02d", minutes, seconds)
+}
+
+extension GKPlayer {
+    var gameKitImage: UIImage? {
+        // This is a placeholder. In a real app, you would need to implement
+        // proper photo loading from Game Center
+        return nil
     }
 }
 
@@ -390,8 +406,4 @@ struct SheetPresentationModifier: ViewModifier {
             content
         }
     }
-}
-
-#Preview {
-    LeaderboardView()
 }

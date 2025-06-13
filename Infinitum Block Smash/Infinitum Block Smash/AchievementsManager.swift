@@ -308,6 +308,7 @@ struct Achievement: Identifiable, Codable, Equatable {
 import Foundation
 import Combine
 
+@MainActor
 class AchievementsManager: ObservableObject {
     @Published private var achievements: [String: Achievement] = [:]
     @Published var totalPoints: Int = 0
@@ -357,7 +358,9 @@ class AchievementsManager: ObservableObject {
         // Report to Game Center if achievement is unlocked
         if achievement.unlocked {
             let percentComplete = Double(achievement.progress) / Double(achievement.goal) * 100.0
-            GameCenterManager.shared.reportAchievement(id: achievement.id, percentComplete: percentComplete)
+            Task {
+                GameCenterManager.shared.reportAchievement(id: achievement.id, percentComplete: percentComplete)
+            }
         }
         
         // Sync with Firebase
