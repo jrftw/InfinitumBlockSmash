@@ -1,6 +1,7 @@
 import SwiftUI
 import FirebaseAuth
 import FirebaseFirestore
+import GameKit
 
 struct ChangeInformationView: View {
     @Environment(\.dismiss) private var dismiss
@@ -37,6 +38,10 @@ struct ChangeInformationView: View {
     @State private var linkPassword = ""
     @State private var showingLinkError = false
     @State private var linkErrorMessage = ""
+    @State private var isLinkingGameCenter = false
+    @State private var gameCenterError: Error?
+    @State private var showingGameCenterError = false
+    @State private var gameCenterErrorMessage = ""
     
     var body: some View {
         NavigationView {
@@ -169,6 +174,11 @@ struct ChangeInformationView: View {
             } message: {
                 Text(linkErrorMessage)
             }
+            .alert("Error", isPresented: $showingGameCenterError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(gameCenterErrorMessage)
+            }
             .sheet(isPresented: $showingLinkEmail) {
                 NavigationView {
                     Form {
@@ -193,6 +203,59 @@ struct ChangeInformationView: View {
                     .navigationTitle("Link Email")
                     .navigationBarItems(trailing: Button("Cancel") {
                         showingLinkEmail = false
+                    })
+                }
+            }
+            .sheet(isPresented: $showingLinkGameCenter) {
+                NavigationView {
+                    VStack(spacing: 20) {
+                        if isLinkingGameCenter {
+                            ProgressView()
+                                .scaleEffect(1.5)
+                                .padding()
+                            
+                            Text("Linking Game Center...")
+                                .font(.headline)
+                            
+                            Text("Please wait while we connect your Game Center account")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal)
+                        } else {
+                            VStack(spacing: 16) {
+                                Image(systemName: "gamecontroller.fill")
+                                    .font(.system(size: 50))
+                                    .foregroundColor(.green)
+                                
+                                Text("Link Game Center")
+                                    .font(.title2)
+                                    .bold()
+                                
+                                Text("Connect your Game Center account to sync your achievements and leaderboard progress")
+                                    .font(.body)
+                                    .foregroundColor(.secondary)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal)
+                                
+                                Button(action: linkGameCenter) {
+                                    Text("Start Linking")
+                                        .font(.headline)
+                                        .foregroundColor(.white)
+                                        .frame(maxWidth: .infinity)
+                                        .padding()
+                                        .background(Color.green)
+                                        .cornerRadius(10)
+                                }
+                                .padding(.horizontal)
+                                .padding(.top)
+                            }
+                        }
+                    }
+                    .padding()
+                    .navigationTitle("Link Game Center")
+                    .navigationBarItems(trailing: Button("Cancel") {
+                        showingLinkGameCenter = false
                     })
                 }
             }
@@ -377,7 +440,6 @@ struct ChangeInformationView: View {
                     deleteErrorMessage = "Failed to delete account: \(error.localizedDescription)"
                     showingDeleteError = true
                     isDeleting = false
-                    return
                 }
                 
                 // Sign out and dismiss the view
@@ -419,10 +481,77 @@ struct ChangeInformationView: View {
     }
     
     private func linkGameCenter() {
-        // Implement Game Center linking
-        // This would require additional Game Center integration
-        // and handling of Game Center authentication
-        showingLinkGameCenter = false
+        isLinkingGameCenter = true
+        gameCenterError = nil
+        
+        // First check if GameCenter is available
+        guard GKLocalPlayer.local.isAuthenticated else {
+            // If not authenticated, start the authentication process
+            GKLocalPlayer.local.authenticateHandler = { viewController, error in
+                if let viewController = viewController {
+                    // Present the GameCenter login UI
+                    if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                       let window = windowScene.windows.first,
+                       let rootViewController = window.rootViewController {
+                        rootViewController.present(viewController, animated: true)
+                    }
+                } else if GKLocalPlayer.local.isAuthenticated {
+                    // Successfully authenticated, proceed with linking
+                    self.linkGameCenterToFirebase()
+                } else if let error = error {
+                    // Handle authentication error
+                    self.handleGameCenterError(error)
+                }
+            }
+            return
+        }
+        
+        // If already authenticated, proceed with linking
+        linkGameCenterToFirebase()
+    }
+    
+    private func linkGameCenterToFirebase() {
+        guard let user = Auth.auth().currentUser else {
+            handleGameCenterError(NSError(domain: "Firebase", code: -1, userInfo: [NSLocalizedDescriptionKey: "No authenticated user found"]))
+            return
+        }
+        
+        GameCenterAuthProvider.getCredential { credential, error in
+            if let error = error {
+                self.handleGameCenterError(error)
+                return
+            }
+            
+            guard let credential = credential else {
+                self.handleGameCenterError(NSError(domain: "GameCenter", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to get Game Center credential"]))
+                return
+            }
+            
+            // Link the GameCenter credential to the current user
+            user.link(with: credential) { result, error in
+                if let error = error {
+                    self.handleGameCenterError(error)
+                    return
+                }
+                
+                // Successfully linked
+                DispatchQueue.main.async {
+                    self.connectionTypes.append("Game Center")
+                    self.showingLinkGameCenter = false
+                    self.showSuccess = true
+                    self.isLinkingGameCenter = false
+                }
+            }
+        }
+    }
+    
+    private func handleGameCenterError(_ error: Error) {
+        DispatchQueue.main.async {
+            self.isLinkingGameCenter = false
+            self.gameCenterError = error
+            self.gameCenterErrorMessage = error.localizedDescription
+            self.showingGameCenterError = true
+        }
     }
 }
 
