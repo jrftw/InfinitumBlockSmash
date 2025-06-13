@@ -223,8 +223,13 @@ class ThemeManager: ObservableObject {
                 window.overrideUserInterfaceStyle = .unspecified
             }
         } else {
+            // For custom themes, we need to ensure the window style is unspecified
+            // so our custom colors can take effect
             window.overrideUserInterfaceStyle = .unspecified
         }
+        
+        // Post notification to update all views
+        NotificationCenter.default.post(name: NSNotification.Name("ThemeDidChange"), object: nil)
     }
     
     func setTheme(_ theme: String) {
@@ -234,6 +239,13 @@ class ThemeManager: ObservableObject {
         } else {
             currentTheme = theme
         }
+        
+        // Save to UserDefaults immediately
+        UserDefaults.standard.set(currentTheme, forKey: "selectedTheme")
+        UserDefaults.standard.set(systemTheme, forKey: "systemTheme")
+        UserDefaults.standard.synchronize()
+        
+        // Apply the theme
         applyTheme()
     }
     

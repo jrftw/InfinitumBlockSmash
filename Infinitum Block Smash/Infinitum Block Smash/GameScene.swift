@@ -137,14 +137,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         super.didMove(to: view)
         setBackgroundAnimationsActive(true)
         
-        // Observe theme changes
-        themeObserver = NotificationCenter.default.addObserver(
-            forName: NSNotification.Name("ThemeDidChange"),
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.updateTheme()
-        }
+        // Set up notification observer for theme changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleThemeChange),
+            name: NSNotification.Name("ThemeDidChange"),
+            object: nil
+        )
+        
+        // Initial theme setup
+        updateTheme()
     }
     
     override func willMove(from view: SKView) {
@@ -176,6 +178,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             particleEmitter = nil
             glowNode = nil
         }
+        
+        NotificationCenter.default.removeObserver(self)
     }
     
     private func setupScene() {
@@ -1243,28 +1247,57 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func updateTheme() {
+        // Get the current theme
+        let theme = ThemeManager.shared.getCurrentTheme()
+        
         // Update grid appearance
         if let gridBackground = gridNode.childNode(withName: "gridBackground") as? SKShapeNode {
-            let theme = ThemeManager.shared.getCurrentTheme()
             gridBackground.fillColor = SKColor.from(theme.colors.background)
         }
         
         // Update grid lines
         gridNode.children.forEach { node in
             if node.name == "gridLine", let line = node as? SKShapeNode {
-                let theme = ThemeManager.shared.getCurrentTheme()
                 line.fillColor = SKColor.from(theme.colors.secondary)
             }
         }
         
         // Update debug border if present
         if let debugBorder = gridNode.childNode(withName: "debugBorder") as? SKShapeNode {
-            let theme = ThemeManager.shared.getCurrentTheme()
             debugBorder.strokeColor = SKColor.from(theme.colors.primary)
         }
         
-        // Redraw blocks with new theme colors
+        // Update all blocks with new theme colors
+        gridNode.children.forEach { node in
+            if let blockNode = node as? SKShapeNode, blockNode.name?.hasPrefix("block_") == true {
+                // Update block appearance based on the current theme
+                if let block = gameState.grid[Int(blockNode.name!.split(separator: "_")[1])!][Int(blockNode.name!.split(separator: "_")[2])!] {
+                    // Update gradient fill
+                    let colors = [block.gradientColors.start, block.gradientColors.end]
+                    let locations: [CGFloat] = [0.0, 1.0]
+                    if let gradientImage = createGradientImage(size: CGSize(width: GameConstants.blockSize, height: GameConstants.blockSize),
+                                                             colors: colors,
+                                                             locations: locations) {
+                        blockNode.fillTexture = SKTexture(image: gradientImage)
+                        blockNode.fillColor = .white
+                    } else {
+                        blockNode.fillColor = SKColor.from(Color(cgColor: block.gradientColors.start))
+                    }
+                    
+                    // Update shadow
+                    if let shadowNode = blockNode.children.first(where: { $0.zPosition == -1 }) as? SKShapeNode {
+                        shadowNode.fillColor = UIColor(cgColor: block.shadowColor)
+                    }
+                }
+            }
+        }
+        
+        // Redraw grid to ensure all elements are updated
         renderGrid(gridNode: gridNode, gameState: gameState, blockSize: GameConstants.blockSize)
+    }
+    
+    @objc private func handleThemeChange() {
+        updateTheme()
     }
     
     private func cleanupParticleEffects() {

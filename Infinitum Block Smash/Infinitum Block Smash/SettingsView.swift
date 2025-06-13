@@ -40,7 +40,6 @@ private struct GameSettingsSection: View {
     @State private var hasEliteAccess = false
     @State private var unlockedThemes: Set<String> = []
     @AppStorage("selectedLanguage") private var selectedLanguage = Locale.current.languageCode ?? "en"
-    @State private var systemTheme: String = UserDefaults.standard.string(forKey: "systemTheme") ?? "auto"
     
     private let availableLanguages = [
         ("en", "English"),
@@ -75,36 +74,7 @@ private struct GameSettingsSection: View {
     }
     
     var body: some View {
-        Section(header: Text(NSLocalizedString("Game Settings", comment: "Settings section header"))) {
-            // Language Picker
-            Picker(NSLocalizedString("Language", comment: "Language picker label"), selection: $selectedLanguage) {
-                ForEach(availableLanguages, id: \.0) { code, name in
-                    Text(name).tag(code)
-                }
-            }
-            .onChange(of: selectedLanguage) { newValue in
-                // Update the app's language
-                UserDefaults.standard.set([newValue], forKey: "AppleLanguages")
-                UserDefaults.standard.synchronize()
-                
-                // Show alert to restart app
-                let alert = UIAlertController(
-                    title: NSLocalizedString("Language Changed", comment: "Language change alert title"),
-                    message: NSLocalizedString("Please restart the app for the language change to take effect.", comment: "Language change alert message"),
-                    preferredStyle: .alert
-                )
-                alert.addAction(UIAlertAction(
-                    title: NSLocalizedString("OK", comment: "OK button"),
-                    style: .default
-                ))
-                
-                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                   let viewController = windowScene.windows.first?.rootViewController {
-                    viewController.present(alert, animated: true)
-                }
-            }
-            
-            // Unified Theme Picker
+        Section(header: Text(NSLocalizedString("Game Settings", comment: "Game settings section header"))) {
             Picker(NSLocalizedString("Theme", comment: "Theme picker label"), selection: $theme) {
                 // System themes
                 Text(NSLocalizedString("Auto", comment: "Auto theme option")).tag("auto")
