@@ -58,7 +58,7 @@
       ".read": true,
       "players_today": {
         ".write": "auth != null",
-        ".validate": "newData.isNumber()"
+        ".validate": "newData.isNumber() && newData.val() >= 0"
       },
       "last_reset": {
         ".write": "auth != null",

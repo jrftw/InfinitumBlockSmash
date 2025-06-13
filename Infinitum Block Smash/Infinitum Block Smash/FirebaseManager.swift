@@ -183,19 +183,36 @@ class FirebaseManager: ObservableObject {
         }
         do {
             print("[FirebaseManager] Updating lastActive for current user: \(userId)")
+            
+            // Update Firestore
             try await db.collection("users").document(userId).updateData([
                 "lastActive": FieldValue.serverTimestamp()
             ])
-            print("[FirebaseManager] Successfully updated lastActive for current user")
             
-            // Also update RTDB for real-time presence
+            // Update RTDB for real-time presence
             try await rtdb.child("online_users").child(userId).setValue(true)
             
-            // Verify the update
-            let doc = try await db.collection("users").document(userId).getDocument()
-            if let lastActive = doc.data()?["lastActive"] as? Timestamp {
-                print("[FirebaseManager] Verified lastActive timestamp: \(lastActive.dateValue())")
+            // Update daily stats
+            let calendar = Calendar.current
+            let lastResetSnapshot = try await rtdb.child("daily_stats").child("last_reset").getData()
+            
+            if let lastResetTimestamp = lastResetSnapshot.value as? TimeInterval {
+                let lastResetDate = Date(timeIntervalSince1970: lastResetTimestamp)
+                if !calendar.isDate(lastResetDate, inSameDayAs: Date()) {
+                    // Reset the count for the new day
+                    try await resetDailyPlayersCount()
+                } else {
+                    // Increment the daily players count
+                    let currentCount = try await rtdb.child("daily_stats").child("players_today").getData()
+                    if let count = currentCount.value as? Int {
+                        try await rtdb.child("daily_stats").child("players_today").setValue(count + 1)
+                    } else {
+                        try await rtdb.child("daily_stats").child("players_today").setValue(1)
+                    }
+                }
             }
+            
+            print("[FirebaseManager] Successfully updated lastActive and presence for current user")
         } catch {
             print("[FirebaseManager] Error updating lastActive: \(error)")
         }
@@ -593,11 +610,24 @@ class FirebaseManager: ObservableObject {
             // First try to get from RTDB for faster response
             let rtdbSnapshot = try await rtdb.child("daily_stats").child("players_today").getData()
             if let count = rtdbSnapshot.value as? Int {
+                // Check if the count needs to be reset (if it's from a previous day)
+                let lastResetSnapshot = try await rtdb.child("daily_stats").child("last_reset").getData()
+                if let lastResetTimestamp = lastResetSnapshot.value as? TimeInterval {
+                    let lastResetDate = Date(timeIntervalSince1970: lastResetTimestamp)
+                    if !calendar.isDate(lastResetDate, inSameDayAs: Date()) {
+                        // Reset the count for the new day
+                        print("[FirebaseManager] Resetting daily players count for new day")
+                        try await resetDailyPlayersCount()
+                        return 0
+                    }
+                }
+                
                 print("[FirebaseManager] Got daily players count from RTDB: \(count)")
                 return count
             }
             
             // Fallback to Firestore if RTDB doesn't have the data
+            print("[FirebaseManager] Falling back to Firestore for daily players count")
             let query = db.collection("users")
                 .whereField("lastActive", isGreaterThan: startOfDayTimestamp)
             
@@ -605,8 +635,9 @@ class FirebaseManager: ObservableObject {
             let count = Int(truncating: snapshot.count)
             print("[FirebaseManager] Daily players count from Firestore: \(count)")
             
-            // Update RTDB with the count
+            // Update RTDB with the count and last reset time
             try await rtdb.child("daily_stats").child("players_today").setValue(count)
+            try await rtdb.child("daily_stats").child("last_reset").setValue(Date().timeIntervalSince1970)
             
             return count
         } catch {
@@ -616,9 +647,16 @@ class FirebaseManager: ObservableObject {
         }
     }
     
+    private func resetDailyPlayersCount() async throws {
+        print("[FirebaseManager] Resetting daily players count")
+        try await rtdb.child("daily_stats").child("players_today").setValue(0)
+        try await rtdb.child("daily_stats").child("last_reset").setValue(Date().timeIntervalSince1970)
+    }
+    
     func getOnlineUsersCount() async throws -> Int {
-        let fiveMinutesAgo = Timestamp(date: Date().addingTimeInterval(-300))
-        print("[FirebaseManager] Getting online users count since: \(fiveMinutesAgo.dateValue())")
+        // Increase online window to 15 minutes
+        let fifteenMinutesAgo = Timestamp(date: Date().addingTimeInterval(-900))
+        print("[FirebaseManager] Getting online users count since: \(fifteenMinutesAgo.dateValue())")
         
         do {
             // First try to get from RTDB for faster response
@@ -630,19 +668,41 @@ class FirebaseManager: ObservableObject {
             }
             
             // Fallback to Firestore if RTDB doesn't have the data
+            print("[FirebaseManager] Falling back to Firestore for online users count")
             let snapshot = try await db.collection("users")
-                .whereField("lastActive", isGreaterThan: fiveMinutesAgo)
+                .whereField("lastActive", isGreaterThan: fifteenMinutesAgo)
                 .count
                 .getAggregation(source: .server)
             
             let count = Int(truncating: snapshot.count)
             print("[FirebaseManager] Online users count from Firestore: \(count)")
+            
+            // Update RTDB with the count
+            try await updateOnlineUsersInRTDB(count)
+            
             return count
         } catch {
             print("[FirebaseManager] Error getting online users count: \(error)")
-            // Return 0 if there's an error, but log it
             return 0
         }
+    }
+    
+    private func updateOnlineUsersInRTDB(_ count: Int) async throws {
+        print("[FirebaseManager] Updating online users count in RTDB: \(count)")
+        // Get all users who have been active in the last 15 minutes
+        let fifteenMinutesAgo = Timestamp(date: Date().addingTimeInterval(-900))
+        let snapshot = try await db.collection("users")
+            .whereField("lastActive", isGreaterThan: fifteenMinutesAgo)
+            .getDocuments()
+        
+        // Create a dictionary of online users
+        var onlineUsers: [String: Bool] = [:]
+        for document in snapshot.documents {
+            onlineUsers[document.documentID] = true
+        }
+        
+        // Update RTDB
+        try await rtdb.child("online_users").setValue(onlineUsers)
     }
     
     // MARK: - Leaderboard
