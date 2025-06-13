@@ -70,8 +70,8 @@ final class GameState: ObservableObject {
     private let traySize = 3
     
     private let userDefaults = UserDefaults.standard
-    private let scoreKey = "highScore"
-    private let levelKey = "highestLevel"
+    private let scoreKey = "personalHighScore"  // Changed from "highScore" to be more specific
+    private let levelKey = "personalHighestLevel"  // Changed from "highestLevel" to be more specific
     private let progressKey = "gameProgress"
     private let hasSavedGameKey = "hasSavedGame"
     
@@ -180,9 +180,19 @@ final class GameState: ObservableObject {
         // Run data migration if needed
         GameDataVersion.migrateIfNeeded()
         
-        // Load high score from UserDefaults first
+        // Load personal high score and highest level from UserDefaults
         highScore = userDefaults.integer(forKey: scoreKey)
         highestLevel = userDefaults.integer(forKey: levelKey)
+        
+        // If no values exist yet, initialize them
+        if highScore == 0 {
+            highScore = 0
+            userDefaults.set(highScore, forKey: scoreKey)
+        }
+        if highestLevel == 0 {
+            highestLevel = 1
+            userDefaults.set(highestLevel, forKey: levelKey)
+        }
         
         // Load other statistics
         loadStatistics()
@@ -1018,53 +1028,12 @@ final class GameState: ObservableObject {
         
         achievementsManager.updateAchievement(id: "score_1000", value: temporaryScore)
         
-        // Update high scores locally and check against leaderboard
+        // Update personal high score
         if temporaryScore > highScore {
             highScore = temporaryScore
             userDefaults.set(highScore, forKey: scoreKey)
             achievementsManager.updateAchievement(id: "high_score", value: temporaryScore)
-            print("[HighScore] New all-time high score: \(temporaryScore)")
-            
-            // Update high score achievement
-            achievementsManager.increment(id: "high_score")
-            
-            // Check if this is a new leaderboard high score
-            if temporaryScore > leaderboardHighScore {
-                Task {
-                    // Check network connectivity first
-                    guard NetworkMonitor.shared.isConnected else {
-                        print("[Leaderboard] No internet connection - will retry later")
-                        return
-                    }
-                    
-                    // Check if user is authenticated
-                    guard Auth.auth().currentUser != nil else {
-                        print("[Leaderboard] User not authenticated - will retry later")
-                        return
-                    }
-                    
-                    do {
-                        print("[Leaderboard] Updating leaderboard with new high score: \(temporaryScore)")
-                        try await LeaderboardService.shared.updateLeaderboard(
-                            score: temporaryScore,
-                            level: level,
-                            type: .score
-                        )
-                        print("[Leaderboard] Successfully updated leaderboard with new high score")
-                        
-                        // Refresh leaderboard high score
-                        await fetchLeaderboardHighScore()
-                        
-                        // Update Game Center leaderboard
-                        GameCenterManager.shared.submitScore(temporaryScore, for: .score, period: "alltime")
-                    } catch {
-                        print("[Leaderboard] Error updating leaderboard: \(error.localizedDescription)")
-                        // Store the score for later update
-                        let pendingScore = PendingScore(score: temporaryScore, timestamp: Date())
-                        userDefaults.set(try? JSONEncoder().encode(pendingScore), forKey: "pendingLeaderboardScore")
-                    }
-                }
-            }
+            print("[HighScore] New personal high score: \(temporaryScore)")
         }
         
         // Update level high score
@@ -1183,10 +1152,15 @@ final class GameState: ObservableObject {
         setSeed(for: level)
         grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
         tray = []
-        if level > userDefaults.integer(forKey: levelKey) {
+        
+        // Update personal highest level
+        if level > highestLevel {
+            highestLevel = level
+            userDefaults.set(highestLevel, forKey: levelKey)
             achievementsManager.updateAchievement(id: "highest_level", value: level)
-            achievementsManager.increment(id: "highest_level")
+            print("[Level] New personal highest level: \(level)")
         }
+        
         let availableShapes = BlockShape.availableShapes(for: level)
         print("[Level] Level \(level) - Available shapes: \(availableShapes.map { String(describing: $0) }.joined(separator: ", "))")
         refillTray()
@@ -1243,11 +1217,11 @@ final class GameState: ObservableObject {
         // Update the actual score with the temporary score
         score = temporaryScore
         
-        // Update high score if needed
+        // Update personal high score if needed
         if score > highScore {
             highScore = score
-            UserDefaults.standard.set(highScore, forKey: "highScore")
-            print("[GameState] 🏆 New High Score: \(highScore)")
+            userDefaults.set(highScore, forKey: scoreKey)
+            print("[GameState] 🏆 New Personal High Score: \(highScore)")
         }
         
         // Update leaderboard only if not a guest user

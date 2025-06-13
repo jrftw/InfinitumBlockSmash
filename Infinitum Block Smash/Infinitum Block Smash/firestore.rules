@@ -47,7 +47,18 @@ service cloud.firestore {
       // Progress subcollection
       match /progress/{progressId} {
         allow read: if isAuthenticated() && hasValidAppCheck();
-        allow write: if isOwner(userId) && hasValidAppCheck();
+        allow write: if isOwner(userId) && hasValidAppCheck() &&
+          request.resource.data.keys().hasAll(['score', 'level', 'blocksPlaced', 'linesCleared', 'gamesCompleted', 'perfectLevels', 'totalPlayTime', 'personalHighScore', 'personalHighestLevel', 'lastSaveTime']) &&
+          request.resource.data.score is number && request.resource.data.score >= 0 &&
+          request.resource.data.level is number && request.resource.data.level >= 1 &&
+          request.resource.data.blocksPlaced is number && request.resource.data.blocksPlaced >= 0 &&
+          request.resource.data.linesCleared is number && request.resource.data.linesCleared >= 0 &&
+          request.resource.data.gamesCompleted is number && request.resource.data.gamesCompleted >= 0 &&
+          request.resource.data.perfectLevels is number && request.resource.data.perfectLevels >= 0 &&
+          request.resource.data.totalPlayTime is number && request.resource.data.totalPlayTime >= 0 &&
+          request.resource.data.personalHighScore is number && request.resource.data.personalHighScore >= 0 &&
+          request.resource.data.personalHighestLevel is number && request.resource.data.personalHighestLevel >= 1 &&
+          request.resource.data.lastSaveTime is number;
       }
     }
 

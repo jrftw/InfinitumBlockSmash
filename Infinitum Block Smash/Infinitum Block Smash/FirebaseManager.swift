@@ -164,8 +164,8 @@ class FirebaseManager: ObservableObject {
     }
     
     private func startLastActiveUpdates() {
-        // Update lastActive every 2 minutes
-        lastActiveUpdateTimer = Timer.scheduledTimer(withTimeInterval: 120, repeats: true) { [weak self] _ in
+        // Update lastActive every 30 seconds instead of 2 minutes
+        lastActiveUpdateTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             Task {
                 await self?.updateLastActive()
             }
@@ -187,6 +187,9 @@ class FirebaseManager: ObservableObject {
                 "lastActive": FieldValue.serverTimestamp()
             ])
             print("[FirebaseManager] Successfully updated lastActive for current user")
+            
+            // Also update RTDB for real-time presence
+            try await rtdb.child("online_users").child(userId).setValue(true)
             
             // Verify the update
             let doc = try await db.collection("users").document(userId).getDocument()
@@ -587,12 +590,24 @@ class FirebaseManager: ObservableObject {
         print("[FirebaseManager] Getting daily players count since: \(startOfDay)")
         
         do {
+            // First try to get from RTDB for faster response
+            let rtdbSnapshot = try await rtdb.child("daily_stats").child("players_today").getData()
+            if let count = rtdbSnapshot.value as? Int {
+                print("[FirebaseManager] Got daily players count from RTDB: \(count)")
+                return count
+            }
+            
+            // Fallback to Firestore if RTDB doesn't have the data
             let query = db.collection("users")
                 .whereField("lastActive", isGreaterThan: startOfDayTimestamp)
             
             let snapshot = try await query.count.getAggregation(source: .server)
             let count = Int(truncating: snapshot.count)
-            print("[FirebaseManager] Daily players count: \(count)")
+            print("[FirebaseManager] Daily players count from Firestore: \(count)")
+            
+            // Update RTDB with the count
+            try await rtdb.child("daily_stats").child("players_today").setValue(count)
+            
             return count
         } catch {
             print("[FirebaseManager] Error getting daily players count: \(error)")
@@ -606,13 +621,22 @@ class FirebaseManager: ObservableObject {
         print("[FirebaseManager] Getting online users count since: \(fiveMinutesAgo.dateValue())")
         
         do {
+            // First try to get from RTDB for faster response
+            let rtdbSnapshot = try await rtdb.child("online_users").getData()
+            if let onlineUsers = rtdbSnapshot.value as? [String: Bool] {
+                let count = onlineUsers.filter { $0.value }.count
+                print("[FirebaseManager] Got online users count from RTDB: \(count)")
+                return count
+            }
+            
+            // Fallback to Firestore if RTDB doesn't have the data
             let snapshot = try await db.collection("users")
                 .whereField("lastActive", isGreaterThan: fiveMinutesAgo)
                 .count
                 .getAggregation(source: .server)
             
             let count = Int(truncating: snapshot.count)
-            print("[FirebaseManager] Online users count: \(count)")
+            print("[FirebaseManager] Online users count from Firestore: \(count)")
             return count
         } catch {
             print("[FirebaseManager] Error getting online users count: \(error)")
@@ -950,9 +974,21 @@ class FirebaseManager: ObservableObject {
                 return GameProgress() // Return empty progress if no data exists
             }
             
-            guard let progress = GameProgress(dictionary: data) else {
-                throw NSError(domain: "FirebaseManager", code: -2, userInfo: [NSLocalizedDescriptionKey: "Invalid progress data"])
-            }
+            // Create progress object with personal high score and highest level
+            let progress = GameProgress(
+                score: data["score"] as? Int ?? 0,
+                level: data["level"] as? Int ?? 1,
+                blocksPlaced: data["blocksPlaced"] as? Int ?? 0,
+                linesCleared: data["linesCleared"] as? Int ?? 0,
+                gamesCompleted: data["gamesCompleted"] as? Int ?? 0,
+                perfectLevels: data["perfectLevels"] as? Int ?? 0,
+                totalPlayTime: data["totalPlayTime"] as? Double ?? 0,
+                highScore: data["personalHighScore"] as? Int ?? 0,  // Changed from highScore to personalHighScore
+                highestLevel: data["personalHighestLevel"] as? Int ?? 1,  // Changed from highestLevel to personalHighestLevel
+                grid: data["grid"] as? [[String]] ?? Array(repeating: Array(repeating: "nil", count: GameConstants.gridSize), count: GameConstants.gridSize),
+                tray: [],  // Tray is not stored in Firebase
+                lastSaveTime: (data["lastSaveTime"] as? Timestamp)?.dateValue() ?? Date()
+            )
             
             return progress
         } catch {
@@ -971,16 +1007,20 @@ class FirebaseManager: ObservableObject {
         progressData["lastUpdate"] = Date().timeIntervalSince1970
         progressData["lastSaveTime"] = Date().timeIntervalSince1970
         
+        // Ensure we're using the correct keys for personal high score and highest level
+        progressData["personalHighScore"] = progress.highScore
+        progressData["personalHighestLevel"] = progress.highestLevel
+        
         // Save to Firestore
         let firestoreRef = db.collection("users").document(userId)
             .collection("progress")
-            .document("current")
+            .document("data")
         try await firestoreRef.setData(progressData, merge: true)
         
         // Save to RTDB for real-time sync
         let rtdbRef = rtdb.child("users").child(userId)
             .child("progress")
-            .child("current")  // Add "current" to match Firestore structure
+            .child("data")
         try await rtdbRef.setValue(progressData)
         
         print("[Firebase] Game progress saved for user: \(userId)")
@@ -1007,9 +1047,9 @@ class FirebaseManager: ObservableObject {
                 cacheGameProgress(cloudProgress)
                 cachedProgress = cloudProgress
                 
-                // Update UserDefaults
-                UserDefaults.standard.set(cloudProgress.highScore, forKey: "highScore")
-                UserDefaults.standard.set(cloudProgress.highestLevel, forKey: "highestLevel")
+                // Update UserDefaults with personal high score and highest level
+                UserDefaults.standard.set(cloudProgress.highScore, forKey: "personalHighScore")
+                UserDefaults.standard.set(cloudProgress.highestLevel, forKey: "personalHighestLevel")
                 UserDefaults.standard.set(cloudProgress.lastSaveTime, forKey: "lastSaveTime")
                 UserDefaults.standard.synchronize()
             }
@@ -1018,9 +1058,9 @@ class FirebaseManager: ObservableObject {
             cacheGameProgress(cloudProgress)
             cachedProgress = cloudProgress
             
-            // Update UserDefaults
-            UserDefaults.standard.set(cloudProgress.highScore, forKey: "highScore")
-            UserDefaults.standard.set(cloudProgress.highestLevel, forKey: "highestLevel")
+            // Update UserDefaults with personal high score and highest level
+            UserDefaults.standard.set(cloudProgress.highScore, forKey: "personalHighScore")
+            UserDefaults.standard.set(cloudProgress.highestLevel, forKey: "personalHighestLevel")
             UserDefaults.standard.set(cloudProgress.lastSaveTime, forKey: "lastSaveTime")
             UserDefaults.standard.synchronize()
         }
