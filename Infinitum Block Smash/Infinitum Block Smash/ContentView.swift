@@ -22,6 +22,7 @@ struct ContentView: View {
     @StateObject private var authViewModel = AuthViewModel()
     @State private var onlineUsersCount = 0
     @State private var dailyPlayersCount = 0
+    @State private var showingGameModeSelection = false
     
     var isLoggedIn: Bool {
         !userID.isEmpty && (!username.isEmpty || isGuest)
@@ -86,27 +87,9 @@ struct ContentView: View {
                             }
                         }
                         
-                        // Game Modes Menu
-                        MenuButton(title: "Game Modes", icon: "gamecontroller.fill") {
-                            // Show game modes menu
-                            let alert = UIAlertController(title: "Select Game Mode", message: nil, preferredStyle: .actionSheet)
-                            
-                            alert.addAction(UIAlertAction(title: "Classic", style: .default) { _ in
-                                UserDefaults.standard.set(false, forKey: "isTimedMode")
-                                showingGameView = true
-                            })
-                            
-                            alert.addAction(UIAlertAction(title: "Classic Timed", style: .default) { _ in
-                                UserDefaults.standard.set(true, forKey: "isTimedMode")
-                                showingClassicTimedView = true
-                            })
-                            
-                            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-                            
-                            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                               let viewController = windowScene.windows.first?.rootViewController {
-                                viewController.present(alert, animated: true)
-                            }
+                        // Play Button (replaces Game Modes)
+                        MenuButton(title: "Play", icon: "gamecontroller.fill") {
+                            showingGameModeSelection = true
                         }
                         
                         MenuButton(title: "Leaderboard", icon: "trophy.fill") {
@@ -224,6 +207,20 @@ struct ContentView: View {
             Button("Cancel", role: .cancel) { }
         } message: {
             Text("Sign in or create an account to view the leaderboard")
+        }
+        .fullScreenCover(isPresented: $showingGameModeSelection) {
+            GameModeSelectionView(
+                onClassic: {
+                    UserDefaults.standard.set(false, forKey: "isTimedMode")
+                    showingGameModeSelection = false
+                    showingGameView = true
+                },
+                onClassicTimed: {
+                    UserDefaults.standard.set(true, forKey: "isTimedMode")
+                    showingGameModeSelection = false
+                    showingClassicTimedView = true
+                }
+            )
         }
     }
     
