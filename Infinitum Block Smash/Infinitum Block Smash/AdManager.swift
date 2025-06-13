@@ -8,32 +8,16 @@ struct AdConfig {
     static let interstitialAdUnitID = "ca-app-pub-6815311336585204/3176321467"
     static let rewardedAdUnitID = "ca-app-pub-6815311336585204/5802484807"
     
-    static let testBannerAdUnitID = "ca-app-pub-3940256099942544/2934735716"
-    static let testInterstitialAdUnitID = "ca-app-pub-3940256099942544/4411468910"
-    static let testRewardedAdUnitID = "ca-app-pub-3940256099942544/1712485313"
-    
-    static func shouldShowTestAds() -> Bool {
-        #if DEBUG
-        return true
-        #else
-        // Check if running in TestFlight
-        if Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt" {
-            return true
-        }
-        return false
-        #endif
-    }
-    
     static func getBannerAdUnitID() -> String {
-        return shouldShowTestAds() ? testBannerAdUnitID : bannerAdUnitID
+        return bannerAdUnitID
     }
     
     static func getInterstitialAdUnitID() -> String {
-        return shouldShowTestAds() ? testInterstitialAdUnitID : interstitialAdUnitID
+        return interstitialAdUnitID
     }
     
     static func getRewardedAdUnitID() -> String {
-        return shouldShowTestAds() ? testRewardedAdUnitID : rewardedAdUnitID
+        return rewardedAdUnitID
     }
 }
 
@@ -44,10 +28,13 @@ class AdManager: NSObject, ObservableObject {
     @Published private(set) var bannerAd: BannerView?
     @Published private(set) var interstitialAd: InterstitialAd?
     @Published private(set) var rewardedInterstitialAd: RewardedInterstitialAd?
+    @Published private(set) var fallbackInterstitialAd: InterstitialAd?
+    @Published private(set) var fallbackRewardedAd: RewardedInterstitialAd?
     @Published private(set) var isTopThreePlayer = false
     @Published var adDidDismiss = false
     @Published var isAdLoading = false
     @Published var adLoadFailed = false
+    @Published var isLoadingIndicatorVisible = false
     
     // Add new state tracking properties
     @Published private(set) var adState: AdState = .idle
@@ -57,8 +44,8 @@ class AdManager: NSObject, ObservableObject {
     @Published private(set) var adsWatchedThisGame: Int = 0
     
     // Add ad frequency control
-    private let minimumTimeBetweenAds: TimeInterval = 60 // 1 minute
-    private let maximumAdsPerGame: Int = 5
+    private let minimumTimeBetweenAds: TimeInterval = 45 // Reduced to 45 seconds
+    private let maximumAdsPerGame: Int = 8 // Increased to 8 ads per game
     private let maximumAdLoadAttempts: Int = 3
     private let adLoadTimeout: TimeInterval = 10 // 10 seconds timeout for ad loading
     
@@ -80,19 +67,18 @@ class AdManager: NSObject, ObservableObject {
     }
     
     private let subscriptionManager = SubscriptionManager.shared
-    private let bannerAdUnitID = "ca-app-pub-3940256099942544/2934735716" // Test ID
-    private let interstitialAdUnitID = "ca-app-pub-3940256099942544/4411468910" // Test ID
-    private let rewardedInterstitialAdUnitID = "ca-app-pub-3940256099942544/1712485313" // Test ID
+    private let bannerAdUnitID = AdConfig.getBannerAdUnitID()
+    private let interstitialAdUnitID = AdConfig.getInterstitialAdUnitID()
+    private let rewardedInterstitialAdUnitID = AdConfig.getRewardedAdUnitID()
     
     private override init() {
         super.init()
         // Initialize the Google Mobile Ads SDK
         MobileAds.shared.start(completionHandler: { [weak self] (status: InitializationStatus) in
-            // Handle initialization status if needed
             print("Google Mobile Ads SDK initialization status: \(status)")
-            // Load initial ads after SDK is initialized
+            // Preload all ad types after SDK is initialized
             Task { @MainActor [weak self] in
-                await self?.preloadBanner()
+                await self?.preloadAllAds()
             }
         })
     }
@@ -108,6 +94,50 @@ class AdManager: NSObject, ObservableObject {
             }
         } catch {
             print("[AdManager] Error checking top three status: \(error.localizedDescription)")
+        }
+    }
+    
+    // MARK: - Ad Preloading
+    
+    private func preloadAllAds() async {
+        await preloadBanner()
+        await preloadInterstitial()
+        await preloadRewardedInterstitial()
+    }
+    
+    private func preloadInterstitial() async {
+        guard await shouldShowAds() else { return }
+        
+        do {
+            let request = Request()
+            try await withTimeout(seconds: adLoadTimeout) {
+                self.interstitialAd = try await InterstitialAd.load(with: AdConfig.getInterstitialAdUnitID(), request: request)
+                self.interstitialAd?.fullScreenContentDelegate = self
+                
+                // Load fallback ad
+                self.fallbackInterstitialAd = try await InterstitialAd.load(with: AdConfig.getInterstitialAdUnitID(), request: request)
+                self.fallbackInterstitialAd?.fullScreenContentDelegate = self
+            }
+        } catch {
+            print("Failed to preload interstitial ads: \(error.localizedDescription)")
+        }
+    }
+    
+    private func preloadRewardedInterstitial() async {
+        guard await shouldShowAds() else { return }
+        
+        do {
+            let request = Request()
+            try await withTimeout(seconds: adLoadTimeout) {
+                self.rewardedInterstitialAd = try await RewardedInterstitialAd.load(with: AdConfig.getRewardedAdUnitID(), request: request)
+                self.rewardedInterstitialAd?.fullScreenContentDelegate = self
+                
+                // Load fallback ad
+                self.fallbackRewardedAd = try await RewardedInterstitialAd.load(with: AdConfig.getRewardedAdUnitID(), request: request)
+                self.fallbackRewardedAd?.fullScreenContentDelegate = self
+            }
+        } catch {
+            print("Failed to preload rewarded interstitial ads: \(error.localizedDescription)")
         }
     }
     
@@ -247,14 +277,27 @@ class AdManager: NSObject, ObservableObject {
         let shouldShow = await shouldShowAds()
         guard shouldShow else { return }
         
+        isLoadingIndicatorVisible = true
+        
         if let ad = interstitialAd {
             adState = .showing
             ad.present(from: root)
             lastAdShownTime = Date()
             adsWatchedThisGame += 1
+            // Preload next ad
+            await preloadInterstitial()
+        } else if let fallbackAd = fallbackInterstitialAd {
+            adState = .showing
+            fallbackAd.present(from: root)
+            lastAdShownTime = Date()
+            adsWatchedThisGame += 1
+            // Preload next ad
+            await preloadInterstitial()
         } else {
             await loadInterstitial()
         }
+        
+        isLoadingIndicatorVisible = false
     }
     
     // MARK: - Rewarded Interstitial Ads
@@ -300,13 +343,25 @@ class AdManager: NSObject, ObservableObject {
         let shouldShow = await shouldShowAds()
         guard shouldShow else { return }
         
+        isLoadingIndicatorVisible = true
+        
         if let ad = rewardedInterstitialAd {
             ad.present(from: root) {
                 onReward()
             }
+            // Preload next ad
+            await preloadRewardedInterstitial()
+        } else if let fallbackAd = fallbackRewardedAd {
+            fallbackAd.present(from: root) {
+                onReward()
+            }
+            // Preload next ad
+            await preloadRewardedInterstitial()
         } else {
             await loadRewardedInterstitial()
         }
+        
+        isLoadingIndicatorVisible = false
     }
     
     // MARK: - Improved Cleanup
@@ -329,6 +384,21 @@ class AdManager: NSObject, ObservableObject {
             adState = .idle
             adError = nil
         }
+    }
+    
+    // MARK: - Error Handling
+    
+    private func handleAdError(_ error: Error) {
+        adError = .loadFailed
+        adLoadFailed = true
+        isLoadingIndicatorVisible = false
+        
+        // Show user-friendly error message
+        NotificationCenter.default.post(
+            name: NSNotification.Name("AdLoadError"),
+            object: nil,
+            userInfo: ["message": "Unable to load ad. Please try again later."]
+        )
     }
 }
 

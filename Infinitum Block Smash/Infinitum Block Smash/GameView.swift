@@ -192,6 +192,28 @@ struct GameView: View {
                 .padding()
                 .transition(.move(edge: .top))
             }
+            
+            // Ad loading indicator
+            if adManager.isLoadingIndicatorVisible {
+                VStack {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle())
+                        .scaleEffect(1.5)
+                    Text("Loading Ad...")
+                        .foregroundColor(.white)
+                        .padding(.top, 8)
+                }
+                .padding()
+                .background(Color.black.opacity(0.7))
+                .cornerRadius(12)
+            }
+        }
+        .alert("Ad Error", isPresented: $adManager.adLoadFailed) {
+            Button("OK", role: .cancel) {
+                adManager.adLoadFailed = false
+            }
+        } message: {
+            Text("Unable to load ad. Please try again later.")
         }
         .sheet(isPresented: $showingSettings) {
             if isSettingsLoading {

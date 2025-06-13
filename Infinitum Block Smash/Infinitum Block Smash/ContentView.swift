@@ -23,6 +23,7 @@ struct ContentView: View {
     @State private var onlineUsersCount = 0
     @State private var dailyPlayersCount = 0
     @State private var showingGameModeSelection = false
+    @State private var isTopThreePlayer = false
     
     var isLoggedIn: Bool {
         !userID.isEmpty && (!username.isEmpty || isGuest)
@@ -136,6 +137,15 @@ struct ContentView: View {
             } else {
                 AuthView()
             }
+            
+            VStack {
+                Spacer()
+                if !isTopThreePlayer {
+                    BannerAdView()
+                        .frame(height: 50)
+                        .background(Color.black.opacity(0.1))
+                }
+            }
         }
         .onAppear {
             // Connect GameState to SceneDelegate
@@ -157,6 +167,11 @@ struct ContentView: View {
             
             setupOnlineUsersTracking()
             setupDailyPlayersTracking()
+            
+            // Check top three status when view appears
+            Task {
+                await AdManager.shared.checkTopThreeStatus()
+            }
         }
         .onDisappear {
             cleanup()

@@ -1436,6 +1436,26 @@ final class GameState: ObservableObject {
     
     func gameOver() {
         isGameOver = true
+        delegate?.gameStateDidUpdate()
+        
+        // Show interstitial ad when game is over
+        Task {
+            if await AdManager.shared.isAdAvailable() {
+                await AdManager.shared.showInterstitial()
+            }
+        }
+        
+        // Save high score if needed
+        if score > highScore {
+            highScore = score
+            UserDefaults.standard.set(highScore, forKey: "highScore")
+        }
+        
+        // Update achievements
+        achievementsManager.updateAchievement(id: "score_1000", value: score)
+        achievementsManager.updateAchievement(id: "score_5000", value: score)
+        achievementsManager.updateAchievement(id: "score_10000", value: score)
+        
         // Only increment gamesCompleted if the game was lost (not manually ended)
         if !isPaused {
             gamesCompleted += 1
