@@ -121,62 +121,18 @@ final class LeaderboardService: ObservableObject {
     }
     
     private func resetPeriodScores(period: String, collection: String) async {
+        print("[Leaderboard] 🔄 Starting score reset for \(collection)/\(period)")
+        
         do {
-            let scores = try await db.collection(collection)
+            let snapshot = try await db.collection(collection)
                 .document(period)
                 .collection("scores")
                 .getDocuments()
             
-            // Get current time in EST
-            let now = Date()
-            let calendar = Calendar.current
-            let estNow = now.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
-            
-            // Get start of current period in EST
-            let startOfPeriod: Date
-            switch period {
-            case "daily":
-                startOfPeriod = calendar.startOfDay(for: estNow)
-            case "weekly":
-                // Get start of week (Sunday) in EST
-                var components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: estNow)
-                components.weekday = 1 // Sunday
-                startOfPeriod = calendar.date(from: components) ?? now
-            case "monthly":
-                // Get start of month in EST with proper month boundary handling
-                var components = calendar.dateComponents([.year, .month], from: estNow)
-                components.day = 1
-                components.hour = 0
-                components.minute = 0
-                components.second = 0
-                startOfPeriod = calendar.date(from: components) ?? now
-            default:
-                startOfPeriod = now
-            }
-            
-            print("[Leaderboard] Checking \(period) resets for \(collection) - Start of period: \(startOfPeriod)")
-            
-            for document in scores.documents {
-                // Check if the entry needs to be reset based on EST time
-                if let timestamp = (document.data()["timestamp"] as? Timestamp)?.dateValue() {
-                    let estTimestamp = timestamp.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
-                    
-                    let shouldReset: Bool
-                    switch period {
-                    case "daily":
-                        shouldReset = estTimestamp < startOfPeriod
-                    case "weekly":
-                        shouldReset = estTimestamp < startOfPeriod
-                    case "monthly":
-                        // For monthly, also check if we're in a new month
-                        let estComponents = calendar.dateComponents([.year, .month], from: estTimestamp)
-                        let currentComponents = calendar.dateComponents([.year, .month], from: estNow)
-                        shouldReset = estTimestamp < startOfPeriod || 
-                            estComponents.year != currentComponents.year || 
-                            estComponents.month != currentComponents.month
-                    default:
-                        shouldReset = false
-                    }
+            for document in snapshot.documents {
+                if let timestamp = document.data()["timestamp"] as? Timestamp {
+                    let estTimestamp = timestamp.dateValue()
+                    let shouldReset = shouldResetScore(for: period, timestamp: estTimestamp)
                     
                     if shouldReset {
                         print("[Leaderboard] Resetting \(period) score for user \(document.documentID) - Timestamp: \(estTimestamp)")
@@ -187,11 +143,12 @@ final class LeaderboardService: ObservableObject {
                         if let userId = documentData["userId"] as? String,
                            let username = documentData["username"] as? String {
                             // Get the latest score from the alltime leaderboard
-                            let alltimeDoc = try await db.collection(collection)
+                            let alltimeDocRef = db.collection(collection)
                                 .document("alltime")
                                 .collection("scores")
                                 .document(userId)
-                                .getDocument()
+                            
+                            let alltimeDoc = try await alltimeDocRef.getDocument()
                             
                             if let alltimeData = alltimeDoc.data() {
                                 // Regenerate the score for the current period
@@ -361,32 +318,7 @@ final class LeaderboardService: ObservableObject {
                       Auth.auth().currentUser?.displayName ??
                       "Anonymous"
         
-        print("[Leaderboard] 👤 Using username: \(username)")
-        
-        // Validate score
-        guard score >= 0 else {
-            print("[Leaderboard] ❌ Invalid score: \(score)")
-            throw LeaderboardError.invalidData
-        }
-        
-        // Check if we're in simulator or test flight
-        #if targetEnvironment(simulator)
-        print("[Leaderboard] 📱 Running in simulator - skipping security checks")
-        #else
-        if Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt" {
-            print("[Leaderboard] 📱 Running in TestFlight - skipping security checks")
-        } else {
-            // In production, try to verify App Check but don't fail if it's not available
-            do {
-                try await AppCheck.appCheck().token(forcingRefresh: false)
-                print("[Leaderboard] ✅ App Check verification successful")
-            } catch {
-                print("[Leaderboard] ⚠️ App Check verification failed, but continuing: \(error.localizedDescription)")
-            }
-        }
-        #endif
-        
-        // Update all periods
+        // Use all periods
         let periods = ["daily", "weekly", "monthly", "alltime"]
         
         for period in periods {
@@ -397,13 +329,17 @@ final class LeaderboardService: ObservableObject {
                     .collection("scores")
                     .document(userId)
                 
-                // Get current score if it exists
-                let currentDoc = try await docRef.getDocument()
-                let currentScore = currentDoc.data()?[type.scoreField] as? Int ?? 0
+                // Get current score from server
+                let doc = try await docRef.getDocument(source: .server)
+                let currentScore = doc.data()?[type.scoreField] as? Int ?? -1
+                
+                if !doc.exists {
+                    print("[Leaderboard] ✅ No previous score exists — writing new \(period) score")
+                }
                 
                 // For achievement leaderboard, always update
-                // For other leaderboards, only update if score is better or no score exists
-                if type == .achievement || score > currentScore || !currentDoc.exists {
+                // For other leaderboards, update if no score exists or new score is higher
+                if type == .achievement || currentScore == -1 || score > currentScore {
                     // Create base data dictionary
                     var data: [String: Any] = [
                         "username": username,
@@ -427,52 +363,29 @@ final class LeaderboardService: ObservableObject {
                         data["time"] = time
                     }
                     
-                    // Validate data against security rules
-                    print("[Leaderboard] 🔍 Validating data against security rules:")
-                    print("[Leaderboard] - Score valid: \(score >= 0)")
-                    print("[Leaderboard] - Username valid: \(username.count >= 3 && username.count <= 20)")
-                    print("[Leaderboard] - UserId matches: \(userId == Auth.auth().currentUser?.uid)")
-                    print("[Leaderboard] - Period valid: \(periods.contains(period))")
-                    print("[Leaderboard] - Data fields: \(data.keys.joined(separator: ", "))")
-                    
                     print("[Leaderboard] 📝 Writing data to Firestore: \(data)")
                     print("[Leaderboard] 📝 Writing to path: \(type.collectionName)/\(period)/scores/\(userId)")
                     
-                    // Try to write the document
-                    do {
-                        try await docRef.setData(data)
-                        print("[Leaderboard] ✅ Successfully updated \(period) leaderboard")
-                        
-                        // Invalidate cache for this leaderboard
-                        LeaderboardCache.shared.invalidateCache(type: type, period: period)
-                        
-                        // Force refresh real-time listener
-                        setupRealTimeListener(type: type, period: period)
-                    } catch let error as NSError {
-                        print("[Leaderboard] ❌ Firestore error: \(error.localizedDescription)")
-                        print("[Leaderboard] ❌ Error domain: \(error.domain)")
-                        print("[Leaderboard] ❌ Error code: \(error.code)")
-                        print("[Leaderboard] ❌ Error user info: \(error.userInfo)")
-                        throw error
-                    }
+                    // Write the document with merge
+                    try await docRef.setData(data, merge: true)
+                    print("[Leaderboard] ✅ Successfully updated \(period) leaderboard")
+                    
+                    // Invalidate cache for this leaderboard
+                    LeaderboardCache.shared.invalidateCache(type: type, period: period)
+                    
+                    // Force refresh real-time listener
+                    setupRealTimeListener(type: type, period: period)
                 } else {
                     print("[Leaderboard] ⏭️ Skipping \(period) update - Score not better")
                 }
                 
             } catch {
                 print("[Leaderboard] ❌ Error updating \(period) leaderboard: \(error.localizedDescription)")
-                print("[Leaderboard] ❌ Error details: \(error)")
-                // Store score for later submission
-                let pendingScore = PendingScore(score: score, timestamp: Date(), level: level, time: time)
-                UserDefaults.standard.set(try? JSONEncoder().encode(pendingScore), forKey: "pendingLeaderboardScore")
+                throw error
             }
         }
         
-        // Update ad-free status for top 3 players
-        if type == .score {
-            print("[Leaderboard] 🔄 Updating ad-free status for top 3 players")
-            try await updateAdFreeStatus()
-        }
+        print("[Leaderboard] ✅ Completed all leaderboard updates")
     }
     
     func getLeaderboard(type: LeaderboardType, period: String) async throws -> (entries: [FirebaseManager.LeaderboardEntry], totalUsers: Int) {
@@ -797,6 +710,59 @@ final class LeaderboardService: ObservableObject {
         
         // Invalidate cache for all leaderboard types
         LeaderboardCache.shared.invalidateCache(period: period)
+    }
+    
+    private func shouldResetScore(for period: String, timestamp: Date) -> Bool {
+        // Get current time in EST
+        let now = Date()
+        let calendar = Calendar.current
+        let estNow = now.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
+        
+        // Get start of current period in EST
+        let startOfPeriod: Date
+        switch period {
+        case "daily":
+            startOfPeriod = calendar.startOfDay(for: estNow)
+        case "weekly":
+            // Get start of week (Sunday) in EST
+            var components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: estNow)
+            components.weekday = 1 // Sunday
+            startOfPeriod = calendar.date(from: components) ?? now
+        case "monthly":
+            // Get start of month in EST with proper month boundary handling
+            var components = calendar.dateComponents([.year, .month], from: estNow)
+            components.day = 1
+            components.hour = 0
+            components.minute = 0
+            components.second = 0
+            startOfPeriod = calendar.date(from: components) ?? now
+        default:
+            startOfPeriod = now
+        }
+        
+        print("[Leaderboard] Checking reset for \(period) - Start of period: \(startOfPeriod)")
+        
+        // Convert timestamp to EST for comparison
+        let estTimestamp = timestamp.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
+        
+        let shouldReset: Bool
+        switch period {
+        case "daily":
+            shouldReset = estTimestamp < startOfPeriod
+        case "weekly":
+            shouldReset = estTimestamp < startOfPeriod
+        case "monthly":
+            // For monthly, also check if we're in a new month
+            let estComponents = calendar.dateComponents([.year, .month], from: estTimestamp)
+            let currentComponents = calendar.dateComponents([.year, .month], from: estNow)
+            shouldReset = estTimestamp < startOfPeriod || 
+                estComponents.year != currentComponents.year || 
+                estComponents.month != currentComponents.month
+        default:
+            shouldReset = false
+        }
+        
+        return shouldReset
     }
 }
 

@@ -1,3 +1,6 @@
+// This is not a implementation for the app this is a manually toggle for me to use don't update this as the core leaderboard logic update
+
+
 import Foundation
 import FirebaseFirestore
 import FirebaseAuth
@@ -6,7 +9,21 @@ class ManualLeaderboardUpdate {
     static let shared = ManualLeaderboardUpdate()
     private let db = Firestore.firestore()
     
+    // Add a flag to control leaderboard updates
+    private var isLeaderboardUpdateEnabled = false
+    
     private init() {}
+    
+    // Function to toggle leaderboard updates
+    func setLeaderboardUpdateEnabled(_ enabled: Bool) {
+        isLeaderboardUpdateEnabled = enabled
+        print("[ManualUpdate] 🔄 Leaderboard updates \(enabled ? "enabled" : "disabled")")
+    }
+    
+    // Function to check if leaderboard updates are enabled
+    func isLeaderboardUpdatesEnabled() -> Bool {
+        return isLeaderboardUpdateEnabled
+    }
     
     // Add validation function
     private func validateUserData(userId: String, username: String) throws {
@@ -58,7 +75,7 @@ class ManualLeaderboardUpdate {
             ("achievement_leaderboard", [
                 "userId": uid,
                 "username": username,
-                "score": finalScore,
+                "points": finalScore,
                 "timestamp": FieldValue.serverTimestamp(),
                 "lastUpdate": FieldValue.serverTimestamp(),
                 "level": finalLevel,
@@ -67,35 +84,60 @@ class ManualLeaderboardUpdate {
             ("classic_timed_leaderboard", [
                 "userId": uid,
                 "username": username,
-                "score": finalScore,
+                "time": totalTime,
                 "timestamp": FieldValue.serverTimestamp(),
                 "lastUpdate": FieldValue.serverTimestamp(),
                 "level": finalLevel,
-                "time": totalTime
+                "score": finalScore
             ])
         ]
         
+        // Define all periods
+        let periods = ["daily", "weekly", "monthly", "alltime"]
+        
         // Update all leaderboard types
         for (collection, data) in leaderboards {
-            do {
-                let docRef = db.collection(collection)
-                    .document("daily")
-                    .collection("scores")
-                    .document(uid)
-                
-                print("[ManualUpdate] 📝 Updating daily entry for \(collection)")
-                print("[ManualUpdate] 📊 Data: \(data)")
-                
-                // Force update the daily entry regardless of existence
-                try await docRef.setData(data, merge: true)
-                print("[ManualUpdate] ✅ Successfully updated daily entry for \(collection)")
-                
-                // Invalidate cache for daily leaderboard
-                LeaderboardCache.shared.invalidateCache(period: "daily")
-                
-            } catch {
-                print("[ManualUpdate] ❌ Error updating \(collection): \(error.localizedDescription)")
-                throw error
+            for period in periods {
+                do {
+                    let docRef = db.collection(collection)
+                        .document(period)
+                        .collection("scores")
+                        .document(uid)
+                    
+                    // Check if document exists
+                    let currentDoc = try await docRef.getDocument()
+                    
+                    if !currentDoc.exists {
+                        // Create new leaderboard entry
+                        print("[ManualUpdate] 📝 Creating new \(period) entry for \(collection)")
+                        try await docRef.setData(data)
+                        print("[ManualUpdate] ✅ Created new \(period) entry for \(collection)")
+                    } else {
+                        // Update existing entry if score is better
+                        let currentData = currentDoc.data()
+                        let currentScore = currentData?["score"] as? Int ?? 0
+                        let currentTime = currentData?["time"] as? Double ?? 0
+                        
+                        let shouldUpdate = collection == "achievement_leaderboard" ? true :
+                                         collection == "classic_timed_leaderboard" ? totalTime < currentTime :
+                                         finalScore > currentScore
+                        
+                        if shouldUpdate {
+                            print("[ManualUpdate] 📝 Updating existing \(period) entry for \(collection)")
+                            try await docRef.setData(data, merge: true)
+                            print("[ManualUpdate] ✅ Updated existing \(period) entry for \(collection)")
+                        } else {
+                            print("[ManualUpdate] ⏭️ Skipping update - current score is better")
+                        }
+                    }
+                    
+                    // Invalidate cache for this leaderboard
+                    LeaderboardCache.shared.invalidateCache(period: period)
+                    
+                } catch {
+                    print("[ManualUpdate] ❌ Error updating \(collection)/\(period): \(error.localizedDescription)")
+                    throw error
+                }
             }
         }
         
@@ -271,9 +313,8 @@ class ManualLeaderboardUpdate {
             return newScore > currentScore
             
         case "achievement_leaderboard":
-            let currentPoints = currentData["points"] as? Int ?? 0
-            let newPoints = newData["points"] as? Int ?? 0
-            return newPoints > currentPoints
+            // Always update achievement scores
+            return true
             
         case "classic_timed_leaderboard":
             let currentTime = currentData["time"] as? Double ?? Double.infinity
@@ -362,5 +403,236 @@ class ManualLeaderboardUpdate {
             print("[ManualUpdate] 📊 Would have written the following data for \(collection):")
             print("[ManualUpdate] 📝 \(data)")
         }
+    }
+    
+    // Add test function to verify updates
+    func testLeaderboardUpdate() async {
+        print("[ManualUpdate] 🧪 Starting leaderboard update test")
+        
+        do {
+            // Get current user data
+            guard let userId = Auth.auth().currentUser?.uid else {
+                print("[ManualUpdate] ❌ Test failed - No authenticated user")
+                return
+            }
+            
+            let username = UserDefaults.standard.string(forKey: "username") ?? "jrftw"
+            let testScore = 1000
+            let testLevel = 1
+            let testTime = 60.0
+            
+            print("[ManualUpdate] 🧪 Test data:")
+            print("[ManualUpdate] - User ID: \(userId)")
+            print("[ManualUpdate] - Username: \(username)")
+            print("[ManualUpdate] - Score: \(testScore)")
+            print("[ManualUpdate] - Level: \(testLevel)")
+            print("[ManualUpdate] - Time: \(testTime)")
+            
+            // Try to update all leaderboards
+            try await updateAllLeaderboardsWithData(
+                finalScore: testScore,
+                finalLevel: testLevel,
+                totalTime: testTime,
+                shouldWrite: true
+            )
+            
+            // Verify the updates
+            let periods = ["daily", "weekly", "monthly", "alltime"]
+            for period in periods {
+                let docRef = db.collection("classic_leaderboard")
+                    .document(period)
+                    .collection("scores")
+                    .document(userId)
+                
+                let document = try await docRef.getDocument()
+                if document.exists {
+                    let data = document.data()
+                    print("[ManualUpdate] ✅ Verified \(period) update:")
+                    print("[ManualUpdate] - Score: \(data?["score"] ?? "nil")")
+                    print("[ManualUpdate] - Username: \(data?["username"] ?? "nil")")
+                    print("[ManualUpdate] - Level: \(data?["level"] ?? "nil")")
+                } else {
+                    print("[ManualUpdate] ❌ Failed to verify \(period) update - Document doesn't exist")
+                }
+            }
+            
+            print("[ManualUpdate] 🧪 Test completed")
+            
+        } catch {
+            print("[ManualUpdate] ❌ Test failed with error: \(error.localizedDescription)")
+        }
+    }
+    
+    // New function for toggleable leaderboard updates
+    func updateLeaderboardWithToggle(finalScore: Int, finalLevel: Int, totalTime: Double) async throws {
+        guard isLeaderboardUpdateEnabled else {
+            print("[ManualUpdate] ⏭️ Leaderboard updates are disabled - skipping update")
+            return
+        }
+        
+        print("[ManualUpdate] 🏆 Starting leaderboard update with toggle")
+        
+        let uid = Auth.auth().currentUser?.uid ?? "unknown"
+        let username = UserDefaults.standard.string(forKey: "username") ?? "jrftw"
+        
+        // Define all leaderboard types and their data
+        let leaderboards: [(collection: String, data: [String: Any])] = [
+            ("classic_leaderboard", [
+                "userId": uid,
+                "username": username,
+                "score": finalScore,
+                "timestamp": FieldValue.serverTimestamp(),
+                "lastUpdate": FieldValue.serverTimestamp(),
+                "level": finalLevel,
+                "time": totalTime
+            ]),
+            ("achievement_leaderboard", [
+                "userId": uid,
+                "username": username,
+                "points": finalScore,
+                "timestamp": FieldValue.serverTimestamp(),
+                "lastUpdate": FieldValue.serverTimestamp(),
+                "level": finalLevel,
+                "time": totalTime
+            ]),
+            ("classic_timed_leaderboard", [
+                "userId": uid,
+                "username": username,
+                "time": totalTime,
+                "timestamp": FieldValue.serverTimestamp(),
+                "lastUpdate": FieldValue.serverTimestamp(),
+                "level": finalLevel,
+                "score": finalScore
+            ])
+        ]
+        
+        // Define all periods
+        let periods = ["daily", "weekly", "monthly", "alltime"]
+        
+        // Update all leaderboard types
+        for (collection, data) in leaderboards {
+            for period in periods {
+                do {
+                    let docRef = db.collection(collection)
+                        .document(period)
+                        .collection("scores")
+                        .document(uid)
+                    
+                    // Check if document exists
+                    let currentDoc = try await docRef.getDocument()
+                    
+                    if !currentDoc.exists {
+                        // Create new leaderboard entry
+                        print("[ManualUpdate] 📝 Creating new \(period) entry for \(collection)")
+                        try await docRef.setData(data)
+                        print("[ManualUpdate] ✅ Created new \(period) entry for \(collection)")
+                    } else {
+                        // Update existing entry if score is better
+                        let currentData = currentDoc.data()
+                        let currentScore = currentData?["score"] as? Int ?? 0
+                        let currentTime = currentData?["time"] as? Double ?? 0
+                        
+                        let shouldUpdate = collection == "achievement_leaderboard" ? true :
+                                         collection == "classic_timed_leaderboard" ? totalTime < currentTime :
+                                         finalScore > currentScore
+                        
+                        if shouldUpdate {
+                            print("[ManualUpdate] 📝 Updating existing \(period) entry for \(collection)")
+                            try await docRef.setData(data, merge: true)
+                            print("[ManualUpdate] ✅ Updated existing \(period) entry for \(collection)")
+                        } else {
+                            print("[ManualUpdate] ⏭️ Skipping update - current score is better")
+                        }
+                    }
+                    
+                    // Invalidate cache for this leaderboard
+                    LeaderboardCache.shared.invalidateCache(period: period)
+                    
+                } catch {
+                    print("[ManualUpdate] ❌ Error updating \(collection)/\(period): \(error.localizedDescription)")
+                    throw error
+                }
+            }
+        }
+        
+        print("[ManualUpdate] ✅ Completed all leaderboard updates")
+    }
+    
+    // Add function to regenerate deleted entries
+    func regenerateDeletedEntries() async throws {
+        print("[ManualUpdate] 🔄 Starting regeneration of deleted entries")
+        
+        let uid = Auth.auth().currentUser?.uid ?? "unknown"
+        let username = UserDefaults.standard.string(forKey: "username") ?? "jrftw"
+        
+        // Get current scores from UserDefaults
+        let currentScore = max(0, UserDefaults.standard.integer(forKey: "highScore"))
+        let currentLevel = max(1, UserDefaults.standard.integer(forKey: "highestLevel"))
+        let currentTime = max(0, UserDefaults.standard.double(forKey: "bestTime"))
+        
+        // Define all leaderboard types and their data
+        let leaderboards: [(collection: String, data: [String: Any])] = [
+            ("classic_leaderboard", [
+                "userId": uid,
+                "username": username,
+                "score": currentScore,
+                "timestamp": FieldValue.serverTimestamp(),
+                "lastUpdate": FieldValue.serverTimestamp(),
+                "level": currentLevel,
+                "time": currentTime
+            ]),
+            ("achievement_leaderboard", [
+                "userId": uid,
+                "username": username,
+                "points": currentScore,
+                "timestamp": FieldValue.serverTimestamp(),
+                "lastUpdate": FieldValue.serverTimestamp(),
+                "level": currentLevel,
+                "time": currentTime
+            ]),
+            ("classic_timed_leaderboard", [
+                "userId": uid,
+                "username": username,
+                "time": currentTime,
+                "timestamp": FieldValue.serverTimestamp(),
+                "lastUpdate": FieldValue.serverTimestamp(),
+                "level": currentLevel,
+                "score": currentScore
+            ])
+        ]
+        
+        // Define all periods
+        let periods = ["daily", "weekly", "monthly", "alltime"]
+        
+        // Check and regenerate entries for all leaderboard types
+        for (collection, data) in leaderboards {
+            for period in periods {
+                do {
+                    let docRef = db.collection(collection)
+                        .document(period)
+                        .collection("scores")
+                        .document(uid)
+                    
+                    // Check if document exists
+                    let currentDoc = try await docRef.getDocument()
+                    
+                    if !currentDoc.exists {
+                        print("[ManualUpdate] 🔄 Regenerating deleted entry for \(collection)/\(period)")
+                        try await docRef.setData(data)
+                        print("[ManualUpdate] ✅ Successfully regenerated entry for \(collection)/\(period)")
+                        
+                        // Invalidate cache for this leaderboard
+                        LeaderboardCache.shared.invalidateCache(period: period)
+                    } else {
+                        print("[ManualUpdate] ⏭️ Entry exists for \(collection)/\(period) - skipping regeneration")
+                    }
+                } catch {
+                    print("[ManualUpdate] ❌ Error regenerating entry for \(collection)/\(period): \(error.localizedDescription)")
+                    throw error
+                }
+            }
+        }
+        
+        print("[ManualUpdate] ✅ Completed regeneration of deleted entries")
     }
 }
