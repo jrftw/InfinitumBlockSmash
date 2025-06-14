@@ -203,6 +203,24 @@ final class MemorySystem {
             
             log("[MemorySystem] Clearing image cache")
             UIImageView.clearImageCache()
+            
+            // Additional aggressive cleanup
+            log("[MemorySystem] Clearing image caches")
+            UIImageView.clearImageCache()
+            BlockShapeView.clearCache()
+            
+            // Clear any remaining texture caches
+            SKTextureAtlas.preloadTextureAtlases([], withCompletionHandler: {})
+            
+            // Clear any remaining temporary files
+            if let tmp = try? FileManager.default.contentsOfDirectory(
+                at: FileManager.default.temporaryDirectory,
+                includingPropertiesForKeys: nil
+            ) {
+                for file in tmp {
+                    try? FileManager.default.removeItem(at: file)
+                }
+            }
         }
         
         // Reset cache statistics

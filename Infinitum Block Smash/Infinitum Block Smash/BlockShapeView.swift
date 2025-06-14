@@ -83,12 +83,14 @@ struct BlockShapeView: View {
 
     private static func trimGradientCache() async {
         cacheQueue.async {
+            // First trim by count
             if gradientCache.count > maxCacheSize {
-                gradientCache.keys.sorted().prefix(gradientCache.count - maxCacheSize).forEach {
-                    gradientCache.removeValue(forKey: $0)
-                }
+                let sortedKeys = gradientCache.keys.sorted()
+                let keysToRemove = sortedKeys.prefix(gradientCache.count - maxCacheSize)
+                keysToRemove.forEach { gradientCache.removeValue(forKey: $0) }
             }
 
+            // Then trim by memory usage
             var totalMemory = 0
             for image in gradientCache.values {
                 guard let cg = image.cgImage else { continue }
@@ -96,12 +98,14 @@ struct BlockShapeView: View {
             }
 
             if totalMemory > maxCacheMemoryBytes {
+                // Sort by size (largest first)
                 let sorted = gradientCache.sorted {
                     let size1 = ($0.value.cgImage?.bytesPerRow ?? 0) * ($0.value.cgImage?.height ?? 0)
                     let size2 = ($1.value.cgImage?.bytesPerRow ?? 0) * ($1.value.cgImage?.height ?? 0)
                     return size1 > size2
                 }
 
+                // Remove largest images until we're under the limit
                 var memoryUsed = totalMemory
                 for (key, image) in sorted {
                     guard let cg = image.cgImage else { continue }
@@ -111,6 +115,10 @@ struct BlockShapeView: View {
                     if memoryUsed <= maxCacheMemoryBytes { break }
                 }
             }
+            
+            // Log cache stats
+            let totalMemoryMB = Double(totalMemory) / 1024.0 / 1024.0
+            print("[BlockShapeView] Gradient cache stats - Count: \(gradientCache.count), Memory: \(String(format: "%.1f", totalMemoryMB))MB")
         }
     }
 }

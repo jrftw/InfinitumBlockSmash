@@ -104,39 +104,50 @@ final class CacheManager {
         guard now.timeIntervalSince(lastCleanupTime) >= cleanupInterval else { return }
         lastCleanupTime = now
         
-        let files = try fileManager.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey])
-        var totalSize: Int64 = 0
-        var expiredFiles: [URL] = []
+        // Clean up expired entries
+        let expiredDate = Date().addingTimeInterval(-cacheExpirationInterval)
+        let files = try fileManager.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: [.creationDateKey])
         
         for file in files {
-            let attributes = try fileManager.attributesOfItem(atPath: file.path)
-            let modDate = attributes[.modificationDate] as? Date ?? .distantPast
-            let size = attributes[.size] as? Int64 ?? 0
-            
-            if now.timeIntervalSince(modDate) > cacheExpirationInterval {
-                expiredFiles.append(file)
-            } else {
-                totalSize += size
+            if let attributes = try? fileManager.attributesOfItem(atPath: file.path),
+               let creationDate = attributes[.creationDate] as? Date,
+               creationDate < expiredDate {
+                try? fileManager.removeItem(at: file)
             }
         }
         
-        for file in expiredFiles {
-            try? fileManager.removeItem(at: file)
+        // Check cache size
+        var totalSize: Int64 = 0
+        let fileAttributes = try fileManager.attributesOfItem(atPath: cacheDirectory.path)
+        if let size = fileAttributes[.size] as? Int64 {
+            totalSize = size
         }
         
         if totalSize > maxCacheSize {
-            let sorted = try files.sorted {
-                let date1 = try fileManager.attributesOfItem(atPath: $0.path)[.modificationDate] as? Date ?? .distantPast
-                let date2 = try fileManager.attributesOfItem(atPath: $1.path)[.modificationDate] as? Date ?? .distantPast
+            // Sort files by creation date
+            let sortedFiles = try files.sorted { file1, file2 in
+                let date1 = try fileManager.attributesOfItem(atPath: file1.path)[.creationDate] as? Date ?? Date.distantPast
+                let date2 = try fileManager.attributesOfItem(atPath: file2.path)[.creationDate] as? Date ?? Date.distantPast
                 return date1 < date2
             }
             
-            for file in sorted where totalSize > maxCacheSize {
-                let size = try fileManager.attributesOfItem(atPath: file.path)[.size] as? Int64 ?? 0
-                try? fileManager.removeItem(at: file)
-                totalSize -= size
+            // Remove oldest files until we're under the limit
+            for file in sortedFiles {
+                if totalSize <= maxCacheSize { break }
+                if let size = try? fileManager.attributesOfItem(atPath: file.path)[.size] as? Int64 {
+                    try? fileManager.removeItem(at: file)
+                    totalSize -= size
+                }
             }
         }
+        
+        // Trim memory cache if needed
+        if memoryCache.totalCostLimit > 75 * 1024 * 1024 {
+            memoryCache.removeAllObjects()
+        }
+        
+        // Log cache stats
+        logCacheStats()
     }
     
     private func startPeriodicCleanup() {
@@ -157,22 +168,27 @@ final class CacheManager {
     }
     
     private func logCacheStats() {
-        let total = cacheHits + cacheMisses
-        let hitRatio = total > 0 ? Double(cacheHits) / Double(total) : 0
-        logger.info("Cache Stats - Hits: \(self.cacheHits), Misses: \(self.cacheMisses), Hit Ratio: \(String(format: "%.1f", hitRatio * 100))%")
+        let now = Date()
+        guard now.timeIntervalSince(lastStatsLogTime) >= statsLogInterval else { return }
+        lastStatsLogTime = now
         
-        // Get current cache size
-        do {
-            let files = try fileManager.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: [.fileSizeKey])
-            let totalSize: Int64 = try files.reduce(0) { sum, file in
-                let attributes = try fileManager.attributesOfItem(atPath: file.path)
-                return sum + (attributes[.size] as? Int64 ?? 0)
+        var totalSize: Int64 = 0
+        var fileCount = 0
+        if let files = try? fileManager.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: [.fileSizeKey]) {
+            fileCount = files.count
+            for file in files {
+                if let size = try? fileManager.attributesOfItem(atPath: file.path)[.size] as? Int64 {
+                    totalSize += size
+                }
             }
-            let totalSizeMB = Double(totalSize) / 1024.0 / 1024.0
-            logger.info("Disk Cache Size: \(String(format: "%.1f", totalSizeMB))MB")
-        } catch {
-            logger.error("Error getting cache size: \(error.localizedDescription)")
         }
+        
+        logger.info("""
+            Cache Stats:
+            - Memory Cache: \(self.memoryCache.totalCostLimit / 1024 / 1024)MB limit
+            - Disk Cache: \(totalSize / 1024 / 1024)MB used, \(fileCount) files
+            - Hit Ratio: \(Double(self.cacheHits) / Double(max(1, self.cacheHits + self.cacheMisses)) * 100)%
+            """)
     }
     
     // MARK: - Compression

@@ -1098,6 +1098,30 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Clear temporary data
         cleanupTemporaryData()
         
+        // Additional aggressive cleanup
+        autoreleasepool {
+            // Clear any remaining particle effects
+            activeParticleEmitters.forEach { $0.removeFromParent() }
+            activeParticleEmitters.removeAll()
+            
+            // Clear any remaining cached nodes
+            cachedNodes.removeAll()
+            
+            // Clear any remaining block nodes
+            blockNodes.forEach { $0.removeFromParent() }
+            blockNodes.removeAll()
+            
+            // Clear any remaining preview or drag nodes
+            previewNode?.removeFromParent()
+            previewNode = nil
+            dragNode?.removeFromParent()
+            dragNode = nil
+            
+            // Clear any remaining hint highlights
+            hintHighlight?.removeFromParent()
+            hintHighlight = nil
+        }
+        
         // Notify GameState
         await gameState.handleCriticalMemory()
     }
