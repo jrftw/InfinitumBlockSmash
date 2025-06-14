@@ -1,9 +1,11 @@
 // MARK: - CacheManager.swift
 import Foundation
 import Compression
+import os.log
 
 final class CacheManager {
     static let shared = CacheManager()
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.infinitum.blocksmash", category: "CacheManager")
     
     private let memoryCache = NSCache<NSString, AnyObject>()
     private let fileManager = FileManager.default
@@ -18,6 +20,8 @@ final class CacheManager {
     private var cacheMisses = 0
     private var lastCleanupTime = Date()
     private let cleanupInterval: TimeInterval = 300 // 5 minutes
+    private var lastStatsLogTime = Date()
+    private let statsLogInterval: TimeInterval = 60 // 1 minute
     
     private init() {
         memoryCache.countLimit = 200
@@ -28,6 +32,7 @@ final class CacheManager {
         try? fileManager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
         
         startPeriodicCleanup()
+        startStatsLogging()
     }
     
     // MARK: - Memory Cache
@@ -143,6 +148,31 @@ final class CacheManager {
     private func resetCacheStats() {
         cacheHits = 0
         cacheMisses = 0
+    }
+    
+    private func startStatsLogging() {
+        Timer.scheduledTimer(withTimeInterval: statsLogInterval, repeats: true) { [weak self] _ in
+            self?.logCacheStats()
+        }
+    }
+    
+    private func logCacheStats() {
+        let total = cacheHits + cacheMisses
+        let hitRatio = total > 0 ? Double(cacheHits) / Double(total) : 0
+        logger.info("Cache Stats - Hits: \(self.cacheHits), Misses: \(self.cacheMisses), Hit Ratio: \(String(format: "%.1f", hitRatio * 100))%")
+        
+        // Get current cache size
+        do {
+            let files = try fileManager.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: [.fileSizeKey])
+            let totalSize: Int64 = try files.reduce(0) { sum, file in
+                let attributes = try fileManager.attributesOfItem(atPath: file.path)
+                return sum + (attributes[.size] as? Int64 ?? 0)
+            }
+            let totalSizeMB = Double(totalSize) / 1024.0 / 1024.0
+            logger.info("Disk Cache Size: \(String(format: "%.1f", totalSizeMB))MB")
+        } catch {
+            logger.error("Error getting cache size: \(error.localizedDescription)")
+        }
     }
     
     // MARK: - Compression

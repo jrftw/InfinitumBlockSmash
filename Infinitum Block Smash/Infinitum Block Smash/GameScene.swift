@@ -713,9 +713,20 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let blockDragOffset = UserDefaults.standard.double(forKey: "blockDragOffset")
         dragNode.position = CGPoint(x: touchPoint.x, y: touchPoint.y + GameConstants.blockSize * blockDragOffset)
         
-        // Remove any existing preview and highlights
-        previewNode?.removeFromParent()
-        previewNode = nil
+        // Explicitly cleanup previous preview and highlights
+        if let oldPreview = previewNode {
+            print("[Preview] Removing old preview node")
+            oldPreview.removeFromParent()
+            previewNode = nil
+        }
+        
+        // Remove any existing highlight containers
+        gridNode.children.forEach { node in
+            if node.name?.hasPrefix("highlight_") == true {
+                print("[Preview] Removing old highlight container")
+                node.removeFromParent()
+            }
+        }
         
         // Only show preview if placement is valid
         if gameState.canPlaceBlock(draggingBlock, at: gridPoint) {
@@ -723,6 +734,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             
             // Create preview node for the entire shape
             let preview = SKNode()
+            preview.name = "preview_block" // Add name for easier cleanup
             preview.zPosition = 5 // Set preview z-position above grid but below highlights
             
             // Create preview for each cell in the shape at BASE size
@@ -731,6 +743,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 cellNode.fillColor = SKColor.from(draggingBlock.color.color)
                 cellNode.strokeColor = .clear
                 cellNode.alpha = 0.5
+                cellNode.name = "preview_cell" // Add name for easier cleanup
                 // Position each cell relative to the shape's anchor point (BASE size)
                 cellNode.position = CGPoint(
                     x: CGFloat(dx) * GameConstants.blockSize,
@@ -760,16 +773,19 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             
             // Create a separate container for highlights
             let highlightContainer = SKNode()
+            highlightContainer.name = "highlight_container" // Add name for easier cleanup
             highlightContainer.zPosition = 10 // Ensure highlights are above everything else
             
             for row in rowsToClear {
                 let highlight = createLineHighlight(for: row, isRow: true, color: highlightColor, blockSize: GameConstants.blockSize)
+                highlight.name = "highlight_row_\(row)" // Add name for easier cleanup
                 highlightContainer.addChild(highlight)
                 print("[Preview] Added row highlight at row: \(row)")
             }
             
             for col in columnsToClear {
                 let highlight = createLineHighlight(for: col, isRow: false, color: highlightColor, blockSize: GameConstants.blockSize)
+                highlight.name = "highlight_column_\(col)" // Add name for easier cleanup
                 highlightContainer.addChild(highlight)
                 print("[Preview] Added column highlight at column: \(col)")
             }
@@ -1092,6 +1108,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Clean up finished particle effects
         cleanupParticleEffects()
         
+        // Review and cleanup long-lived references
+        reviewAndCleanupLongLivedReferences()
+        
         // Clear old cached nodes
         manageCachedNodes()
         
@@ -1135,38 +1154,18 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     override func update(_ currentTime: TimeInterval) {
-        // Update FPS tracking
-        FPSManager.shared.updateFrameTime()
-        
-        // Update game state
-        if let gameState = gameState {
-            Task {
-                await gameState.update()
-            }
-        }
-        
-        // Perform periodic memory cleanup
-        if currentTime - lastMemoryCleanup > memoryCleanupInterval {
+        // Check if we need to perform memory cleanup
+        if currentTime - lastMemoryCleanup >= memoryCleanupInterval {
             Task { @MainActor in
-                await MemorySystem.shared.cleanupMemory()
+                print("[Memory] Performing periodic memory cleanup")
+                await cleanupMemory()
                 lastMemoryCleanup = currentTime
             }
         }
         
-        // Check memory status periodically
-        if currentTime - lastMemoryCheck > 5.0 {
-            Task { @MainActor in
-                let status = MemorySystem.shared.checkMemoryStatus()
-                switch status {
-                case .critical:
-                    NotificationCenter.default.post(name: .memoryCritical, object: nil)
-                case .warning:
-                    NotificationCenter.default.post(name: .memoryWarning, object: nil)
-                case .normal:
-                    break
-                }
-                lastMemoryCheck = currentTime
-            }
+        // Update game state
+        Task {
+            await gameState.update()
         }
     }
 
@@ -1598,6 +1597,90 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Clear temporary data
         cleanupTemporaryData()
+    }
+    
+    private func reviewAndCleanupLongLivedReferences() {
+        print("[Memory] Reviewing long-lived references")
+        
+        // Review and cleanup block nodes
+        let blockNodesCount = blockNodes.count
+        blockNodes = blockNodes.filter { node in
+            if node.parent == nil {
+                print("[Memory] Removing orphaned block node")
+                return false
+            }
+            return true
+        }
+        if blockNodes.count != blockNodesCount {
+            print("[Memory] Removed \(blockNodesCount - blockNodes.count) orphaned block nodes")
+        }
+        
+        // Review and cleanup particle emitters
+        let emitterCount = activeParticleEmitters.count
+        activeParticleEmitters = activeParticleEmitters.filter { emitter in
+            if emitter.parent == nil {
+                print("[Memory] Removing orphaned particle emitter")
+                return false
+            }
+            return true
+        }
+        if activeParticleEmitters.count != emitterCount {
+            print("[Memory] Removed \(emitterCount - activeParticleEmitters.count) orphaned particle emitters")
+        }
+        
+        // Review and cleanup cached nodes
+        let cachedNodesCount = cachedNodes.count
+        cachedNodes = cachedNodes.filter { key, node in
+            if node.parent == nil {
+                print("[Memory] Removing orphaned cached node: \(key)")
+                return false
+            }
+            return true
+        }
+        if cachedNodes.count != cachedNodesCount {
+            print("[Memory] Removed \(cachedNodesCount - cachedNodes.count) orphaned cached nodes")
+        }
+        
+        // Review and cleanup node pools
+        let blockPoolCount = blockNodePool.count
+        blockNodePool = blockNodePool.filter { node in
+            if node.parent != nil {
+                print("[Memory] Removing node from pool that is still in use")
+                return false
+            }
+            return true
+        }
+        if blockNodePool.count != blockPoolCount {
+            print("[Memory] Removed \(blockPoolCount - blockNodePool.count) nodes from block pool")
+        }
+        
+        let particlePoolCount = particleEmitterPool.count
+        particleEmitterPool = particleEmitterPool.filter { emitter in
+            if emitter.parent != nil {
+                print("[Memory] Removing emitter from pool that is still in use")
+                return false
+            }
+            return true
+        }
+        if particleEmitterPool.count != particlePoolCount {
+            print("[Memory] Removed \(particlePoolCount - particleEmitterPool.count) emitters from particle pool")
+        }
+        
+        // Review and cleanup temporary nodes
+        if let dragNode = dragNode, dragNode.parent == nil {
+            print("[Memory] Removing orphaned drag node")
+            self.dragNode = nil
+        }
+        
+        if let previewNode = previewNode, previewNode.parent == nil {
+            print("[Memory] Removing orphaned preview node")
+            self.previewNode = nil
+        }
+        
+        if let hintHighlight = hintHighlight, hintHighlight.parent == nil {
+            print("[Memory] Removing orphaned hint highlight")
+            self.hintHighlight = nil
+        }
     }
 }
 

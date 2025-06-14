@@ -80,7 +80,9 @@ final class MemorySystem {
         monitoringTimer?.invalidate()
         monitoringTimer = Timer.scheduledTimer(withTimeInterval: monitoringInterval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                await self?.checkAndHandleMemoryStatus()
+                guard let self = self else { return }
+                await self.checkAndHandleMemoryStatus()
+                self.logMemoryUsage()
             }
         }
     }
@@ -168,17 +170,20 @@ final class MemorySystem {
     }
     
     private func performAggressiveCleanup() async {
-        log("[MemorySystem] Performing aggressive cleanup")
+        log("[MemorySystem] Starting aggressive cleanup")
+        let startTime = Date()
+        let initialMemory = getMemoryUsage()
         
         // Clear all caches immediately
+        log("[MemorySystem] Clearing all caches")
         clearAllCaches()
         
         // Force garbage collection
         autoreleasepool {
-            // Clear URL cache
+            log("[MemorySystem] Clearing URL cache")
             URLCache.shared.removeAllCachedResponses()
             
-            // Remove ALL temp files
+            log("[MemorySystem] Removing temporary files")
             let tmp = FileManager.default.temporaryDirectory
             if let files = try? FileManager.default.contentsOfDirectory(
                 at: tmp,
@@ -187,15 +192,16 @@ final class MemorySystem {
                 for file in files {
                     try? FileManager.default.removeItem(at: file)
                 }
+                log("[MemorySystem] Removed \(files.count) temporary files")
             }
             
-            // Purge ALL SpriteKit textures
+            log("[MemorySystem] Purging SpriteKit textures")
             SKTextureAtlas.preloadTextureAtlases([], withCompletionHandler: {})
             
-            // Clear custom gradient cache
+            log("[MemorySystem] Clearing gradient cache")
             BlockShapeView.clearCache()
             
-            // Clear image cache
+            log("[MemorySystem] Clearing image cache")
             UIImageView.clearImageCache()
         }
         
@@ -208,42 +214,57 @@ final class MemorySystem {
             // Additional cleanup if needed
         }
         
+        let endTime = Date()
+        let finalMemory = getMemoryUsage()
+        let memoryReduction = initialMemory.used - finalMemory.used
+        
+        log("[MemorySystem] Aggressive cleanup completed in \(String(format: "%.2f", endTime.timeIntervalSince(startTime)))s")
+        log("[MemorySystem] Memory reduced by \(String(format: "%.1f", memoryReduction))MB")
         logMemoryUsage()
-        log("[MemorySystem] Aggressive cleanup completed")
     }
     
     private func performCleanup() async {
-        log("[MemorySystem] Cleanup started")
+        log("[MemorySystem] Starting normal cleanup")
+        let startTime = Date()
+        let initialMemory = getMemoryUsage()
         
         autoreleasepool {
-            // Clear URL cache
+            log("[MemorySystem] Clearing URL cache")
             URLCache.shared.removeAllCachedResponses()
             
-            // Remove temp files older than 30 minutes
+            log("[MemorySystem] Removing old temporary files")
             let tmp = FileManager.default.temporaryDirectory
             let thirtyMinutesAgo = Date().addingTimeInterval(-1800)
             if let files = try? FileManager.default.contentsOfDirectory(
                 at: tmp,
                 includingPropertiesForKeys: [.creationDateKey]
             ) {
+                var removedCount = 0
                 for file in files {
                     if let attributes = try? FileManager.default.attributesOfItem(atPath: file.path),
                        let creationDate = attributes[.creationDate] as? Date,
                        creationDate < thirtyMinutesAgo {
                         try? FileManager.default.removeItem(at: file)
+                        removedCount += 1
                     }
                 }
+                log("[MemorySystem] Removed \(removedCount) old temporary files")
             }
             
-            // Purge unused SpriteKit textures
+            log("[MemorySystem] Purging unused SpriteKit textures")
             SKTextureAtlas.preloadTextureAtlases([], withCompletionHandler: {})
             
-            // Clear old cached images
+            log("[MemorySystem] Clearing old cached images")
             UIImageView.clearOldImageCache()
         }
         
+        let endTime = Date()
+        let finalMemory = getMemoryUsage()
+        let memoryReduction = initialMemory.used - finalMemory.used
+        
+        log("[MemorySystem] Normal cleanup completed in \(String(format: "%.2f", endTime.timeIntervalSince(startTime)))s")
+        log("[MemorySystem] Memory reduced by \(String(format: "%.1f", memoryReduction))MB")
         logMemoryUsage()
-        log("[MemorySystem] Cleanup completed")
     }
     
     // MARK: — Cache Management
@@ -281,13 +302,14 @@ final class MemorySystem {
         print(message)
     }
     
-    func logMemoryUsage() {
+    private func logMemoryUsage() {
         let (used, total) = getMemoryUsage()
-        let percent = (used / total) * 100
-        log(String(
-            format: "[MemorySystem] Usage: %.1fMB / %.1fMB (%.1f%%)",
-            used, total, percent
-        ))
+        let ratio = used / total
+        let status = checkMemoryStatus()
+        
+        log("[MemorySystem] Memory Status: \(status)")
+        log("[MemorySystem] Memory Usage: \(String(format: "%.1f", used))MB / \(String(format: "%.1f", total))MB (\(String(format: "%.1f", ratio * 100))%)")
+        log("[MemorySystem] Cache Stats - Hits: \(cacheHits), Misses: \(cacheMisses), Hit Ratio: \(String(format: "%.1f", Double(cacheHits) / Double(max(1, cacheHits + cacheMisses)) * 100))%")
     }
     
     deinit {
