@@ -48,6 +48,10 @@ class AdManager: NSObject, ObservableObject {
     private let maximumAdsPerGame: Int = 8 // Increased to 8 ads per game
     private let maximumAdLoadAttempts: Int = 3
     private let adLoadTimeout: TimeInterval = 10 // 10 seconds timeout for ad loading
+    private let preloadDelay: TimeInterval = 2 // Delay before preloading next ad
+    private let maxRetryAttempts: Int = 3
+    private var retryCount: Int = 0
+    private var preloadTimer: Timer?
     
     enum AdState {
         case idle
@@ -55,6 +59,7 @@ class AdManager: NSObject, ObservableObject {
         case ready
         case showing
         case error
+        case retrying
     }
     
     enum AdError: Error {
@@ -64,6 +69,9 @@ class AdManager: NSObject, ObservableObject {
         case noAdsAvailable
         case userHasNoAds
         case timeout
+        case networkError
+        case invalidResponse
+        case retryLimitExceeded
     }
     
     private let subscriptionManager = SubscriptionManager.shared
@@ -100,9 +108,22 @@ class AdManager: NSObject, ObservableObject {
     // MARK: - Ad Preloading
     
     private func preloadAllAds() async {
+        // Cancel any existing preload timer
+        preloadTimer?.invalidate()
+        
+        // Start preloading with a small delay to ensure SDK is ready
+        try? await Task.sleep(nanoseconds: UInt64(0.5 * 1_000_000_000))
+        
         await preloadBanner()
         await preloadInterstitial()
         await preloadRewardedInterstitial()
+        
+        // Schedule periodic preloading
+        preloadTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
+            Task { [weak self] in
+                await self?.preloadAllAds()
+            }
+        }
     }
     
     private func preloadInterstitial() async {
@@ -111,15 +132,31 @@ class AdManager: NSObject, ObservableObject {
         do {
             let request = Request()
             try await withTimeout(seconds: adLoadTimeout) {
+                // Load primary ad
                 self.interstitialAd = try await InterstitialAd.load(with: AdConfig.getInterstitialAdUnitID(), request: request)
                 self.interstitialAd?.fullScreenContentDelegate = self
+                
+                // Add small delay before loading fallback
+                try await Task.sleep(nanoseconds: UInt64(self.preloadDelay * 1_000_000_000))
                 
                 // Load fallback ad
                 self.fallbackInterstitialAd = try await InterstitialAd.load(with: AdConfig.getInterstitialAdUnitID(), request: request)
                 self.fallbackInterstitialAd?.fullScreenContentDelegate = self
+                
+                self.adState = .ready
+                self.retryCount = 0
             }
         } catch {
             print("Failed to preload interstitial ads: \(error.localizedDescription)")
+            handleAdError(error)
+            
+            // Retry with exponential backoff
+            if retryCount < maxRetryAttempts {
+                retryCount += 1
+                let delay = pow(2.0, Double(retryCount))
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                await preloadInterstitial()
+            }
         }
     }
     
@@ -129,15 +166,31 @@ class AdManager: NSObject, ObservableObject {
         do {
             let request = Request()
             try await withTimeout(seconds: adLoadTimeout) {
+                // Load primary ad
                 self.rewardedInterstitialAd = try await RewardedInterstitialAd.load(with: AdConfig.getRewardedAdUnitID(), request: request)
                 self.rewardedInterstitialAd?.fullScreenContentDelegate = self
+                
+                // Add small delay before loading fallback
+                try await Task.sleep(nanoseconds: UInt64(self.preloadDelay * 1_000_000_000))
                 
                 // Load fallback ad
                 self.fallbackRewardedAd = try await RewardedInterstitialAd.load(with: AdConfig.getRewardedAdUnitID(), request: request)
                 self.fallbackRewardedAd?.fullScreenContentDelegate = self
+                
+                self.adState = .ready
+                self.retryCount = 0
             }
         } catch {
             print("Failed to preload rewarded interstitial ads: \(error.localizedDescription)")
+            handleAdError(error)
+            
+            // Retry with exponential backoff
+            if retryCount < maxRetryAttempts {
+                retryCount += 1
+                let delay = pow(2.0, Double(retryCount))
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                await preloadRewardedInterstitial()
+            }
         }
     }
     
@@ -371,10 +424,15 @@ class AdManager: NSObject, ObservableObject {
         bannerAd = nil
         interstitialAd = nil
         rewardedInterstitialAd = nil
+        fallbackInterstitialAd = nil
+        fallbackRewardedAd = nil
         adState = .idle
         adError = nil
         adLoadAttempts = 0
         adLoadFailed = false
+        retryCount = 0
+        preloadTimer?.invalidate()
+        preloadTimer = nil
     }
     
     func resetGameState() async {
@@ -393,11 +451,32 @@ class AdManager: NSObject, ObservableObject {
         adLoadFailed = true
         isLoadingIndicatorVisible = false
         
+        // Determine specific error type
+        if let adError = error as? AdError {
+            self.adError = adError
+        } else if (error as NSError).code == -1009 {
+            self.adError = .networkError
+        } else if (error as NSError).code == -1001 {
+            self.adError = .timeout
+        }
+        
         // Show user-friendly error message
+        let errorMessage: String
+        switch self.adError {
+        case .networkError:
+            errorMessage = "Network connection error. Please check your internet connection."
+        case .timeout:
+            errorMessage = "Ad loading timed out. Please try again."
+        case .tooManyAttempts:
+            errorMessage = "Too many ad attempts. Please try again later."
+        default:
+            errorMessage = "Unable to load ad. Please try again later."
+        }
+        
         NotificationCenter.default.post(
             name: NSNotification.Name("AdLoadError"),
             object: nil,
-            userInfo: ["message": "Unable to load ad. Please try again later."]
+            userInfo: ["message": errorMessage]
         )
     }
 }

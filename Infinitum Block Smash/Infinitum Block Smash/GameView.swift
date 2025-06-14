@@ -6,6 +6,9 @@ import AppTrackingTransparency
 import Firebase
 import FirebaseAuth
 
+// Add AdError reference
+typealias AdError = AdManager.AdError
+
 struct GameView: View {
     @ObservedObject var gameState: GameState
     @StateObject private var adManager = AdManager.shared
@@ -31,6 +34,10 @@ struct GameView: View {
     @State private var showingAchievementProgress = false
     @State private var currentAchievementProgress: (id: String, progress: Double)?
     @State private var achievementTimer: Timer?
+    @State private var showingAdError = false
+    @State private var adErrorMessage = ""
+    @State private var adRetryCount = 0
+    @State private var isAdRetrying = false
     
     private enum SettingsAction {
         case resume
@@ -171,49 +178,26 @@ struct GameView: View {
             
             // Achievement progress overlay
             if showingAchievementProgress, let achievement = currentAchievementProgress {
-                VStack {
-                    if let description = GameCenterManager.shared.getAchievementDescription(id: achievement.id) {
-                        HStack {
-                            Image(systemName: description.icon)
-                                .font(.title2)
-                            Text(description.title)
-                                .font(.headline)
-                        }
-                        ProgressView(value: achievement.progress, total: 100)
-                            .progressViewStyle(LinearProgressViewStyle())
-                            .tint(.blue)
-                        Text("\(Int(achievement.progress))%")
-                            .font(.caption)
-                    }
-                }
-                .padding()
-                .background(Color.black.opacity(0.8))
-                .cornerRadius(10)
-                .padding()
-                .transition(.move(edge: .top))
+                achievementProgressView(achievement)
             }
             
             // Ad loading indicator
             if adManager.isLoadingIndicatorVisible {
-                VStack {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle())
-                        .scaleEffect(1.5)
-                    Text("Loading Ad...")
-                        .foregroundColor(.white)
-                        .padding(.top, 8)
-                }
-                .padding()
-                .background(Color.black.opacity(0.7))
-                .cornerRadius(12)
+                adLoadingView
             }
         }
-        .alert("Ad Error", isPresented: $adManager.adLoadFailed) {
+        .alert("Ad Error", isPresented: $showingAdError) {
+            Button("Retry") {
+                Task {
+                    await adManager.loadInterstitial()
+                    await adManager.loadRewardedInterstitial()
+                }
+            }
             Button("OK", role: .cancel) {
-                adManager.adLoadFailed = false
+                resetAdState()
             }
         } message: {
-            Text("Unable to load ad. Please try again later.")
+            Text(adErrorMessage)
         }
         .sheet(isPresented: $showingSettings) {
             if isSettingsLoading {
@@ -292,6 +276,21 @@ struct GameView: View {
             NotificationCenter.default.removeObserver(self)
             
             achievementTimer?.invalidate()
+        }
+        .onChange(of: adManager.adLoadFailed) { failed in
+            if failed {
+                handleAdError(adManager.adError ?? AdError.loadFailed)
+            }
+        }
+        .onChange(of: adManager.adState) { state in
+            switch state {
+            case .error:
+                handleAdError(adManager.adError ?? AdError.loadFailed)
+            case .ready:
+                resetAdState()
+            default:
+                break
+            }
         }
     }
     
@@ -639,6 +638,72 @@ struct GameView: View {
                 }
             }
         }
+    }
+    
+    private func handleAdError(_ error: Error) {
+        adErrorMessage = error.localizedDescription
+        showingAdError = true
+        
+        // Auto-retry logic
+        if adRetryCount < 3 && !isAdRetrying {
+            isAdRetrying = true
+            adRetryCount += 1
+            
+            // Exponential backoff
+            let delay = pow(2.0, Double(adRetryCount))
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                Task {
+                    // Use public method instead of private preloadAllAds
+                    await adManager.loadInterstitial()
+                    await adManager.loadRewardedInterstitial()
+                    isAdRetrying = false
+                }
+            }
+        }
+    }
+    
+    private func resetAdState() {
+        adRetryCount = 0
+        isAdRetrying = false
+        showingAdError = false
+        adErrorMessage = ""
+    }
+    
+    private func achievementProgressView(_ achievement: (id: String, progress: Double)) -> some View {
+        VStack {
+            if let description = GameCenterManager.shared.getAchievementDescription(id: achievement.id) {
+                HStack {
+                    Image(systemName: description.icon)
+                        .font(.title2)
+                    Text(description.title)
+                        .font(.headline)
+                }
+                ProgressView(value: achievement.progress, total: 100)
+                    .progressViewStyle(LinearProgressViewStyle())
+                    .tint(.blue)
+                Text("\(Int(achievement.progress))%")
+                    .font(.caption)
+            }
+        }
+        .padding()
+        .background(Color.black.opacity(0.8))
+        .cornerRadius(10)
+        .padding()
+        .transition(.move(edge: .top))
+    }
+    
+    private var adLoadingView: some View {
+        VStack {
+            ProgressView()
+                .progressViewStyle(CircularProgressViewStyle())
+                .scaleEffect(1.5)
+            Text("Loading Ad...")
+                .foregroundColor(.white)
+                .padding(.top, 8)
+        }
+        .padding()
+        .background(Color.black.opacity(0.7))
+        .cornerRadius(12)
     }
 }
 
