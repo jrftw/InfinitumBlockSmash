@@ -70,13 +70,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
         
         // Configure Game Center
         GKLocalPlayer.local.authenticateHandler = { viewController, error in
-            if let viewController = viewController {
-                // Present the view controller if needed
-                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                   let rootViewController = windowScene.windows.first?.rootViewController {
-                    rootViewController.present(viewController, animated: true)
-                }
-            } else if let error = error {
+            if let error = error {
                 print("Game Center authentication error: \(error.localizedDescription)")
             }
         }
@@ -272,34 +266,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
     // MARK: - Game Center Configuration
     private func configureGameCenter() {
         GKLocalPlayer.local.authenticateHandler = { viewController, error in
-            if let viewController = viewController {
-                // Present the view controller if needed
-                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                   let window = windowScene.windows.first {
-                    window.rootViewController?.present(viewController, animated: true)
-                }
-            } else if GKLocalPlayer.local.isAuthenticated {
+            if GKLocalPlayer.local.isAuthenticated {
                 print("[GameCenter] Player authenticated successfully")
-                // Use the modern Game Center authentication approach
-                GameCenterAuthProvider.getCredential { credential, error in
-                    if let error = error {
-                        print("Failed to get Game Center credential: \(error)")
-                        return
-                    }
-                    
-                    guard let credential = credential else {
-                        print("No Game Center credential available")
-                        return
-                    }
-                    
-                    Auth.auth().signIn(with: credential) { authResult, error in
-                        if let error = error {
-                            print("Firebase Game Center sign-in failed: \(error)")
-                        } else {
-                            print("Firebase Game Center sign-in succeeded!")
-                        }
-                    }
-                }
                 // Initialize Game Center manager
                 _ = GameCenterManager.shared
             } else if let error = error {
