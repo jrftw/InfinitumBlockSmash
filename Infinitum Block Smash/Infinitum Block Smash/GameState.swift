@@ -1438,7 +1438,7 @@ final class GameState: ObservableObject {
         isGameOver = true
         delegate?.gameStateDidUpdate()
         
-        // Show interstitial ad when game is over
+        // Show interstitial ad when game is over, but don't wait for it
         Task {
             if await AdManager.shared.isAdAvailable() {
                 await AdManager.shared.showInterstitial()

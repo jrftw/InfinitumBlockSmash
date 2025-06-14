@@ -186,19 +186,6 @@ struct GameView: View {
                 adLoadingView
             }
         }
-        .alert("Ad Error", isPresented: $showingAdError) {
-            Button("Retry") {
-                Task {
-                    await adManager.loadInterstitial()
-                    await adManager.loadRewardedInterstitial()
-                }
-            }
-            Button("OK", role: .cancel) {
-                resetAdState()
-            }
-        } message: {
-            Text(adErrorMessage)
-        }
         .sheet(isPresented: $showingSettings) {
             if isSettingsLoading {
                 ProgressView()
@@ -641,10 +628,7 @@ struct GameView: View {
     }
     
     private func handleAdError(_ error: Error) {
-        adErrorMessage = error.localizedDescription
-        showingAdError = true
-        
-        // Auto-retry logic
+        // Silently handle ad errors without showing alerts
         if adRetryCount < 3 && !isAdRetrying {
             isAdRetrying = true
             adRetryCount += 1
@@ -653,7 +637,6 @@ struct GameView: View {
             let delay = pow(2.0, Double(adRetryCount))
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 Task {
-                    // Use public method instead of private preloadAllAds
                     await adManager.loadInterstitial()
                     await adManager.loadRewardedInterstitial()
                     isAdRetrying = false
@@ -665,8 +648,6 @@ struct GameView: View {
     private func resetAdState() {
         adRetryCount = 0
         isAdRetrying = false
-        showingAdError = false
-        adErrorMessage = ""
     }
     
     private func achievementProgressView(_ achievement: (id: String, progress: Double)) -> some View {

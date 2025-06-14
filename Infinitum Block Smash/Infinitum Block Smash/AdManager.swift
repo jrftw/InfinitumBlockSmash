@@ -460,24 +460,15 @@ class AdManager: NSObject, ObservableObject {
             self.adError = .timeout
         }
         
-        // Show user-friendly error message
-        let errorMessage: String
-        switch self.adError {
-        case .networkError:
-            errorMessage = "Network connection error. Please check your internet connection."
-        case .timeout:
-            errorMessage = "Ad loading timed out. Please try again."
-        case .tooManyAttempts:
-            errorMessage = "Too many ad attempts. Please try again later."
-        default:
-            errorMessage = "Unable to load ad. Please try again later."
+        // Silently retry loading ads without showing error to user
+        Task {
+            if retryCount < maxRetryAttempts {
+                retryCount += 1
+                let delay = pow(2.0, Double(retryCount))
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                await preloadAllAds()
+            }
         }
-        
-        NotificationCenter.default.post(
-            name: NSNotification.Name("AdLoadError"),
-            object: nil,
-            userInfo: ["message": errorMessage]
-        )
     }
 }
 
