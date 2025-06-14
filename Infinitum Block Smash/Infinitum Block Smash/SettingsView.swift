@@ -565,8 +565,11 @@ private struct PrivacySection: View {
                 get: { UserDefaults.standard.bool(forKey: "allowCrashReports") },
                 set: { UserDefaults.standard.set($0, forKey: "allowCrashReports") }
             ))
-            Button("View Analytics Dashboard") {
-                showingAnalytics = true
+            NavigationLink(destination: AnalyticsDashboardView()) {
+                Text("View Analytics Dashboard")
+            }
+            NavigationLink(destination: DebugLogsView()) {
+                Text("Debug Logs")
             }
         }
     }
