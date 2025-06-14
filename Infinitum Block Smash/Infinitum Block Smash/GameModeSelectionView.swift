@@ -42,7 +42,7 @@ struct GameModeSelectionView: View {
                     Button(action: onClassic) {
                         GameModeButton(
                             title: "Classic",
-                            description: "Place blocks and create matches at your own pace",
+                            description: "Place blocks and create matches at your own pace 699 Levels",
                             icon: "gamecontroller.fill",
                             color: .blue
                         )
@@ -52,7 +52,7 @@ struct GameModeSelectionView: View {
                     Button(action: onClassicTimed) {
                         GameModeButton(
                             title: "Classic Timed",
-                            description: "Race against the clock to achieve high scores",
+                            description: "Race against the clock to achieve high scores 699 Levels",
                             icon: "timer",
                             color: .orange
                         )
@@ -62,7 +62,7 @@ struct GameModeSelectionView: View {
                     ZStack(alignment: .leading) {
                         GameModeButton(
                             title: "Countdown Quest",
-                            description: "Complete challenges before time runs out",
+                            description: "Complete challenges before the 7 day time runs out 100 Levels",
                             icon: "hourglass",
                             color: .purple
                         )
