@@ -533,6 +533,10 @@ private struct InformationSection: View {
             Button("Suggest a Feature") {
                 showingFeatureMail = true
             }
+            
+            NavigationLink(destination: MoreAppsView()) {
+                Text("More Apps By Us")
+            }
         }
     }
 }
