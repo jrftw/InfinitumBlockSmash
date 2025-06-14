@@ -302,9 +302,9 @@ struct GameView: View {
                 highScoresView
             }
         }
-        .frame(height: 88)
+        .frame(height: UIScreen.main.bounds.width <= 390 ? 76 : 88)
         .padding(.horizontal, 8)
-        .padding(.top, 8)
+        .padding(.top, UIScreen.main.bounds.width <= 390 ? 4 : 8)
     }
     
     private var scoreLevelContent: some View {
@@ -316,17 +316,17 @@ struct GameView: View {
             levelView
         }
         .padding(.horizontal)
-        .padding(.top, 8)
+        .padding(.top, UIScreen.main.bounds.width <= 390 ? 4 : 8)
         .padding(.bottom, 4)
     }
     
     private var scoreView: some View {
         VStack(spacing: 4) {
             Text("Score")
-                .font(.system(size: 14, weight: .medium))
+                .font(.system(size: UIScreen.main.bounds.width <= 390 ? 12 : 14, weight: .medium))
                 .foregroundColor(.white.opacity(0.7))
             Text("\(gameState.isGameOver ? gameState.score : gameState.temporaryScore)")
-                .font(.system(size: 24, weight: .bold))
+                .font(.system(size: UIScreen.main.bounds.width <= 390 ? 20 : 24, weight: .bold))
                 .foregroundColor(.white)
         }
     }
@@ -341,7 +341,7 @@ struct GameView: View {
                 Text(gameState.canUndo ? 
                     NSLocalizedString("Undo Last Move", comment: "Undo button text") :
                     NSLocalizedString("Watch Ad for Undo", comment: "Watch ad for undo button text"))
-                    .font(.headline)
+                    .font(.system(size: UIScreen.main.bounds.width <= 390 ? 14 : 16, weight: .semibold))
                     .foregroundColor(gameState.canUndo ? Color(#colorLiteral(red: 0.2, green: 0.5, blue: 1, alpha: 1)) : Color.gray)
             }
             .disabled(!gameState.canUndo && !gameState.canAdUndo)
@@ -355,12 +355,12 @@ struct GameView: View {
             
             if !gameState.canUndo && gameState.canAdUndo {
                 Text(String(format: NSLocalizedString("Undos: %d", comment: "Remaining undos count"), gameState.adUndoCount))
-                    .font(.caption2)
+                    .font(.system(size: UIScreen.main.bounds.width <= 390 ? 10 : 12))
                     .foregroundColor(.white.opacity(0.9))
             }
             
             Text(String(format: NSLocalizedString("Need: %d", comment: "Required score"), gameState.calculateRequiredScore() - gameState.temporaryScore))
-                .font(.caption2)
+                .font(.system(size: UIScreen.main.bounds.width <= 390 ? 10 : 12))
                 .foregroundColor(.white.opacity(0.9))
         }
     }

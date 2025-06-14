@@ -10,20 +10,27 @@ struct GameTopBar: View {
     // Minimum tap target size for better touch response
     private let minimumTapSize: CGFloat = 44
     
+    // Screen size check
+    private var isSmallScreen: Bool {
+        UIScreen.main.bounds.width <= 390 // 6.1" iPhone width
+    }
+    
     var body: some View {
         HStack {
             // Pause Button
             Button(action: { isPaused = true }) {
                 Image(systemName: "pause.circle.fill")
-                    .font(.title2)
+                    .font(isSmallScreen ? .title3 : .title2)
                     .foregroundColor(.white)
                     .frame(width: minimumTapSize, height: minimumTapSize)
             }
             .padding(.trailing, 8)
             
-            Text("Block Smash")
-                .font(.title2.bold())
-                .foregroundColor(.white)
+            if !isSmallScreen {
+                Text("Block Smash")
+                    .font(.title2.bold())
+                    .foregroundColor(.white)
+            }
             
             Spacer()
             
