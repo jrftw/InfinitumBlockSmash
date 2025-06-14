@@ -22,6 +22,7 @@ struct ContentView: View {
     @StateObject private var authViewModel = AuthViewModel()
     @State private var onlineUsersCount = 0
     @State private var dailyPlayersCount = 0
+    @State private var totalPlayersCount = 0
     @State private var showingGameModeSelection = false
     @State private var isTopThreePlayer = false
     
@@ -72,6 +73,15 @@ struct ContentView: View {
                                 .foregroundColor(.white.opacity(0.6))
                             
                             Text(dailyPlayersCountText)
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
+                                .foregroundColor(.white.opacity(0.8))
+                                .shadow(color: .black.opacity(0.2), radius: 1, x: 0, y: 1)
+                            
+                            Text("•")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.white.opacity(0.6))
+                            
+                            Text(totalPlayersCountText)
                                 .font(.system(size: 13, weight: .medium, design: .rounded))
                                 .foregroundColor(.white.opacity(0.8))
                                 .shadow(color: .black.opacity(0.2), radius: 1, x: 0, y: 1)
@@ -167,6 +177,7 @@ struct ContentView: View {
             
             setupOnlineUsersTracking()
             setupDailyPlayersTracking()
+            updateTotalPlayersCount()
             
             // Check top three status when view appears
             Task {
@@ -275,6 +286,17 @@ struct ContentView: View {
         }
     }
     
+    private func updateTotalPlayersCount() {
+        Task { @MainActor in
+            do {
+                totalPlayersCount = try await FirebaseManager.shared.getTotalPlayersCount()
+            } catch {
+                print("Error getting total players count: \(error)")
+                totalPlayersCount = 0
+            }
+        }
+    }
+    
     private func cleanup() {
         NotificationCenter.default.removeObserver(self)
     }
@@ -307,6 +329,10 @@ struct ContentView: View {
     
     private var dailyPlayersCountText: String {
         "\(dailyPlayersCount) players today"
+    }
+    
+    private var totalPlayersCountText: String {
+        "\(totalPlayersCount) total players"
     }
 }
 

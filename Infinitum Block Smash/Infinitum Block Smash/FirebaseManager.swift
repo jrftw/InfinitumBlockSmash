@@ -687,6 +687,19 @@ class FirebaseManager: ObservableObject {
         }
     }
     
+    func getTotalPlayersCount() async throws -> Int {
+        print("[FirebaseManager] Getting total players count")
+        do {
+            let snapshot = try await db.collection("users").count.getAggregation(source: .server)
+            let count = Int(truncating: snapshot.count)
+            print("[FirebaseManager] Total players count: \(count)")
+            return count
+        } catch {
+            print("[FirebaseManager] Error getting total players count: \(error)")
+            return 0
+        }
+    }
+    
     private func updateOnlineUsersInRTDB(_ count: Int) async throws {
         print("[FirebaseManager] Updating online users count in RTDB: \(count)")
         // Get all users who have been active in the last 15 minutes
