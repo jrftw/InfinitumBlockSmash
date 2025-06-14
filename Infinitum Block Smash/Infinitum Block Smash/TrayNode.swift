@@ -60,9 +60,9 @@ class TrayNode: SKNode {
         let shapeHeights = blockBounds.map { CGFloat($0.maxY - $0.minY + 1) * blockSize }
         let maxHeight = shapeHeights.max() ?? 0
 
-        // 3. Calculate scale to fit height first, with a maximum scale of 0.8
+        // 3. Calculate scale to fit height first, with a maximum scale of 0.7
         let scaleY = availableHeight / maxHeight
-        let scale = min(0.8, scaleY)
+        let scale = min(0.7, scaleY)
         lastScale = scale
         lastBlockSize = blockSize * scale
 
@@ -70,11 +70,10 @@ class TrayNode: SKNode {
         let scaledShapeWidths = shapeWidths.map { $0 * scale }
         let totalShapesWidth = scaledShapeWidths.reduce(0, +)
         
-        // 5. Calculate minimum spacing needed between shapes to prevent overlap
-        let minSpacing = blockSize * scale * 0.5 // Minimum spacing of half a block
+        // 5. Calculate optimal spacing to use entire tray width
         let totalSpacing = availableWidth - totalShapesWidth
-        let spacingBetweenShapes = max(minSpacing, totalSpacing / CGFloat(blocks.count + 1))
-
+        let spacingBetweenShapes = totalSpacing / CGFloat(blocks.count + 1)
+        
         // 6. Position shapes with proper spacing and z-ordering
         var xOffset: CGFloat = -availableWidth / 2 + spacingBetweenShapes
         for (i, block) in blocks.enumerated() {
@@ -82,8 +81,9 @@ class TrayNode: SKNode {
             let shapeHeight = shapeHeights[i] * scale
             let node = ShapeNode(block: block, blockSize: blockSize * scale)
             
-            // Center each shape vertically
+            // Center each shape vertically in the tray, accounting for the shape's origin
             let verticalOffset = -shapeHeight / 2 + blockSize * scale / 2
+            
             node.position = CGPoint(x: xOffset + shapeWidth / 2, y: verticalOffset)
             node.setScale(1.0)
             node.name = "trayShape_\(block.id.uuidString)"
