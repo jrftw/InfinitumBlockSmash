@@ -21,6 +21,8 @@ final class LeaderboardService: ObservableObject {
         Task {
             await setupPeriodResets()
             setupResetTimer()
+            // Run cleanup once during initialization
+            await cleanupZeroScores()
         }
     }
     
@@ -196,74 +198,73 @@ final class LeaderboardService: ObservableObject {
         // Remove existing listener if any
         listeners[key]?.remove()
         
-        // Create new listener
-        let listener = db.collection(type.collectionName)
+        // Create new listener with where clause to filter out zero scores
+        let query = db.collection(type.collectionName)
             .document(period)
             .collection("scores")
+            .whereField(type.scoreField, isGreaterThan: 0)  // Only show scores greater than 0
             .order(by: type.scoreField, descending: type.sortOrder == "desc")
             .limit(to: leaderboardLimit)
-            .addSnapshotListener { [weak self] snapshot, error in
-                guard let self = self else { return }
-                
-                if let error = error {
-                    print("[Leaderboard] ❌ Real-time listener error: \(error.localizedDescription)")
-                    return
+        
+        let listener = query.addSnapshotListener { [weak self] snapshot, error in
+            guard let self = self else { return }
+            
+            if let error = error {
+                print("[Leaderboard] ❌ Real-time listener error: \(error.localizedDescription)")
+                return
+            }
+            
+            guard let documents = snapshot?.documents else {
+                print("[Leaderboard] ❌ No documents in real-time update")
+                return
+            }
+            
+            let entries = documents.compactMap { document -> FirebaseManager.LeaderboardEntry? in
+                let data = document.data()
+                guard let username = data["username"] as? String,
+                      let timestamp = (data["timestamp"] as? Timestamp)?.dateValue() else {
+                    return nil
                 }
                 
-                guard let documents = snapshot?.documents else {
-                    print("[Leaderboard] ❌ No documents in real-time update")
-                    return
-                }
-                
-                let entries = documents.compactMap { document -> FirebaseManager.LeaderboardEntry? in
-                    let data = document.data()
-                    guard let username = data["username"] as? String,
-                          let timestamp = (data["timestamp"] as? Timestamp)?.dateValue() else {
+                // Handle different score fields based on leaderboard type
+                let score: Int
+                if type == .timed {
+                    // For timed leaderboard, convert time to milliseconds for consistent comparison
+                    if let time = data["time"] as? TimeInterval {
+                        score = Int(time * 1000)
+                    } else if let time = data["time"] as? Int {  // Backward compatibility for Int time
+                        score = time
+                    } else {
                         return nil
                     }
-                    
-                    // Handle different score fields based on leaderboard type
-                    let score: Int
-                    if type == .timed {
-                        // For timed leaderboard, convert time to milliseconds for consistent comparison
-                        if let time = data["time"] as? TimeInterval {
-                            score = Int(time * 1000)
-                        } else {
-                            return nil
-                        }
+                } else {
+                    // For score and achievement leaderboards
+                    if let value = data[type.scoreField] as? Int {
+                        score = value
+                    } else if let value = data[type.scoreField] as? Double {  // Backward compatibility for Double scores
+                        score = Int(value)
                     } else {
-                        // For score and achievement leaderboards
-                        if let value = data[type.scoreField] as? Int {
-                            score = value
-                        } else {
-                            return nil
-                        }
+                        return nil
                     }
-                    
-                    return FirebaseManager.LeaderboardEntry(
-                        id: document.documentID,
-                        username: username,
-                        score: score,
-                        timestamp: timestamp
-                    )
                 }
                 
-                print("[Leaderboard] 📊 Real-time update received: \(entries.count) entries")
+                // Double check that score is greater than 0
+                guard score > 0 else { return nil }
                 
-                // Only update if the data is newer than what we have
-                if let currentEntries = self.leaderboardUpdates[key],
-                   let currentLatestTimestamp = currentEntries.first?.timestamp,
-                   let newLatestTimestamp = entries.first?.timestamp,
-                   newLatestTimestamp <= currentLatestTimestamp {
-                    print("[Leaderboard] ⏭️ Skipping update - data is not newer")
-                    return
-                }
-                
-                self.leaderboardUpdates[key] = entries
-                
-                // Update cache with new data
-                LeaderboardCache.shared.cacheLeaderboard(entries, type: type, period: period)
+                return FirebaseManager.LeaderboardEntry(
+                    id: document.documentID,
+                    username: username,
+                    score: score,
+                    timestamp: timestamp
+                )
             }
+            
+            // Update the leaderboard with new entries
+            self.leaderboardUpdates[key] = entries
+            
+            // Update cache with new data
+            LeaderboardCache.shared.cacheLeaderboard(entries, type: type, period: period)
+        }
         
         listeners[key] = listener
     }
@@ -281,6 +282,7 @@ final class LeaderboardService: ObservableObject {
     func updateLeaderboard(score: Int, level: Int? = nil, time: TimeInterval? = nil, type: LeaderboardType = .score, username: String? = nil) async throws {
         print("[Leaderboard] 🔄 Starting leaderboard update")
         print("[Leaderboard] 📊 Score: \(score), Level: \(level ?? -1), Type: \(type)")
+        print("[Leaderboard] 👤 User: \(Auth.auth().currentUser?.uid ?? "unknown")")
         
         // Check if user is guest
         let isGuest = UserDefaults.standard.bool(forKey: "isGuest")
@@ -308,22 +310,20 @@ final class LeaderboardService: ObservableObject {
         let db = Firestore.firestore()
         let userDoc = try await db.collection("users").document(userId).getDocument()
         
-        // Get username in this order:
-        // 1. Use passed username if provided
-        // 2. Get from Firestore user document
-        // 3. Get from Firebase Auth displayName
-        // 4. Fall back to "Anonymous" if all else fails
-        let username = username ?? 
-                      userDoc.data()?["username"] as? String ??
-                      Auth.auth().currentUser?.displayName ??
-                      "Anonymous"
+        guard let username = username ?? userDoc.data()?["username"] as? String else {
+            print("[Leaderboard] ❌ No username found for user: \(userId)")
+            throw LeaderboardError.invalidData
+        }
+        
+        print("[Leaderboard] ✅ Username found: \(username)")
         
         // Use all periods
         let periods = ["daily", "weekly", "monthly", "alltime"]
         
         for period in periods {
             do {
-                print("[Leaderboard] 📝 Updating \(period) leaderboard")
+                print("[Leaderboard] 🔄 Attempting to update \(period) leaderboard for user \(userId)")
+                
                 let docRef = db.collection(type.collectionName)
                     .document(period)
                     .collection("scores")
@@ -339,7 +339,12 @@ final class LeaderboardService: ObservableObject {
                 
                 // For achievement leaderboard, always update
                 // For other leaderboards, update if no score exists or new score is higher
-                if type == .achievement || currentScore == -1 || score > currentScore {
+                let shouldUpdate = type == .achievement || 
+                                 currentScore == -1 || 
+                                 score > currentScore ||
+                                 (type == .timed && time != nil && (currentScore == -1 || time! < TimeInterval(currentScore)))
+                
+                if shouldUpdate {
                     // Create base data dictionary
                     var data: [String: Any] = [
                         "username": username,
@@ -370,22 +375,23 @@ final class LeaderboardService: ObservableObject {
                     try await docRef.setData(data, merge: true)
                     print("[Leaderboard] ✅ Successfully updated \(period) leaderboard")
                     
-                    // Invalidate cache for this leaderboard
-                    LeaderboardCache.shared.invalidateCache(type: type, period: period)
-                    
-                    // Force refresh real-time listener
-                    setupRealTimeListener(type: type, period: period)
+                    // Verify the update
+                    if !(try await verifyScoreUpdate(userId: userId, type: type, period: period, expectedScore: score)) {
+                        print("[Leaderboard] ⚠️ Score verification failed - scheduling retry")
+                        await handleFailedUpdate(userId: userId, type: type, period: period, score: score, level: level, time: time)
+                    }
                 } else {
-                    print("[Leaderboard] ⏭️ Skipping \(period) update - Score not better")
+                    print("[Leaderboard] ⏭️ Skipping \(period) update - Score not better (Current: \(currentScore), New: \(score))")
                 }
-                
             } catch {
                 print("[Leaderboard] ❌ Error updating \(period) leaderboard: \(error.localizedDescription)")
-                throw error
+                print("[Leaderboard] ❌ Error details: \(error)")
+                await handleFailedUpdate(userId: userId, type: type, period: period, score: score, level: level, time: time)
+                throw LeaderboardError.updateFailed(error)
             }
         }
         
-        print("[Leaderboard] ✅ Completed all leaderboard updates")
+        print("[Leaderboard] ✅ Successfully completed all leaderboard updates")
     }
     
     func getLeaderboard(type: LeaderboardType, period: String) async throws -> (entries: [FirebaseManager.LeaderboardEntry], totalUsers: Int) {
@@ -764,6 +770,98 @@ final class LeaderboardService: ObservableObject {
         
         return shouldReset
     }
+    
+    // Add a function to clean up zero scores for backward compatibility
+    private func cleanupZeroScores() async {
+        print("[Leaderboard] Starting cleanup of zero scores for backward compatibility")
+        
+        let collections = ["classic_leaderboard", "achievement_leaderboard", "classic_timed_leaderboard"]
+        let periods = ["daily", "weekly", "monthly", "alltime"]
+        
+        for collection in collections {
+            for period in periods {
+                do {
+                    let snapshot = try await db.collection(collection)
+                        .document(period)
+                        .collection("scores")
+                        .getDocuments()
+                    
+                    for document in snapshot.documents {
+                        let data = document.data()
+                        let scoreField = collection == "achievement_leaderboard" ? "points" :
+                                       collection == "classic_timed_leaderboard" ? "time" : "score"
+                        
+                        if let score = data[scoreField] as? Int, score == 0 {
+                            print("[Leaderboard] Removing zero score entry for user \(document.documentID) in \(collection)/\(period)")
+                            try await document.reference.delete()
+                        }
+                    }
+                } catch {
+                    print("[Leaderboard] Error cleaning up zero scores for \(collection)/\(period): \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+    
+    // Add this function to verify score updates
+    private func verifyScoreUpdate(userId: String, type: LeaderboardType, period: String, expectedScore: Int) async throws -> Bool {
+        print("[Leaderboard] 🔍 Verifying score update for user \(userId)")
+        
+        let docRef = db.collection(type.collectionName)
+            .document(period)
+            .collection("scores")
+            .document(userId)
+        
+        let doc = try await docRef.getDocument(source: .server)
+        guard let data = doc.data(),
+              let actualScore = data[type.scoreField] as? Int else {
+            print("[Leaderboard] ❌ Verification failed - No score found")
+            return false
+        }
+        
+        let isCorrect = actualScore == expectedScore
+        print("[Leaderboard] \(isCorrect ? "✅" : "❌") Score verification: Expected \(expectedScore), Got \(actualScore)")
+        
+        return isCorrect
+    }
+
+    // Update the PendingScore struct to include all fields
+    private struct PendingScore: Codable {
+        let score: Int
+        let timestamp: Date
+        let level: Int?
+        let time: TimeInterval?
+        
+        init(score: Int, timestamp: Date, level: Int? = nil, time: TimeInterval? = nil) {
+            self.score = score
+            self.timestamp = timestamp
+            self.level = level
+            self.time = time
+        }
+    }
+
+    // Update the handleFailedUpdate function to include all parameters
+    private func handleFailedUpdate(userId: String, type: LeaderboardType, period: String, score: Int, level: Int? = nil, time: TimeInterval? = nil) async {
+        print("[Leaderboard] ⚠️ Handling failed update for user \(userId)")
+        
+        // Store the failed update in UserDefaults for retry
+        let pendingScore = PendingScore(score: score, timestamp: Date(), level: level, time: time)
+        if let encoded = try? JSONEncoder().encode(pendingScore) {
+            UserDefaults.standard.set(encoded, forKey: "pendingLeaderboardScore")
+            print("[Leaderboard] ✅ Stored pending score for retry")
+        }
+        
+        // Schedule a retry
+        Task {
+            do {
+                try await Task.sleep(nanoseconds: 5_000_000_000) // 5 seconds
+                try await updateLeaderboard(score: score, level: level, time: time, type: type)
+                print("[Leaderboard] ✅ Retry successful")
+            } catch {
+                print("[Leaderboard] ❌ Retry failed: \(error.localizedDescription)")
+            }
+        }
+    }
 }
 
 enum LeaderboardError: LocalizedError {
@@ -808,4 +906,11 @@ private struct PendingScore: Codable {
     let timestamp: Date
     let level: Int?
     let time: TimeInterval?
+    
+    init(score: Int, timestamp: Date, level: Int? = nil, time: TimeInterval? = nil) {
+        self.score = score
+        self.timestamp = timestamp
+        self.level = level
+        self.time = time
+    }
 } 

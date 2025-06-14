@@ -1044,6 +1044,23 @@ final class GameState: ObservableObject {
             userDefaults.set(highScore, forKey: scoreKey)
             achievementsManager.updateAchievement(id: "high_score", value: temporaryScore)
             print("[HighScore] New personal high score: \(temporaryScore)")
+            
+            // Submit to leaderboard when high score is updated
+            if !UserDefaults.standard.bool(forKey: "isGuest") {
+                Task {
+                    do {
+                        try await LeaderboardService.shared.updateLeaderboard(
+                            score: temporaryScore,
+                            level: level,
+                            time: totalPlayTime,
+                            type: .score
+                        )
+                        print("[Leaderboard] ✅ Submitted score to classic_leaderboard")
+                    } catch {
+                        print("[Leaderboard] ❌ Failed to submit score leaderboard: \(error)")
+                    }
+                }
+            }
         }
         
         // Update level high score
@@ -1219,45 +1236,99 @@ final class GameState: ObservableObject {
     }
     
     private func handleGameOver() {
-        print("[GameState] 🎮 Game Over - Final Score: \(temporaryScore)")
-        
-        // Set game over state first
+        print("[GameState] Handling game over")
         isGameOver = true
         
-        // Update the actual score with the temporary score
+        // Transfer temporary score to main score
         score = temporaryScore
         
-        // Update personal high score if needed
+        // Update achievements
+        achievementsManager.updateAchievement(id: "score_1000", value: score)
+        achievementsManager.updateAchievement(id: "score_5000", value: score)
+        achievementsManager.updateAchievement(id: "score_10000", value: score)
+        
+        // Update high scores
         if score > highScore {
             highScore = score
             userDefaults.set(highScore, forKey: scoreKey)
-            print("[GameState] 🏆 New Personal High Score: \(highScore)")
+            achievementsManager.updateAchievement(id: "high_score", value: score)
+            print("[HighScore] New all-time high score: \(score)")
         }
         
-        // Update leaderboard only if not a guest user
-        if !UserDefaults.standard.bool(forKey: "isGuest") {
+        // Update level high score
+        let levelHighScoreKey = "highScore_level_\(level)"
+        let prevLevelHigh = userDefaults.integer(forKey: levelHighScoreKey)
+        if score > prevLevelHigh {
+            userDefaults.set(score, forKey: levelHighScoreKey)
+            print("[HighScore] New high score for level \(level): \(score)")
+        }
+        
+        // Only increment gamesCompleted if the game was lost (not manually ended)
+        if !isPaused {
+            gamesCompleted += 1
+            saveStatistics() // Save statistics when game is over
+        }
+        
+        // Update play time
+        playTimeTimer?.invalidate()
+        Task { @MainActor in
+            updatePlayTime() // Final update of play time
+            try? await saveProgress()
+        }
+        
+        // Update leaderboard only if not a guest user and score is greater than 0
+        if !UserDefaults.standard.bool(forKey: "isGuest") && score > 0 {
             Task {
                 do {
-                    print("[GameState] 📊 Updating leaderboard with score: \(score)")
-                    try await FirebaseManager.shared.submitScore(score, level: level, time: totalPlayTime)
-                    print("[GameState] ✅ Leaderboard updated successfully")
+                    print("[Leaderboard] Updating leaderboard after game over - Score: \(score)")
+                    
+                    // Update classic score leaderboard
+                    try await LeaderboardService.shared.updateLeaderboard(
+                        score: score,
+                        level: level,
+                        type: .score
+                    )
+                    print("[Leaderboard] ✅ Classic score leaderboard updated")
+                    
+                    // Update achievement leaderboard
+                    try await LeaderboardService.shared.updateLeaderboard(
+                        score: score,
+                        level: level,
+                        type: .achievement
+                    )
+                    print("[Leaderboard] ✅ Achievement leaderboard updated")
+                    
+                    // Update timed leaderboard if in timed mode
+                    if UserDefaults.standard.bool(forKey: "isTimedMode") {
+                        try await LeaderboardService.shared.updateLeaderboard(
+                            score: score,
+                            level: level,
+                            time: totalPlayTime,
+                            type: .timed
+                        )
+                        print("[Leaderboard] ✅ Timed leaderboard updated")
+                    }
+                    
+                    // Refresh leaderboard high score
+                    await fetchLeaderboardHighScore()
                 } catch {
-                    print("[GameState] ❌ Failed to update leaderboard: \(error.localizedDescription)")
+                    print("[Leaderboard] ❌ Error updating leaderboard after game over: \(error.localizedDescription)")
+                    print("[Leaderboard] ❌ Error details: \(error)")
                 }
             }
         } else {
-            print("[GameState] 👤 Guest user - skipping leaderboard update")
+            print("[Leaderboard] 👤 Guest user or zero score - skipping leaderboard update")
         }
         
-        // Update achievements
-        print("[GameState] 🏅 Updating achievements")
-        achievementsManager.updateAchievement(id: "games_10", value: gamesCompleted)
-        achievementsManager.updateAchievement(id: "games_50", value: gamesCompleted)
-        achievementsManager.updateAchievement(id: "games_100", value: gamesCompleted)
-        print("[GameState] ✅ Achievements updated successfully")
-        
-        // Notify observers
+        // Post game over notification
         NotificationCenter.default.post(name: .gameOver, object: nil)
+        
+        // Show interstitial ad when game is over, but don't wait for it
+        Task {
+            if await AdManager.shared.isAdAvailable() {
+                await AdManager.shared.showInterstitial()
+            }
+        }
     }
     
     private func hasValidMoves() -> Bool {
@@ -1333,40 +1404,6 @@ final class GameState: ObservableObject {
             }
         }
         return group
-    }
-    
-    private func updateLeaderboard() {
-        // Skip if user is a guest
-        if UserDefaults.standard.bool(forKey: "isGuest") {
-            print("[Leaderboard] 👤 Guest user - skipping leaderboard update")
-            return
-        }
-        
-        Task {
-            do {
-                // Only update if score is greater than 0
-                if score > 0 {
-                    print("[Leaderboard] Attempting to update leaderboard with score: \(score)")
-                    try await LeaderboardService.shared.updateLeaderboard(
-                        score: score,
-                        level: level,
-                        type: .score
-                    )
-                    print("[Leaderboard] Successfully updated leaderboard")
-                    
-                    // Refresh leaderboard high score
-                    await fetchLeaderboardHighScore()
-                } else {
-                    print("[Leaderboard] Skipping update - score is 0")
-                }
-            } catch LeaderboardError.rateLimited {
-                print("[Leaderboard] Rate limited - skipping update")
-            } catch LeaderboardError.notAuthenticated {
-                print("[Leaderboard] User not authenticated - skipping update")
-            } catch {
-                print("[Leaderboard] Error updating leaderboard: \(error.localizedDescription)")
-            }
-        }
     }
     
     private func loadLastPlayDate() {
@@ -1492,31 +1529,8 @@ final class GameState: ObservableObject {
     
     // Add a new function for manually ending the game from settings
     func endGameFromSettings() {
-        isGameOver = true
-        saveStatistics() // Save statistics when game is ended from settings
-        playTimeTimer?.invalidate()
-        Task { @MainActor in
-            updatePlayTime() // Final update of play time
-            try? await saveProgress()
-            
-            // Update leaderboard if user is not guest
-            if !UserDefaults.standard.bool(forKey: "isGuest") {
-                do {
-                    print("[Leaderboard] Updating leaderboard after manual end - Score: \(score)")
-                    try await LeaderboardService.shared.updateLeaderboard(
-                        score: score,
-                        level: level,
-                        type: .score
-                    )
-                    print("[Leaderboard] Successfully updated leaderboard after manual end")
-                    
-                    // Refresh leaderboard high score
-                    await fetchLeaderboardHighScore()
-                } catch {
-                    print("[Leaderboard] Error updating leaderboard after manual end: \(error.localizedDescription)")
-                }
-            }
-        }
+        print("[GameState] Ending game from settings")
+        handleGameOver() // Use the consolidated game over handler
     }
     
     func hasSavedGame() -> Bool {
@@ -2446,12 +2460,33 @@ final class GameState: ObservableObject {
             Task {
                 do {
                     print("[Leaderboard] Updating leaderboard after level completion - Score: \(score)")
+                    
+                    // Update classic score leaderboard
                     try await LeaderboardService.shared.updateLeaderboard(
                         score: score,
                         level: level,
                         type: .score
                     )
-                    print("[Leaderboard] Successfully updated leaderboard after level completion")
+                    print("[Leaderboard] ✅ Classic score leaderboard updated")
+                    
+                    // Update achievement leaderboard
+                    try await LeaderboardService.shared.updateLeaderboard(
+                        score: score,
+                        level: level,
+                        type: .achievement
+                    )
+                    print("[Leaderboard] ✅ Achievement leaderboard updated")
+                    
+                    // Update timed leaderboard if in timed mode
+                    if UserDefaults.standard.bool(forKey: "isTimedMode") {
+                        try await LeaderboardService.shared.updateLeaderboard(
+                            score: score,
+                            level: level,
+                            time: totalPlayTime,
+                            type: .timed
+                        )
+                        print("[Leaderboard] ✅ Timed leaderboard updated")
+                    }
                     
                     // Refresh leaderboard high score
                     await fetchLeaderboardHighScore()
@@ -2459,7 +2494,7 @@ final class GameState: ObservableObject {
                     // Post level completed notification
                     NotificationCenter.default.post(name: .levelCompleted, object: nil)
                 } catch {
-                    print("[Leaderboard] Error updating leaderboard after level completion: \(error.localizedDescription)")
+                    print("[Leaderboard] ❌ Error updating leaderboard after level completion: \(error.localizedDescription)")
                 }
             }
         } else {
@@ -2467,9 +2502,6 @@ final class GameState: ObservableObject {
             // Still post level completed notification
             NotificationCenter.default.post(name: .levelCompleted, object: nil)
         }
-        
-        // Notify delegate
-        delegate?.gameStateDidUpdate()
     }
     
     private func saveGameState() async throws {

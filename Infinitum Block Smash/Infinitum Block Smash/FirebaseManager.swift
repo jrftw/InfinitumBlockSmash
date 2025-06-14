@@ -12,6 +12,7 @@ import FirebaseCrashlytics
 import AuthenticationServices
 import CryptoKit
 import FirebaseFunctions
+import GameKit
 
 // Network monitoring class
 final class NetworkMonitor: ObservableObject {
@@ -1642,6 +1643,97 @@ class FirebaseManager: ObservableObject {
             await updateLastActive()
         } catch {
             print("[FirebaseManager] Error signing in: \(error)")
+            throw error
+        }
+    }
+
+    private func initializeLeaderboardEntries(for userId: String, username: String) async throws {
+        print("[FirebaseManager] Initializing leaderboard entries for new user: \(userId)")
+        
+        // We no longer create initial entries with zero scores
+        // Instead, we'll wait for the first actual score to be submitted
+        print("[FirebaseManager] Skipping initial zero-score entries for user: \(userId)")
+    }
+
+    func signUpWithEmail(email: String, password: String, username: String) async throws {
+        do {
+            print("[FirebaseManager] Starting email sign up...")
+            let result = try await auth.createUser(withEmail: email, password: password)
+            let user = result.user
+            
+            // Update profile with username
+            let changeRequest = user.createProfileChangeRequest()
+            changeRequest.displayName = username
+            try await changeRequest.commitChanges()
+            
+            // Save user data to Firestore
+            let userData: [String: Any] = [
+                "username": username,
+                "email": email,
+                "timestamp": FieldValue.serverTimestamp(),
+                "lastUsernameChange": FieldValue.serverTimestamp()
+            ]
+            
+            try await db.collection("users").document(user.uid).setData(userData)
+            
+            // Initialize leaderboard entries
+            try await initializeLeaderboardEntries(for: user.uid, username: username)
+            
+            self.currentUser = user
+            self.username = username
+            self.isGuest = false
+            
+            print("[FirebaseManager] Email sign up successful for user: \(user.uid)")
+        } catch {
+            print("[FirebaseManager] Error during email sign up: \(error)")
+            throw error
+        }
+    }
+
+    func signInWithGameCenter() async throws {
+        do {
+            print("[FirebaseManager] Starting Game Center sign in...")
+            let credential = try await GameCenterAuthProvider.getCredential()
+            let result = try await auth.signIn(with: credential)
+            let user = result.user
+            
+            // Get Game Center player info
+            let localPlayer = GKLocalPlayer.local
+            let gameCenterUsername = localPlayer.displayName
+            
+            // Check if this is a new user
+            let userDoc = try await db.collection("users").document(user.uid).getDocument()
+            
+            if !userDoc.exists {
+                print("[FirebaseManager] New Game Center user detected, creating user profile...")
+                
+                // Create user profile
+                let userData: [String: Any] = [
+                    "username": gameCenterUsername,
+                    "gameCenterId": localPlayer.gamePlayerID,
+                    "timestamp": FieldValue.serverTimestamp(),
+                    "lastUsernameChange": FieldValue.serverTimestamp()
+                ]
+                
+                try await db.collection("users").document(user.uid).setData(userData)
+                
+                // Initialize leaderboard entries
+                try await initializeLeaderboardEntries(for: user.uid, username: gameCenterUsername)
+            } else {
+                // Update existing user's Game Center info
+                try await db.collection("users").document(user.uid).updateData([
+                    "gameCenterId": localPlayer.gamePlayerID,
+                    "lastLogin": FieldValue.serverTimestamp()
+                ])
+            }
+            
+            self.currentUser = user
+            self.username = gameCenterUsername
+            self.isGuest = false
+            
+            print("[FirebaseManager] Game Center sign in successful for user: \(user.uid)")
+        } catch {
+            print("[FirebaseManager] Error during Game Center sign in: \(error)")
             throw error
         }
     }
