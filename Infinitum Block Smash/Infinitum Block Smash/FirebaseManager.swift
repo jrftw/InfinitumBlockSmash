@@ -1546,6 +1546,105 @@ class FirebaseManager: ObservableObject {
             await refreshAppCheckToken()
         }
     }
+
+    // MARK: - Account Management
+    
+    func mergeAccounts(gameCenterId: String, emailId: String) async throws {
+        print("[FirebaseManager] Starting account merge between Game Center ID: \(gameCenterId) and Email ID: \(emailId)")
+        
+        // Get data from both accounts
+        let gameCenterDoc = try await db.collection("users").document(gameCenterId).getDocument()
+        let emailDoc = try await db.collection("users").document(emailId).getDocument()
+        
+        guard let gameCenterData = gameCenterDoc.data(),
+              let emailData = emailDoc.data() else {
+            throw FirebaseError.invalidData
+        }
+        
+        // Get progress data from both accounts
+        let gameCenterProgress = try await db.collection("users").document(gameCenterId).collection("progress").document("data").getDocument()
+        let emailProgress = try await db.collection("users").document(emailId).collection("progress").document("data").getDocument()
+        
+        // Merge progress data, taking the highest values
+        let mergedProgress: [String: Any] = [
+            "score": max(gameCenterProgress.data()?["score"] as? Int ?? 0, emailProgress.data()?["score"] as? Int ?? 0),
+            "level": max(gameCenterProgress.data()?["level"] as? Int ?? 1, emailProgress.data()?["level"] as? Int ?? 1),
+            "blocksPlaced": max(gameCenterProgress.data()?["blocksPlaced"] as? Int ?? 0, emailProgress.data()?["blocksPlaced"] as? Int ?? 0),
+            "linesCleared": max(gameCenterProgress.data()?["linesCleared"] as? Int ?? 0, emailProgress.data()?["linesCleared"] as? Int ?? 0),
+            "gamesCompleted": max(gameCenterProgress.data()?["gamesCompleted"] as? Int ?? 0, emailProgress.data()?["gamesCompleted"] as? Int ?? 0),
+            "perfectLevels": max(gameCenterProgress.data()?["perfectLevels"] as? Int ?? 0, emailProgress.data()?["perfectLevels"] as? Int ?? 0),
+            "totalPlayTime": max(gameCenterProgress.data()?["totalPlayTime"] as? Double ?? 0, emailProgress.data()?["totalPlayTime"] as? Double ?? 0),
+            "highScore": max(gameCenterProgress.data()?["highScore"] as? Int ?? 0, emailProgress.data()?["highScore"] as? Int ?? 0),
+            "highestLevel": max(gameCenterProgress.data()?["highestLevel"] as? Int ?? 1, emailProgress.data()?["highestLevel"] as? Int ?? 1),
+            "lastSaveTime": FieldValue.serverTimestamp()
+        ]
+        
+        // Merge user data, preferring email account data for non-game stats
+        let gameCenterTimestamp = gameCenterData["createdAt"] as? Timestamp
+        let emailTimestamp = emailData["createdAt"] as? Timestamp
+        let createdAt: Timestamp = {
+            if let gcDate = gameCenterTimestamp?.dateValue(),
+               let emailDate = emailTimestamp?.dateValue() {
+                return gcDate.compare(emailDate) == .orderedAscending ? gameCenterTimestamp! : emailTimestamp!
+            }
+            return gameCenterTimestamp ?? emailTimestamp ?? Timestamp()
+        }()
+        
+        let mergedUserData: [String: Any] = [
+            "username": emailData["username"] as? String ?? gameCenterData["username"] as? String ?? "",
+            "email": emailData["email"] as? String ?? "",
+            "gameCenterId": gameCenterId,
+            "lastActive": FieldValue.serverTimestamp(),
+            "createdAt": createdAt as Any,
+            "lastLogin": FieldValue.serverTimestamp()
+        ]
+        
+        // Update the email account with merged data
+        try await db.collection("users").document(emailId).setData(mergedUserData, merge: true)
+        try await db.collection("users").document(emailId).collection("progress").document("data").setData(mergedProgress)
+        
+        // Delete the Game Center account
+        try await db.collection("users").document(gameCenterId).delete()
+        
+        print("[FirebaseManager] Successfully merged accounts. Email account (\(emailId)) now contains merged data.")
+    }
+
+    private func handleAccountMergeIfNeeded() async throws {
+        guard let currentUser = currentUser else { return }
+        
+        // Check if user has both Game Center and email accounts
+        let gameCenterId = currentUser.providerData.first { $0.providerID == "gc.apple.com" }?.uid
+        let emailId = currentUser.providerData.first { $0.providerID == "password" }?.uid
+        
+        if let gameCenterId = gameCenterId,
+           let emailId = emailId,
+           gameCenterId != emailId {
+            print("[FirebaseManager] Detected multiple accounts for user. Starting merge process...")
+            try await mergeAccounts(gameCenterId: gameCenterId, emailId: emailId)
+        }
+    }
+
+    // Update the signIn method to handle account merging
+    func signIn(email: String, password: String) async throws {
+        do {
+            let result = try await auth.signIn(withEmail: email, password: password)
+            currentUser = result.user
+            isAuthenticated = true
+            isGuest = false
+            
+            // Load user data
+            await loadUserData(userId: result.user.uid)
+            
+            // Check for account merging
+            try await handleAccountMergeIfNeeded()
+            
+            // Update last active
+            await updateLastActive()
+        } catch {
+            print("[FirebaseManager] Error signing in: \(error)")
+            throw error
+        }
+    }
 }
 
 // MARK: - Models

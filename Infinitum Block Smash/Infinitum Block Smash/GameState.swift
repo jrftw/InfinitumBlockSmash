@@ -197,6 +197,9 @@ final class GameState: ObservableObject {
         // Load other statistics
         loadStatistics()
         
+        // Reset session-specific stats
+        resetSessionStats()
+        
         // Setup initial game state
         setupInitialGame()
         setupSubscriptions()
@@ -347,43 +350,50 @@ final class GameState: ObservableObject {
     
     // MARK: - Public Methods
     func resetGame() {
-        Task { [weak self] in
-            guard let self = self else { return }
-            await MainActor.run {
-                // Only reset current game state, preserve statistics
-                self.score = 0
-                self.temporaryScore = 0
-                self.level = 1
-                self.isGameOver = false
-                self.grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
-                self.tray.removeAll(keepingCapacity: true)
-                self.levelComplete = false
-                self.canUndo = false
-                self.lastMove = nil
-                self.blocksPlaced = 0
-                self.linesCleared = 0
-                self.currentChain = 0
-                self.usedColors.removeAll(keepingCapacity: true)
-                self.usedShapes.removeAll(keepingCapacity: true)
-                self.isPerfectLevel = true
-                self.gameStartTime = Date()
-                
-                // Set the seed for the new game
-                self.setSeed(for: self.level)
-                
-                // Delete any saved game
-                self.deleteSavedGame()
-                
-                // Refill tray after all state is reset
-                self.refillTray()
-                
-                // Reset ad-related state
-                self.resetAdState()
-                
-                // Notify delegate of state change
-                self.delegate?.gameStateDidUpdate()
-            }
-        }
+        // Save current stats before resetting
+        saveStatistics()
+        
+        // Reset game state
+        score = 0
+        temporaryScore = 0
+        level = 1
+        isGameOver = false
+        grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
+        tray = []
+        canUndo = false
+        levelComplete = false
+        adUndoCount = 3
+        showingAchievementNotification = false
+        currentAchievement = nil
+        isPerfectLevel = true
+        undoCount = 0
+        isPaused = false
+        
+        // Reset session-specific stats
+        resetSessionStats()
+        
+        // Reset ad-related state
+        levelsCompletedSinceLastAd = 0
+        adsWatchedThisGame = 0
+        hintsUsedThisGame = 0
+        hasUsedContinueAd = false
+        
+        // Reset undo state
+        undoStack.clear()
+        unlimitedUndos = false
+        
+        // Reset hint state
+        lastHintTime = 0
+        cachedHint = nil
+        
+        // Set the seed for the new game
+        setSeed(for: level)
+        
+        // Refill the tray with new blocks
+        refillTray()
+        
+        // Notify delegate
+        delegate?.gameStateDidUpdate()
     }
     
     func setSeed(for level: Int) {
@@ -1562,11 +1572,18 @@ final class GameState: ObservableObject {
         print("[GameState] Loading statistics from UserDefaults")
         
         // Load statistics from UserDefaults, defaulting to 0 if not found
-        blocksPlaced = userDefaults.integer(forKey: blocksPlacedKey)
-        linesCleared = userDefaults.integer(forKey: linesClearedKey)
-        gamesCompleted = userDefaults.integer(forKey: gamesCompletedKey)
-        perfectLevels = userDefaults.integer(forKey: perfectLevelsKey)
-        totalPlayTime = userDefaults.double(forKey: totalPlayTimeKey)
+        let savedBlocksPlaced = userDefaults.integer(forKey: blocksPlacedKey)
+        let savedLinesCleared = userDefaults.integer(forKey: linesClearedKey)
+        let savedGamesCompleted = userDefaults.integer(forKey: gamesCompletedKey)
+        let savedPerfectLevels = userDefaults.integer(forKey: perfectLevelsKey)
+        let savedTotalPlayTime = userDefaults.double(forKey: totalPlayTimeKey)
+        
+        // Update the published properties with saved values
+        blocksPlaced = savedBlocksPlaced
+        linesCleared = savedLinesCleared
+        gamesCompleted = savedGamesCompleted
+        perfectLevels = savedPerfectLevels
+        totalPlayTime = savedTotalPlayTime
         
         // Load high score and highest level
         highScore = userDefaults.integer(forKey: scoreKey)
@@ -1575,38 +1592,24 @@ final class GameState: ObservableObject {
         print("[GameState] Loaded statistics - Blocks: \(blocksPlaced), Lines: \(linesCleared), Games: \(gamesCompleted), Perfect: \(perfectLevels), High Score: \(highScore), Highest Level: \(highestLevel)")
 
         // Load from Firebase if user is logged in and auto-sync is enabled
-        Task {
-            if !UserDefaults.standard.bool(forKey: "isGuest") && autoSyncEnabled {
+        if !UserDefaults.standard.bool(forKey: "isGuest") && autoSyncEnabled {
+            Task {
                 do {
                     let progress = try await FirebaseManager.shared.loadGameProgress()
                     
-                    // Only update if Firebase data is more recent
-                    if let localLastSave = userDefaults.object(forKey: "lastSaveTime") as? Date,
-                       progress.lastSaveTime > localLastSave {
-                        // Update local statistics with Firebase data, taking the maximum of local and cloud values
-                        blocksPlaced = max(blocksPlaced, progress.blocksPlaced)
-                        linesCleared = max(linesCleared, progress.linesCleared)
-                        gamesCompleted = max(gamesCompleted, progress.gamesCompleted)
-                        perfectLevels = max(perfectLevels, progress.perfectLevels)
-                        totalPlayTime = max(totalPlayTime, progress.totalPlayTime)
-                        
-                        // Only update high score if Firebase has a higher score
-                        if progress.highScore > highScore {
-                            highScore = progress.highScore
-                            userDefaults.set(highScore, forKey: scoreKey)
-                        }
-                        
-                        // Only update highest level if Firebase has a higher level
-                        if progress.highestLevel > highestLevel {
-                            highestLevel = progress.highestLevel
-                            userDefaults.set(highestLevel, forKey: levelKey)
-                        }
-                        
-                        // Save all statistics to UserDefaults
-                        saveStatisticsToUserDefaults()
-                        
-                        print("[GameState] Updated local statistics with Firebase data")
-                    }
+                    // Take the higher values between local and cloud data
+                    blocksPlaced = max(blocksPlaced, progress.blocksPlaced)
+                    linesCleared = max(linesCleared, progress.linesCleared)
+                    gamesCompleted = max(gamesCompleted, progress.gamesCompleted)
+                    perfectLevels = max(perfectLevels, progress.perfectLevels)
+                    totalPlayTime = max(totalPlayTime, progress.totalPlayTime)
+                    highScore = max(highScore, progress.highScore)
+                    highestLevel = max(highestLevel, progress.highestLevel)
+                    
+                    // Save the updated values back to UserDefaults
+                    saveStatisticsToUserDefaults()
+                    
+                    print("[GameState] Successfully loaded and merged statistics from Firebase")
                 } catch {
                     print("[GameState] Error loading statistics from Firebase: \(error.localizedDescription)")
                 }
@@ -1651,11 +1654,18 @@ final class GameState: ObservableObject {
         let currentTotalPlayTime = userDefaults.double(forKey: totalPlayTimeKey)
         
         // Update statistics by adding new values to existing ones
-        blocksPlaced = currentBlocksPlaced + blocksPlaced
-        linesCleared = currentLinesCleared + linesCleared
-        gamesCompleted = currentGamesCompleted + gamesCompleted
-        perfectLevels = currentPerfectLevels + perfectLevels
-        totalPlayTime = currentTotalPlayTime + totalPlayTime
+        let newBlocksPlaced = currentBlocksPlaced + blocksPlaced
+        let newLinesCleared = currentLinesCleared + linesCleared
+        let newGamesCompleted = currentGamesCompleted + gamesCompleted
+        let newPerfectLevels = currentPerfectLevels + perfectLevels
+        let newTotalPlayTime = currentTotalPlayTime + totalPlayTime
+        
+        // Update the published properties
+        blocksPlaced = newBlocksPlaced
+        linesCleared = newLinesCleared
+        gamesCompleted = newGamesCompleted
+        perfectLevels = newPerfectLevels
+        totalPlayTime = newTotalPlayTime
         
         // Save all statistics to UserDefaults
         saveStatisticsToUserDefaults()
@@ -2723,6 +2733,16 @@ final class GameState: ObservableObject {
         if perfectLevels >= 5 {
             handleAchievement(id: "perfect_levels_5", value: min(100, Double(perfectLevels) / 5 * 100))
         }
+    }
+
+    // Add this method to reset session-specific stats
+    private func resetSessionStats() {
+        blocksPlaced = 0
+        linesCleared = 0
+        gamesCompleted = 0
+        perfectLevels = 0
+        totalPlayTime = 0
+        gameStartTime = Date()
     }
 }
 
