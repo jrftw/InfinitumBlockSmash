@@ -241,9 +241,28 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let totalWidth = CGFloat(gridSize) * blockSize
         let totalHeight = CGFloat(gridSize) * blockSize
         
-        // Calculate available space (accounting for safe areas and UI elements)
-        let availableWidth = frame.width * 0.9 // Use 90% of screen width
-        let availableHeight = frame.height * 0.65 // Use 65% of screen height to account for banner ad
+        // Get screen width for size-specific adjustments
+        let screenWidth = UIScreen.main.bounds.width
+        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+        
+        // Calculate available space with size-specific adjustments
+        let availableWidth: CGFloat
+        let availableHeight: CGFloat
+        
+        if isIPad {
+            // iPad-specific adjustments
+            availableWidth = frame.width * 0.8 // Use 80% of screen width
+            availableHeight = frame.height * 0.5 // Use 50% of screen height
+        } else if screenWidth <= 375 { // iPhone SE, iPhone 8, etc. (5.4" and smaller)
+            availableWidth = frame.width * 0.85 // Use 85% of screen width
+            availableHeight = frame.height * 0.6 // Use 60% of screen height
+        } else if screenWidth >= 428 { // iPhone 12 Pro Max, iPhone 14 Pro Max, etc. (6.9" and larger)
+            availableWidth = frame.width * 0.95 // Use 95% of screen width
+            availableHeight = frame.height * 0.7 // Use 70% of screen height
+        } else {
+            availableWidth = frame.width * 0.9 // Use 90% of screen width
+            availableHeight = frame.height * 0.65 // Use 65% of screen height
+        }
         
         // Calculate scale to fit the grid within available space
         let scaleX = availableWidth / totalWidth
@@ -253,8 +272,19 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Apply scale to grid node
         gridNode.setScale(scale)
         
-        // Center the grid in the frame
-        gridNode.position = CGPoint(x: frame.midX, y: frame.midY)
+        // Center the grid in the frame with size-specific vertical offset
+        let verticalOffset: CGFloat
+        if isIPad {
+            verticalOffset = frame.height * 0.08 // Reduced from 0.15 to 0.08 for iPad
+        } else if screenWidth <= 375 {
+            verticalOffset = frame.height * 0.05 // 5% offset for smaller screens
+        } else if screenWidth >= 428 {
+            verticalOffset = frame.height * -0.02 // -2% offset for larger screens
+        } else {
+            verticalOffset = 0 // No offset for medium screens
+        }
+        
+        gridNode.position = CGPoint(x: frame.midX, y: frame.midY + verticalOffset)
         gridNode.zPosition = 0
         
         print("[DEBUG] GridNode position: \(gridNode.position), totalWidth: \(totalWidth), totalHeight: \(totalHeight), frame: \(frame)")
@@ -360,7 +390,25 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func setupTray() {
         let blockSize = GameConstants.blockSize
         let trayHeight = blockSize * 4.5
-        trayNode.position = CGPoint(x: frame.midX, y: frame.midY - CGFloat(GameConstants.gridSize) * blockSize / 2 - trayHeight / 2 - blockSize * 1.2)
+        let screenWidth = UIScreen.main.bounds.width
+        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+        
+        // Adjust vertical position based on screen size
+        let verticalOffset: CGFloat
+        if isIPad {
+            verticalOffset = frame.height * 0.12 // Reduced from 0.25 to 0.12 for iPad
+        } else if screenWidth <= 375 {
+            verticalOffset = frame.height * 0.08 // 8% offset for smaller screens
+        } else if screenWidth >= 428 {
+            verticalOffset = frame.height * 0.04 // 4% offset for larger screens
+        } else {
+            verticalOffset = frame.height * 0.06 // 6% offset for medium screens
+        }
+        
+        trayNode.position = CGPoint(
+            x: frame.midX,
+            y: frame.midY - CGFloat(GameConstants.gridSize) * blockSize / 2 - trayHeight / 2 - blockSize * 1.2 - verticalOffset
+        )
         trayNode.zPosition = 10
         trayNode.updateBlocks(gameState.tray, blockSize: blockSize)
     }
@@ -809,8 +857,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Calculate the grid's origin (top-left corner)
         let gridOrigin = CGPoint(
-            x: frame.midX - totalWidth / 2,
-            y: frame.midY - totalHeight / 2
+            x: gridNode.position.x - totalWidth / 2,
+            y: gridNode.position.y - totalHeight / 2
         )
         
         // Calculate the relative position within the grid

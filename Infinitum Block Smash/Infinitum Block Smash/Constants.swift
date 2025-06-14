@@ -16,12 +16,23 @@ struct GameConstants {
         #if os(iOS)
         let screenSize = UIScreen.main.bounds.size
         let minDimension = min(screenSize.width, screenSize.height)
-        // Calculate block size to fit 10 blocks with some padding
+        let screenWidth = screenSize.width
+        
+        // Calculate base size
         let baseSize = minDimension * 0.08 // 8% of screen width/height
-        if UIDevice.current.userInterfaceIdiom == .pad {
-            return min(baseSize, 54) // Cap at 54 for iPad
+        
+        // Adjust for specific screen sizes
+        if screenWidth <= 375 { // iPhone SE, iPhone 8, etc. (5.4" and smaller)
+            return min(baseSize * 0.85, 28) // Scale down by 15% and cap at 28
+        } else if screenWidth >= 428 { // iPhone 12 Pro Max, iPhone 14 Pro Max, etc. (6.9" and larger)
+            return min(baseSize * 1.15, 38) // Scale up by 15% and cap at 38
         } else {
-            return min(baseSize, 34) // Cap at 34 for iPhone
+            // Default scaling for other screen sizes
+            if UIDevice.current.userInterfaceIdiom == .pad {
+                return min(baseSize, 54) // Cap at 54 for iPad
+            } else {
+                return min(baseSize, 34) // Cap at 34 for iPhone
+            }
         }
         #else
         return 34
