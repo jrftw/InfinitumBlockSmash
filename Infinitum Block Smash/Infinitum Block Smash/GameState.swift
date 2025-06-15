@@ -136,21 +136,27 @@ final class GameState: ObservableObject {
     private var cachedData: [String: Any] = [:]
     
     // Add leaderboard high score property
-    private var leaderboardHighScore: Int = 0
+    @Published private(set) var leaderboardHighScore: Int = 0
+    @Published private(set) var leaderboardHighestLevel: Int = 1
     
     // Add method to fetch leaderboard high score
-    func fetchLeaderboardHighScore() async {
+    private func fetchLeaderboardHighScore() async {
         do {
             let result = try await LeaderboardService.shared.getLeaderboard(type: .score, period: "alltime")
-            if let topScore = result.entries.first?.score {
-                await MainActor.run {
-                    self.leaderboardHighScore = topScore
-                    // Only update the leaderboard high score, not the user's personal high score
-                    print("[GameState] Updated leaderboard high score: \(topScore)")
+            if let userEntry = result.entries.first(where: { $0.username == username }) {
+                leaderboardHighScore = userEntry.score
+                if let level = userEntry.level {
+                    leaderboardHighestLevel = level
                 }
+                // Update the published properties
+                highScore = leaderboardHighScore
+                highestLevel = leaderboardHighestLevel
+                // Save to UserDefaults
+                userDefaults.set(highScore, forKey: scoreKey)
+                userDefaults.set(highestLevel, forKey: levelKey)
             }
         } catch {
-            print("[GameState] Error fetching leaderboard high score: \(error.localizedDescription)")
+            print("[Leaderboard] Error fetching leaderboard high score: \(error.localizedDescription)")
         }
     }
     
@@ -210,7 +216,7 @@ final class GameState: ObservableObject {
         // Start play time timer
         startPlayTimeTimer()
         
-        // Fetch leaderboard high score
+        // Fetch leaderboard high score and highest level
         Task {
             await fetchLeaderboardHighScore()
         }

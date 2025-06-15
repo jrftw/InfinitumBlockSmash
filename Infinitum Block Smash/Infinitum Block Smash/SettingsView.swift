@@ -472,14 +472,14 @@ private struct GameProgressSection: View {
             HStack {
                 Text("High Score")
                 Spacer()
-                Text("\(gameState.highScore)")
+                Text("\(gameState.leaderboardHighScore)")
                     .foregroundColor(.blue)
             }
             
             HStack {
                 Text("Highest Level")
                 Spacer()
-                Text("\(gameState.highestLevel)")
+                Text("\(gameState.leaderboardHighestLevel)")
                     .foregroundColor(.blue)
             }
         }

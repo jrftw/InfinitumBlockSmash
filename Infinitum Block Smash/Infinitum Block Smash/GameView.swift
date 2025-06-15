@@ -385,7 +385,7 @@ struct GameView: View {
                 .foregroundColor(Color.blue.opacity(0.9))
                 .padding(.leading, 12)
             Spacer()
-            Text(String(format: NSLocalizedString("All-Time High: %d", comment: "All-time high score"), gameState.highScore))
+            Text(String(format: NSLocalizedString("All-Time High: %d", comment: "All-time high score"), gameState.leaderboardHighScore))
                 .font(.caption2)
                 .foregroundColor(Color.orange.opacity(0.9))
                 .padding(.trailing, 12)
@@ -394,7 +394,7 @@ struct GameView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(String(format: NSLocalizedString("Level High Score: %d and All-Time High Score: %d", comment: "High scores accessibility label"), 
             UserDefaults.standard.integer(forKey: "highScore_level_\(gameState.level)"),
-            gameState.highScore))
+            gameState.leaderboardHighScore))
     }
     
     private var overlays: some View {
