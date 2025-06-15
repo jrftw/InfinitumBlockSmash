@@ -287,8 +287,13 @@ struct FirebaseLeaderboardRow: View {
             }
             .frame(width: 40)
 
-            VStack(alignment: .leading) {
-                Text(entry.username)
+            Text(entry.username)
+                .font(.headline)
+
+            Spacer()
+
+            VStack(alignment: .trailing) {
+                Text("\(entry.score)")
                     .font(.headline)
                 if let level = entry.level {
                     Text("Level \(level)")
@@ -296,11 +301,6 @@ struct FirebaseLeaderboardRow: View {
                         .foregroundColor(.gray)
                 }
             }
-
-            Spacer()
-
-            Text("\(entry.score)")
-                .font(.headline)
         }
         .padding(.vertical, 6)
         .background(

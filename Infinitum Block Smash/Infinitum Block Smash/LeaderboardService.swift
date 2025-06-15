@@ -255,7 +255,9 @@ final class LeaderboardService: ObservableObject {
                     id: document.documentID,
                     username: username,
                     score: score,
-                    timestamp: timestamp
+                    timestamp: timestamp,
+                    level: data["level"] as? Int,
+                    time: data["time"] as? TimeInterval
                 )
             }
             
@@ -502,7 +504,9 @@ final class LeaderboardService: ObservableObject {
                     id: document.documentID,
                     username: username,
                     score: score,
-                    timestamp: timestamp
+                    timestamp: timestamp,
+                    level: data["level"] as? Int,
+                    time: data["time"] as? TimeInterval
                 )
                 print("[Leaderboard] ✅ Successfully parsed entry: \(entry.username) - \(entry.score)")
                 return entry
