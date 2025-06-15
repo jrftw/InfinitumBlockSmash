@@ -350,6 +350,20 @@ final class GameState: ObservableObject {
     
     // MARK: - Public Methods
     func resetGame() {
+        // Delete any saved game first
+        deleteSavedGame()
+        
+        // Clear cloud state if user is logged in
+        if !UserDefaults.standard.bool(forKey: "isGuest") {
+            Task {
+                do {
+                    try await FirebaseManager.shared.clearGameProgress()
+                } catch {
+                    print("[GameState] Error clearing cloud game progress: \(error.localizedDescription)")
+                }
+            }
+        }
+        
         // Save current stats before resetting
         saveStatistics()
         
@@ -391,6 +405,11 @@ final class GameState: ObservableObject {
         
         // Refill the tray with new blocks
         refillTray()
+        
+        // Clear any saved game state from UserDefaults
+        userDefaults.removeObject(forKey: progressKey)
+        userDefaults.set(false, forKey: hasSavedGameKey)
+        userDefaults.synchronize()
         
         // Notify delegate
         delegate?.gameStateDidUpdate()

@@ -1737,6 +1737,36 @@ class FirebaseManager: ObservableObject {
             throw error
         }
     }
+
+    func clearGameProgress() async throws {
+        guard let userId = currentUser?.uid else {
+            throw NSError(domain: "FirebaseManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "No user logged in"])
+        }
+        
+        do {
+            // Clear progress document
+            let progressData: [String: Any] = [
+                "blocksPlaced": 0,
+                "gamesCompleted": 0,
+                "gridSize": 10,
+                "highScore": 0,
+                "highestLevel": 1,
+                "level": 1,
+                "linesCleared": 0,
+                "perfectLevels": 0,
+                "score": 0,
+                "totalPlayTime": 0,
+                "lastSaveTime": FieldValue.serverTimestamp(),
+                "lastUpdated": FieldValue.serverTimestamp()
+            ]
+            
+            try await db.collection("users").document(userId).collection("progress").document("data").setData(progressData)
+            print("[FirebaseManager] Successfully cleared game progress")
+        } catch {
+            print("[FirebaseManager] Error clearing game progress: \(error)")
+            throw error
+        }
+    }
 }
 
 // MARK: - Models
