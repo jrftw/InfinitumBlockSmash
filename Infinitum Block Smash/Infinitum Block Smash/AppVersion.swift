@@ -2,7 +2,7 @@ import Foundation
 
 struct AppVersion {
     static let version = "1.0.5"
-    static let build = "1"
+    static let build = "2"
     
     static var fullVersion: String {
         return "\(version) (\(build))"
