@@ -339,11 +339,13 @@ class ManualLeaderboardUpdate {
         let collection = type.collectionName
         let periods = ["daily", "weekly", "monthly", "alltime"]
         
+        // Create base data dictionary with UTC timestamp
         var data: [String: Any] = [
-            "userId": userId,
             "username": username,
             "timestamp": FieldValue.serverTimestamp(),
+            "userId": userId,
             "lastUpdate": FieldValue.serverTimestamp(),
+            "periodStart": FieldValue.serverTimestamp(),
             "level": currentLevel
         ]
         

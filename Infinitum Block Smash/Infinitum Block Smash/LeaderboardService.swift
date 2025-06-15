@@ -170,7 +170,7 @@ final class LeaderboardService: ObservableObject {
                                     if let time = alltimeData["time"] as? Int {
                                         newData["time"] = time
                                     }
-                                } else {
+                                
                                     if let score = alltimeData["score"] as? Int {
                                         newData["score"] = score
                                     }
@@ -306,28 +306,15 @@ final class LeaderboardService: ObservableObject {
             throw LeaderboardError.notAuthenticated
         }
         
-        print("[Leaderboard] ✅ User authenticated: \(userId)")
-        
-        // Get username from user profile
-        let db = Firestore.firestore()
-        let userDoc = try await db.collection("users").document(userId).getDocument()
-        
-        guard let username = username ?? userDoc.data()?["username"] as? String else {
-            print("[Leaderboard] ❌ No username found for user: \(userId)")
-            throw LeaderboardError.invalidData
-        }
-        
-        print("[Leaderboard] ✅ Username found: \(username)")
-        
-        // Get current time in UTC
+        let username = username ?? UserDefaults.standard.string(forKey: "username") ?? "unknown"
         let now = Date()
         let calendar = Calendar.current
         
-        // Define period boundaries
-        let periods: [(name: String, startDate: Date)] = [
+        // Define periods and their start dates
+        let periods: [(String, Date)] = [
             ("daily", calendar.startOfDay(for: now)),
-            ("weekly", calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now))!),
-            ("monthly", calendar.date(from: calendar.dateComponents([.year, .month], from: now))!),
+            ("weekly", calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)) ?? now),
+            ("monthly", calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? now),
             ("alltime", Date.distantPast)
         ]
         
@@ -365,8 +352,7 @@ final class LeaderboardService: ObservableObject {
                         "username": username,
                         "timestamp": FieldValue.serverTimestamp(),
                         "userId": userId,
-                        "lastUpdate": FieldValue.serverTimestamp(),
-                        "periodStart": Timestamp(date: startDate)
+                        "lastUpdate": FieldValue.serverTimestamp()
                     ]
                     
                     // Add score/points based on leaderboard type
@@ -399,12 +385,15 @@ final class LeaderboardService: ObservableObject {
                 } else {
                     print("[Leaderboard] ⏭️ Skipping \(period) update - Score not better (Current: \(currentScore), New: \(score))")
                 }
+                
             } catch {
                 print("[Leaderboard] ❌ Error updating \(period) leaderboard: \(error.localizedDescription)")
                 print("[Leaderboard] ❌ Error details: \(error)")
                 throw LeaderboardError.updateFailed(error)
             }
         }
+        
+        print("[Leaderboard] ✅ Successfully submitted all scores")
     }
     
     func getLeaderboard(type: LeaderboardType, period: String) async throws -> (entries: [FirebaseManager.LeaderboardEntry], totalUsers: Int) {

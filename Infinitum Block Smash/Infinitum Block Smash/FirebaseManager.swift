@@ -780,7 +780,7 @@ class FirebaseManager: ObservableObject {
                         "timestamp": FieldValue.serverTimestamp(),
                         "lastUpdate": FieldValue.serverTimestamp(),
                         "userId": userId,
-                        "periodStart": Timestamp(date: startDate)
+                        "periodStart": FieldValue.serverTimestamp()
                     ]
                     
                     if let level = level {
@@ -851,8 +851,8 @@ class FirebaseManager: ObservableObject {
                 var data: [String: Any] = [
                     "username": username,
                     "score": score,
-                    "timestamp": Timestamp(date: Date()),
-                    "lastUpdate": Timestamp(date: Date()),
+                    "timestamp": FieldValue.serverTimestamp(),
+                    "lastUpdate": FieldValue.serverTimestamp(),
                     "userId": userId
                 ]
                 
