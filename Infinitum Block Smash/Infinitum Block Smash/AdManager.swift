@@ -502,4 +502,4 @@ extension AdManager: FullScreenContentDelegate {
             }
         }
     }
-} 
+}

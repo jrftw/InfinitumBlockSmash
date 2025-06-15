@@ -154,6 +154,8 @@ struct AchievementLeaderboardView: View {
         isLoading = true
         error = nil
         
+        let cacheKey = "cached_leaderboard_achievement_\(selectedPeriod)"
+        
         Task {
             do {
                 print("[AchievementLeaderboardView] Fetching leaderboard entries from Firebase")
@@ -164,7 +166,6 @@ struct AchievementLeaderboardView: View {
                 
                 print("[AchievementLeaderboardView] Received \(entries.count) entries")
                 
-                // Update user position
                 if let userId = FirebaseManager.shared.currentUserId {
                     userPosition = entries.firstIndex(where: { $0.id == userId })
                     print("[AchievementLeaderboardView] User position in leaderboard: \(userPosition ?? -1)")
@@ -183,7 +184,7 @@ struct AchievementLeaderboardView: View {
                 
                 // Cache the data for offline access
                 if let encodedData = try? JSONEncoder().encode(entries) {
-                    UserDefaults.standard.set(encodedData, forKey: "cached_leaderboard_achievement_\(selectedPeriod)")
+                    UserDefaults.standard.set(encodedData, forKey: cacheKey)
                     print("[AchievementLeaderboardView] Successfully cached \(entries.count) entries")
                 }
                 
@@ -195,7 +196,7 @@ struct AchievementLeaderboardView: View {
             } catch {
                 print("[AchievementLeaderboardView] ❌ Error loading achievement leaderboard: \(error.localizedDescription)")
                 // Try to load cached data
-                if let cachedData = UserDefaults.standard.data(forKey: "cached_leaderboard_achievement_\(selectedPeriod)"),
+                if let cachedData = UserDefaults.standard.data(forKey: cacheKey),
                    let entries = try? JSONDecoder().decode([FirebaseManager.LeaderboardEntry].self, from: cachedData) {
                     print("[AchievementLeaderboardView] Using cached data with \(entries.count) entries")
                     leaderboardData = entries
@@ -212,4 +213,3 @@ struct AchievementLeaderboardView: View {
         }
     }
 }
-

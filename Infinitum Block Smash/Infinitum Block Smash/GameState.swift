@@ -1623,20 +1623,11 @@ final class GameState: ObservableObject {
         print("[GameState] Loading statistics from UserDefaults")
         
         // Load statistics from UserDefaults, defaulting to 0 if not found
-        let savedBlocksPlaced = userDefaults.integer(forKey: blocksPlacedKey)
-        let savedLinesCleared = userDefaults.integer(forKey: linesClearedKey)
-        let savedGamesCompleted = userDefaults.integer(forKey: gamesCompletedKey)
-        let savedPerfectLevels = userDefaults.integer(forKey: perfectLevelsKey)
-        let savedTotalPlayTime = userDefaults.double(forKey: totalPlayTimeKey)
-        
-        // Update the published properties with saved values
-        blocksPlaced = savedBlocksPlaced
-        linesCleared = savedLinesCleared
-        gamesCompleted = savedGamesCompleted
-        perfectLevels = savedPerfectLevels
-        totalPlayTime = savedTotalPlayTime
-        
-        // Load high score and highest level
+        blocksPlaced = userDefaults.integer(forKey: blocksPlacedKey)
+        linesCleared = userDefaults.integer(forKey: linesClearedKey)
+        gamesCompleted = userDefaults.integer(forKey: gamesCompletedKey)
+        perfectLevels = userDefaults.integer(forKey: perfectLevelsKey)
+        totalPlayTime = userDefaults.double(forKey: totalPlayTimeKey)
         highScore = userDefaults.integer(forKey: scoreKey)
         highestLevel = userDefaults.integer(forKey: levelKey)
         
@@ -1668,55 +1659,9 @@ final class GameState: ObservableObject {
         }
     }
 
-    private func saveStatisticsToUserDefaults() {
-        userDefaults.set(blocksPlaced, forKey: blocksPlacedKey)
-        userDefaults.set(linesCleared, forKey: linesClearedKey)
-        userDefaults.set(gamesCompleted, forKey: gamesCompletedKey)
-        userDefaults.set(perfectLevels, forKey: perfectLevelsKey)
-        userDefaults.set(totalPlayTime, forKey: totalPlayTimeKey)
-        userDefaults.set(highScore, forKey: scoreKey)
-        userDefaults.set(highestLevel, forKey: levelKey)
-        userDefaults.set(Date(), forKey: "lastSaveTime")
-        
-        // Save offline queue
-        if let queueData = try? JSONEncoder().encode(offlineChangesQueue) {
-            userDefaults.set(queueData, forKey: offlineQueueKey)
-        }
-        
-        userDefaults.synchronize()
-    }
-
-    private func loadOfflineQueue() {
-        if let queueData = userDefaults.data(forKey: offlineQueueKey),
-           let queue = try? JSONDecoder().decode([OfflineQueueEntry].self, from: queueData) {
-            offlineChangesQueue = queue
-        }
-    }
-
     @MainActor
     private func saveStatistics() {
         print("[GameState] Saving statistics to UserDefaults")
-        
-        // Get current values from UserDefaults to ensure we're accumulating
-        let currentBlocksPlaced = userDefaults.integer(forKey: blocksPlacedKey)
-        let currentLinesCleared = userDefaults.integer(forKey: linesClearedKey)
-        let currentGamesCompleted = userDefaults.integer(forKey: gamesCompletedKey)
-        let currentPerfectLevels = userDefaults.integer(forKey: perfectLevelsKey)
-        let currentTotalPlayTime = userDefaults.double(forKey: totalPlayTimeKey)
-        
-        // Update statistics by adding new values to existing ones
-        let newBlocksPlaced = currentBlocksPlaced + blocksPlaced
-        let newLinesCleared = currentLinesCleared + linesCleared
-        let newGamesCompleted = currentGamesCompleted + gamesCompleted
-        let newPerfectLevels = currentPerfectLevels + perfectLevels
-        let newTotalPlayTime = currentTotalPlayTime + totalPlayTime
-        
-        // Update the published properties
-        blocksPlaced = newBlocksPlaced
-        linesCleared = newLinesCleared
-        gamesCompleted = newGamesCompleted
-        perfectLevels = newPerfectLevels
-        totalPlayTime = newTotalPlayTime
         
         // Save all statistics to UserDefaults
         saveStatisticsToUserDefaults()
@@ -1767,6 +1712,31 @@ final class GameState: ObservableObject {
                     }
                 }
             }
+        }
+    }
+
+    private func saveStatisticsToUserDefaults() {
+        userDefaults.set(blocksPlaced, forKey: blocksPlacedKey)
+        userDefaults.set(linesCleared, forKey: linesClearedKey)
+        userDefaults.set(gamesCompleted, forKey: gamesCompletedKey)
+        userDefaults.set(perfectLevels, forKey: perfectLevelsKey)
+        userDefaults.set(totalPlayTime, forKey: totalPlayTimeKey)
+        userDefaults.set(highScore, forKey: scoreKey)
+        userDefaults.set(highestLevel, forKey: levelKey)
+        userDefaults.set(Date(), forKey: "lastSaveTime")
+        
+        // Save offline queue
+        if let queueData = try? JSONEncoder().encode(offlineChangesQueue) {
+            userDefaults.set(queueData, forKey: offlineQueueKey)
+        }
+        
+        userDefaults.synchronize()
+    }
+
+    private func loadOfflineQueue() {
+        if let queueData = userDefaults.data(forKey: offlineQueueKey),
+           let queue = try? JSONDecoder().decode([OfflineQueueEntry].self, from: queueData) {
+            offlineChangesQueue = queue
         }
     }
 

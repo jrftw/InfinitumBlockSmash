@@ -19,27 +19,40 @@ struct AchievementsView: View {
     ]
     
     private func achievementsForCategory(_ category: String) -> [Achievement] {
-        if category == NSLocalizedString("All", comment: "All achievements category") {
+        let allCategory = NSLocalizedString("All", comment: "All achievements category")
+        if category == allCategory {
             return achievementsManager.getAllAchievements()
         }
         
+        let categoryPrefix: [String]
+        switch category {
+        case NSLocalizedString("Score", comment: "Score achievements category"):
+            categoryPrefix = ["score_"]
+        case NSLocalizedString("Level", comment: "Level achievements category"):
+            categoryPrefix = ["level_"]
+        case NSLocalizedString("Clearing", comment: "Clearing achievements category"):
+            categoryPrefix = ["clear_", "first_clear"]
+        case NSLocalizedString("Combo", comment: "Combo achievements category"):
+            categoryPrefix = ["combo_", "chain_"]
+        case NSLocalizedString("Special", comment: "Special achievements category"):
+            categoryPrefix = ["perfect_", "color_", "shape_", "grid_"]
+        case NSLocalizedString("Daily", comment: "Daily achievements category"):
+            categoryPrefix = ["login_", "daily_"]
+        default:
+            categoryPrefix = []
+        }
+        
         return achievementsManager.getAllAchievements().filter { achievement in
-            switch category {
-            case NSLocalizedString("Score", comment: "Score achievements category"):
-                return achievement.id.starts(with: "score_")
-            case NSLocalizedString("Level", comment: "Level achievements category"):
-                return achievement.id.starts(with: "level_")
-            case NSLocalizedString("Clearing", comment: "Clearing achievements category"):
-                return achievement.id.starts(with: "clear_") || achievement.id.starts(with: "first_clear")
-            case NSLocalizedString("Combo", comment: "Combo achievements category"):
-                return achievement.id.starts(with: "combo_") || achievement.id.starts(with: "chain_")
-            case NSLocalizedString("Special", comment: "Special achievements category"):
-                return achievement.id.starts(with: "perfect_") || achievement.id.starts(with: "color_") ||
-                       achievement.id.starts(with: "shape_") || achievement.id.starts(with: "grid_")
-            case NSLocalizedString("Daily", comment: "Daily achievements category"):
-                return achievement.id.starts(with: "login_") || achievement.id.starts(with: "daily_")
-            default:
-                return false
+            categoryPrefix.contains { prefix in
+                achievement.id.starts(with: prefix)
+            }
+        }.sorted {
+            if $0.unlocked != $1.unlocked {
+                return $0.unlocked && !$1.unlocked
+            } else {
+                let p0 = Double($0.progress) / Double($0.goal)
+                let p1 = Double($1.progress) / Double($1.goal)
+                return p0 > p1
             }
         }
     }
@@ -77,7 +90,8 @@ struct AchievementsView: View {
                     HStack(spacing: 12) {
                         ForEach(categories, id: \.self) { category in
                             Button(action: {
-                                selectedCategory = category == NSLocalizedString("All", comment: "All achievements category") ? nil : category
+                                let allCategory = NSLocalizedString("All", comment: "All achievements category")
+                                selectedCategory = category == allCategory ? nil : category
                             }) {
                                 Text(category)
                                     .font(.headline)
@@ -100,16 +114,31 @@ struct AchievementsView: View {
                     }
                 }
             }
-            .navigationTitle(NSLocalizedString("Achievements", comment: "Achievements view title"))
             .sheet(isPresented: $showingLeaderboard) {
                 AchievementLeaderboardView()
             }
+            .navigationTitle(NSLocalizedString("Achievements", comment: "Achievements view title"))
         }
     }
 }
 
 struct AchievementRow: View {
     let achievement: Achievement
+    
+    private var progressView: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ProgressView(value: Double(achievement.progress), total: Double(achievement.goal))
+                .progressViewStyle(LinearProgressViewStyle())
+                .frame(height: 4)
+            
+            Text(String(format: NSLocalizedString("Progress: %d/%d (%d%%)", comment: "Achievement progress"), 
+                achievement.progress, 
+                achievement.goal,
+                Int((Double(achievement.progress) / Double(achievement.goal)) * 100)))
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
     
     var body: some View {
         HStack {
@@ -128,18 +157,7 @@ struct AchievementRow: View {
                     .foregroundColor(.secondary)
                 
                 if !achievement.unlocked {
-                    VStack(alignment: .leading, spacing: 2) {
-                        ProgressView(value: Double(achievement.progress), total: Double(achievement.goal))
-                            .progressViewStyle(LinearProgressViewStyle())
-                            .frame(height: 4)
-                        
-                        Text(String(format: NSLocalizedString("Progress: %d/%d (%d%%)", comment: "Achievement progress"), 
-                            achievement.progress, 
-                            achievement.goal,
-                            Int((Double(achievement.progress) / Double(achievement.goal)) * 100)))
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
+                    progressView
                 }
             }
             

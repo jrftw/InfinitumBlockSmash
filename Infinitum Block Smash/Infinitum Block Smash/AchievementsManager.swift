@@ -355,16 +355,12 @@ class AchievementsManager: ObservableObject {
         calculateTotalPoints()
         objectWillChange.send()
         
-        // Report to Game Center if achievement is unlocked
-        if achievement.unlocked {
-            let percentComplete = Double(achievement.progress) / Double(achievement.goal) * 100.0
-            Task {
+        // Combine Game Center and Firebase sync into a single Task
+        Task {
+            if achievement.unlocked {
+                let percentComplete = Double(achievement.progress) / Double(achievement.goal) * 100.0
                 GameCenterManager.shared.reportAchievement(id: achievement.id, percentComplete: percentComplete)
             }
-        }
-        
-        // Sync with Firebase
-        Task {
             await syncAchievementToFirebase(achievement)
         }
     }
@@ -626,6 +622,9 @@ class AchievementsManager: ObservableObject {
     }
     
     private func checkIfAchievementShouldUnlock(_ achievement: Achievement, score: Int, level: Int) -> Bool {
+        func isProgressAtLeast(_ target: Int) -> Bool {
+            return achievement.progress >= target
+        }
         switch achievement.id {
         // Score achievements
         case "score_1000":
@@ -636,7 +635,7 @@ class AchievementsManager: ObservableObject {
             return score >= 10000
         case "score_50000":
             return score >= 50000
-            
+
         // Level achievements
         case "level_5":
             return level >= 5
@@ -646,96 +645,131 @@ class AchievementsManager: ObservableObject {
             return level >= 20
         case "level_50":
             return level >= 50
-            
+
         // Line clearing achievements
         case "clear_10":
-            return achievement.progress >= 10
+            return isProgressAtLeast(10)
         case "clear_50":
-            return achievement.progress >= 50
+            return isProgressAtLeast(50)
         case "clear_100":
-            return achievement.progress >= 100
-            
+            return isProgressAtLeast(100)
+
         // Combo achievements
-        case "combo_3", "combo_5", "combo_10":
-            return achievement.progress >= 1
-            
+        case "combo_3":
+            fallthrough
+        case "combo_5":
+            fallthrough
+        case "combo_10":
+            return isProgressAtLeast(1)
+
         // Block placement achievements
         case "place_100":
-            return achievement.progress >= 100
+            return isProgressAtLeast(100)
         case "place_500":
-            return achievement.progress >= 500
+            return isProgressAtLeast(500)
         case "place_1000":
-            return achievement.progress >= 1000
-            
+            return isProgressAtLeast(1000)
+
         // Group achievements
-        case "group_10", "group_20", "group_30":
-            return achievement.progress >= 1
-            
+        case "group_10":
+            fallthrough
+        case "group_20":
+            fallthrough
+        case "group_30":
+            return isProgressAtLeast(1)
+
         // Perfect level achievements
         case "perfect_level":
-            return achievement.progress >= 1
+            return isProgressAtLeast(1)
         case "perfect_levels_3":
-            return achievement.progress >= 3
+            return isProgressAtLeast(3)
         case "perfect_levels_5":
-            return achievement.progress >= 5
-            
+            return isProgressAtLeast(5)
+
         // Special achievements
-        case "color_master", "shape_master", "rainbow_clear", "shape_clear":
-            return achievement.progress >= 1
-            
+        case "color_master":
+            fallthrough
+        case "shape_master":
+            fallthrough
+        case "rainbow_clear":
+            fallthrough
+        case "shape_clear":
+            return isProgressAtLeast(1)
+
         // Grid achievements
-        case "grid_quarter", "grid_half", "grid_full":
-            return achievement.progress >= 1
-            
+        case "grid_quarter":
+            fallthrough
+        case "grid_half":
+            fallthrough
+        case "grid_full":
+            return isProgressAtLeast(1)
+
         // Chain achievements
-        case "chain_3", "chain_5", "chain_10":
-            return achievement.progress >= 1
-            
+        case "chain_3":
+            fallthrough
+        case "chain_5":
+            fallthrough
+        case "chain_10":
+            return isProgressAtLeast(1)
+
         // Time-based achievements
         case "play_1h":
-            return achievement.progress >= 3600
+            return isProgressAtLeast(3600)
         case "play_5h":
-            return achievement.progress >= 18000
+            return isProgressAtLeast(18000)
         case "play_10h":
-            return achievement.progress >= 36000
-            
+            return isProgressAtLeast(36000)
+
         // Daily achievements
         case "daily_3":
-            return achievement.progress >= 3
+            return isProgressAtLeast(3)
         case "daily_7":
-            return achievement.progress >= 7
+            return isProgressAtLeast(7)
         case "daily_30":
-            return achievement.progress >= 30
-            
+            return isProgressAtLeast(30)
+
         // Login achievements
-        case "login_1", "login_3", "login_7", "login_30", "login_100":
-            return achievement.progress >= achievement.goal
-            
+        case "login_1":
+            fallthrough
+        case "login_3":
+            fallthrough
+        case "login_7":
+            fallthrough
+        case "login_30":
+            fallthrough
+        case "login_100":
+            return isProgressAtLeast(achievement.goal)
+
         // Game completion achievements
-        case "first_game", "games_10", "games_50", "games_100":
-            return achievement.progress >= achievement.goal
-            
+        case "first_game":
+            fallthrough
+        case "games_10":
+            fallthrough
+        case "games_50":
+            fallthrough
+        case "games_100":
+            return isProgressAtLeast(achievement.goal)
+
         // Undo achievements
         case "undo_5":
-            return achievement.progress >= 5
+            return isProgressAtLeast(5)
         case "undo_20":
-            return achievement.progress >= 20
-            
+            return isProgressAtLeast(20)
+
         // High score achievements
         case "high_score":
             return score > UserDefaults.standard.integer(forKey: "highScore")
-            
+
         // Highest level achievements
         case "highest_level":
             return level > UserDefaults.standard.integer(forKey: "highestLevel")
-            
+
         // Speed achievements
         case "quick_clear":
-            return achievement.progress >= 1  // Will be updated by GameState
-            
+            fallthrough
         case "speed_master":
-            return achievement.progress >= 1  // Will be updated by GameState
-            
+            return isProgressAtLeast(1)  // Will be updated by GameState
+
         default:
             return false
         }
