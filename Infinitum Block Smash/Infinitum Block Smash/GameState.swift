@@ -1570,6 +1570,7 @@ final class GameState: ObservableObject {
             
             // Update state on main thread
             await MainActor.run {
+                // Restore core game state
                 self.score = progress.score
                 self.level = progress.level
                 self.blocksPlaced = progress.blocksPlaced
@@ -1586,7 +1587,14 @@ final class GameState: ObservableObject {
                         colorString == "nil" ? nil : BlockColor(rawValue: colorString)
                     }
                 }
+                
+                // Restore tray state
                 self.tray = progress.tray
+                
+                // Restore game state flags
+                self.isGameOver = false
+                self.isPaused = false
+                self.levelComplete = false
                 
                 // Load FPS from UserDefaults
                 if let data = self.userDefaults.data(forKey: self.progressKey),
@@ -1596,11 +1604,15 @@ final class GameState: ObservableObject {
                     // Update the FPS in the game view
                     self.delegate?.updateFPS(savedFPS)
                 }
+                
+                // Notify delegate of state update
+                self.delegate?.gameStateDidUpdate()
             }
             
             // Notify success
             NotificationCenter.default.post(name: .gameStateLoaded, object: nil)
         } catch {
+            print("[GameState] Error loading game progress: \(error.localizedDescription)")
             // Notify failure
             NotificationCenter.default.post(name: .gameStateLoadFailed, object: error)
             throw GameError.loadFailed(error)
@@ -1805,11 +1817,14 @@ final class GameState: ObservableObject {
         // Save statistics before app goes to background
         saveStatistics()
         
-        do {
-            try await saveProgress()
-            print("[GameState] Successfully saved game progress when app resigned active")
-        } catch {
-            print("[GameState] Error saving game progress when app resigned active: \(error.localizedDescription)")
+        // Only save game progress if the game is not over and not paused
+        if !isGameOver && !isPaused {
+            do {
+                try await saveProgress()
+                print("[GameState] Successfully saved game progress when app resigned active")
+            } catch {
+                print("[GameState] Error saving game progress when app resigned active: \(error.localizedDescription)")
+            }
         }
     }
     
