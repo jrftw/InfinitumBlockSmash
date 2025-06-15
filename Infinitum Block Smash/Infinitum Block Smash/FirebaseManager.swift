@@ -737,10 +737,19 @@ class FirebaseManager: ObservableObject {
         
         print("[Firebase] 📊 Submitting score: \(score) for user: \(userId)")
         
-        // Use all periods
-        let periods = ["daily", "weekly", "monthly", "alltime"]
+        // Get current time in UTC
+        let now = Date()
+        let calendar = Calendar.current
         
-        for period in periods {
+        // Define period boundaries
+        let periods: [(name: String, startDate: Date)] = [
+            ("daily", calendar.startOfDay(for: now)),
+            ("weekly", calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now))!),
+            ("monthly", calendar.date(from: calendar.dateComponents([.year, .month], from: now))!),
+            ("alltime", Date.distantPast)
+        ]
+        
+        for (period, startDate) in periods {
             do {
                 print("[Firebase] 🔄 Attempting to update \(period) leaderboard for user \(userId)")
                 
@@ -752,32 +761,47 @@ class FirebaseManager: ObservableObject {
                 let snapshot = try await docRef.getDocument()
                 let currentScore = snapshot.data()?["score"] as? Int ?? 0
                 
-                if score <= currentScore {
-                    print("[Firebase] ⏭️ Skipping \(period) update - Score not better")
-                    continue
+                // For achievement leaderboard, always update
+                // For other leaderboards, update if no score exists or new score is higher
+                let shouldUpdate = type == .achievement || 
+                                 currentScore == 0 || 
+                                 score > currentScore ||
+                                 (type == .timed && time != nil && (currentScore == 0 || time! < TimeInterval(currentScore)))
+                
+                // Always write to daily and weekly if the score is from today/this week
+                let isToday = calendar.isDateInToday(startDate)
+                let isThisWeek = calendar.isDate(startDate, equalTo: now, toGranularity: .weekOfYear)
+                
+                if shouldUpdate || isToday || isThisWeek {
+                    // Include all required fields with UTC timestamp
+                    var data: [String: Any] = [
+                        "username": username,
+                        "score": score,
+                        "timestamp": FieldValue.serverTimestamp(),
+                        "lastUpdate": FieldValue.serverTimestamp(),
+                        "userId": userId,
+                        "periodStart": Timestamp(date: startDate)
+                    ]
+                    
+                    if let level = level {
+                        data["level"] = level
+                    }
+                    
+                    if let time = time {
+                        data["time"] = time
+                    }
+                    
+                    print("[Firebase] 📝 Writing data to Firestore: \(data)")
+                    print("[Firebase] 📝 Writing to path: \(type.collectionName)/\(period)/scores/\(userId)")
+                    
+                    try await docRef.setData(data)
+                    print("[Firebase] ✅ Successfully updated \(period) leaderboard")
+                    
+                    // Invalidate cache for this leaderboard
+                    LeaderboardCache.shared.invalidateCache(type: type, period: period)
+                } else {
+                    print("[Firebase] ⏭️ Skipping \(period) update - Score not better (Current: \(currentScore), New: \(score))")
                 }
-                
-                // Include all required fields
-                var data: [String: Any] = [
-                    "username": username,
-                    "score": score,
-                    "timestamp": Timestamp(date: Date()),
-                    "lastUpdate": Timestamp(date: Date()),
-                    "userId": userId
-                ]
-                
-                if let level = level {
-                    data["level"] = level
-                }
-                
-                if let time = time {
-                    data["time"] = time
-                }
-                
-                print("[Firebase] 📝 Writing data to Firestore: \(data)")
-                
-                try await docRef.setData(data)
-                print("[Firebase] ✅ Successfully updated \(period) leaderboard")
                 
             } catch {
                 print("[Firebase] ❌ Error updating \(period) leaderboard: \(error.localizedDescription)")

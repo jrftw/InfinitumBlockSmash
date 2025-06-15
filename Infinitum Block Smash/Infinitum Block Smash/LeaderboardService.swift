@@ -319,10 +319,19 @@ final class LeaderboardService: ObservableObject {
         
         print("[Leaderboard] ✅ Username found: \(username)")
         
-        // Use all periods
-        let periods = ["daily", "weekly", "monthly", "alltime"]
+        // Get current time in UTC
+        let now = Date()
+        let calendar = Calendar.current
         
-        for period in periods {
+        // Define period boundaries
+        let periods: [(name: String, startDate: Date)] = [
+            ("daily", calendar.startOfDay(for: now)),
+            ("weekly", calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now))!),
+            ("monthly", calendar.date(from: calendar.dateComponents([.year, .month], from: now))!),
+            ("alltime", Date.distantPast)
+        ]
+        
+        for (period, startDate) in periods {
             do {
                 print("[Leaderboard] 🔄 Attempting to update \(period) leaderboard for user \(userId)")
                 
@@ -346,13 +355,18 @@ final class LeaderboardService: ObservableObject {
                                  score > currentScore ||
                                  (type == .timed && time != nil && (currentScore == -1 || time! < TimeInterval(currentScore)))
                 
-                if shouldUpdate {
-                    // Create base data dictionary
+                // Always write to daily and weekly if the score is from today/this week
+                let isToday = calendar.isDateInToday(startDate)
+                let isThisWeek = calendar.isDate(startDate, equalTo: now, toGranularity: .weekOfYear)
+                
+                if shouldUpdate || isToday || isThisWeek {
+                    // Create base data dictionary with UTC timestamp
                     var data: [String: Any] = [
                         "username": username,
                         "timestamp": FieldValue.serverTimestamp(),
                         "userId": userId,
-                        "lastUpdate": FieldValue.serverTimestamp()
+                        "lastUpdate": FieldValue.serverTimestamp(),
+                        "periodStart": Timestamp(date: startDate)
                     ]
                     
                     // Add score/points based on leaderboard type
@@ -388,12 +402,9 @@ final class LeaderboardService: ObservableObject {
             } catch {
                 print("[Leaderboard] ❌ Error updating \(period) leaderboard: \(error.localizedDescription)")
                 print("[Leaderboard] ❌ Error details: \(error)")
-                await handleFailedUpdate(userId: userId, type: type, period: period, score: score, level: level, time: time)
                 throw LeaderboardError.updateFailed(error)
             }
         }
-        
-        print("[Leaderboard] ✅ Successfully completed all leaderboard updates")
     }
     
     func getLeaderboard(type: LeaderboardType, period: String) async throws -> (entries: [FirebaseManager.LeaderboardEntry], totalUsers: Int) {
