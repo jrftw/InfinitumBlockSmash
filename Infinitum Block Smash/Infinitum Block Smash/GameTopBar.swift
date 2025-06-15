@@ -80,6 +80,8 @@ struct GameTopBar: View {
         }
         .padding(.horizontal)
         .padding(.top, 8)
+        .background(Color(.sRGB, red: 32/255, green: 36/255, blue: 48/255, opacity: 0.95))
+        .zIndex(100) // Ensure top bar is always on top
         .sheet(isPresented: $showingLeaderboard) {
             LeaderboardView()
         }
