@@ -339,13 +339,17 @@ class ManualLeaderboardUpdate {
         let collection = type.collectionName
         let periods = ["daily", "weekly", "monthly", "alltime"]
         
+        // Get current time in EST
+        let now = Date()
+        let calendar = Calendar.current
+        let estNow = now.addingTimeInterval(TimeInterval(TimeZone(identifier: "America/New_York")!.secondsFromGMT()))
+        
         // Create base data dictionary with UTC timestamp
         var data: [String: Any] = [
             "username": username,
             "timestamp": FieldValue.serverTimestamp(),
             "userId": userId,
             "lastUpdate": FieldValue.serverTimestamp(),
-            "periodStart": FieldValue.serverTimestamp(),
             "level": currentLevel
         ]
         
@@ -364,6 +368,29 @@ class ManualLeaderboardUpdate {
             
             for period in periods {
                 do {
+                    // Calculate period start date
+                    let startDate: Date
+                    switch period {
+                    case "daily":
+                        startDate = calendar.startOfDay(for: estNow)
+                    case "weekly":
+                        var components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: estNow)
+                        components.weekday = 1 // Sunday
+                        startDate = calendar.date(from: components) ?? now
+                    case "monthly":
+                        var components = calendar.dateComponents([.year, .month], from: estNow)
+                        components.day = 1
+                        components.hour = 0
+                        components.minute = 0
+                        components.second = 0
+                        startDate = calendar.date(from: components) ?? now
+                    default:
+                        startDate = Date.distantPast
+                    }
+                    
+                    // Add periodStart to data
+                    data["periodStart"] = Timestamp(date: startDate)
+                    
                     let docRef = db.collection(collection)
                         .document(period)
                         .collection("scores")
