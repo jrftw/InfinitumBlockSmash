@@ -1251,12 +1251,31 @@ final class GameState: ObservableObject {
         }
     }
     
-    private func checkGameOver() {
-        // End the game if none of the tray shapes can be placed anywhere
+    func checkGameOver() {
+        // First check if any current tray blocks can be placed
         let canPlaceAny = tray.contains { canPlaceBlockAnywhere($0) }
-        if !canPlaceAny && !isGameOver {  // Only proceed if not already game over
-            print("[GameOver] No available moves for any tray shape. Game over.")
-            handleGameOver()
+        
+        // If no current blocks can be placed, try refilling the tray
+        if !canPlaceAny {
+            // Save current tray
+            let currentTray = tray
+            
+            // Try refilling the tray
+            refillTray()
+            
+            // Check if any blocks in the new tray can be placed
+            let canPlaceAfterRefill = tray.contains { canPlaceBlockAnywhere($0) }
+            
+            // If still no valid moves and not already game over, trigger game over
+            if !canPlaceAfterRefill && !isGameOver {
+                print("[GameOver] No available moves for any tray shape, even after refill. Game over.")
+                handleGameOver()
+            }
+            
+            // Restore original tray if no game over
+            if !isGameOver {
+                tray = currentTray
+            }
         }
     }
     

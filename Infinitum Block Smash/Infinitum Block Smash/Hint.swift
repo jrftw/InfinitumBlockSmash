@@ -47,6 +47,8 @@ class HintManager: ObservableObject {
                 lastHintTime = currentTime
             } else {
                 print("[Hint] No valid moves found")
+                // Trigger game over check when no valid moves are found
+                gameState.checkGameOver()
             }
         }
     }
