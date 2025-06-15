@@ -27,6 +27,7 @@ struct Block: Identifiable, Codable {
 enum BlockColor: String, CaseIterable, Codable {
     case red, blue, green, yellow, purple, orange, pink, cyan
 
+    @inlinable
     var gradientColors: (start: CGColor, end: CGColor) {
         switch self {
         case .red: return Self.makeGradient(1.0, 0.2, 0.2, 0.8, 0.1, 0.1)
@@ -40,6 +41,7 @@ enum BlockColor: String, CaseIterable, Codable {
         }
     }
 
+    @inlinable
     var shadowColor: CGColor {
         switch self {
         case .red: return CGColor(red: 0.6, green: 0.1, blue: 0.1, alpha: 1.0)
@@ -53,6 +55,7 @@ enum BlockColor: String, CaseIterable, Codable {
         }
     }
 
+    @inlinable
     var color: Color {
         Color(cgColor: gradientColors.start)
     }
@@ -81,6 +84,7 @@ enum BlockShape: String, CaseIterable, Codable {
     case star, diamond, hexagon, spiral, zigzag
 
     // Cells (unchanged logic)
+    @inline(__always)
     var cells: [(Int, Int)] {
         switch self {
         case .single: return [(0,0)]
@@ -123,6 +127,7 @@ enum BlockShape: String, CaseIterable, Codable {
         }
     }
 
+    @inline(__always)
     var requiredLevel: Int {
         switch self {
         case .single, .tinyLUp, .tinyLDown, .tinyLLeft, .tinyLRight, .tinyI,
@@ -143,7 +148,7 @@ enum BlockShape: String, CaseIterable, Codable {
     }
 
     static func random(for level: Int) -> BlockShape {
-        allCases.filter { $0.requiredLevel <= level }.randomElement() ?? .bar2H
+        allCases.lazy.filter { $0.requiredLevel <= level }.randomElement() ?? .bar2H
     }
 
     var isBasicShape: Bool {
@@ -156,6 +161,7 @@ enum BlockShape: String, CaseIterable, Codable {
         }
     }
 
+    @inline(__always)
     var complexity: Int {
         switch self {
         case .single, .tinyLUp, .tinyLDown, .tinyLLeft, .tinyLRight, .tinyI: return 1
@@ -174,6 +180,10 @@ enum BlockShape: String, CaseIterable, Codable {
 
     static func availableShapes(for level: Int) -> [BlockShape] {
         var result: [BlockShape] = []
+        result.reserveCapacity(33)
+
+        if level <= 25 { result.append(.single) }
+        if level <= 35 { result += [.tinyLUp, .tinyLDown, .tinyLLeft, .tinyLRight, .tinyI] }
 
         result += [
             .bar2H, .bar2V, .bar3H, .bar3V, .bar4H, .bar4V, .square,
@@ -181,8 +191,6 @@ enum BlockShape: String, CaseIterable, Codable {
             .tUp, .tDown, .tLeft, .tRight
         ]
 
-        if level <= 25 { result.append(.single) }
-        if level <= 35 { result += [.tinyLUp, .tinyLDown, .tinyLLeft, .tinyLRight, .tinyI] }
         if level >= 10 { result += [.plus] }
         if level >= 15 { result += [.zShape] }
         if level >= 20 { result += [.cross, .uShape, .vShape, .wShape] }

@@ -1,6 +1,16 @@
 import SwiftUI
 import Charts
 
+// MARK: - View Modifiers
+struct CardModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .padding()
+            .background(Color(.systemBackground))
+            .cornerRadius(12)
+    }
+}
+
 // MARK: - Chart Views
 @available(iOS 16.0, *)
 struct FPSChart: View {
@@ -90,28 +100,30 @@ struct LegacyFPSView: View {
     let fpsHistory: [Double]
     
     var body: some View {
+        let title = Text("FPS History")
+            .font(.headline)
+        
         VStack(alignment: .leading, spacing: 8) {
-            Text("FPS History")
-                .font(.headline)
+            title
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 4) {
                     ForEach(Array(fpsHistory.enumerated()), id: \.offset) { index, fps in
+                        let height = CGFloat(fps)
                         VStack {
                             Rectangle()
                                 .fill(fps >= 60 ? Color.green : Color.red)
-                                .frame(width: 4, height: CGFloat(fps))
+                                .frame(width: 4, height: height)
                             Text("\(Int(fps))")
                                 .font(.system(size: 8))
+                                .monospacedDigit()
                         }
                     }
                 }
                 .frame(height: 200)
             }
         }
-        .padding()
-        .background(Color(.systemBackground))
-        .cornerRadius(12)
+        .modifier(CardModifier())
     }
 }
 
@@ -138,9 +150,7 @@ struct LegacyMemoryView: View {
                 .frame(height: 200)
             }
         }
-        .padding()
-        .background(Color(.systemBackground))
-        .cornerRadius(12)
+        .modifier(CardModifier())
     }
 }
 
@@ -164,9 +174,7 @@ struct LegacyPatternView: View {
                 }
             }
         }
-        .padding()
-        .background(Color(.systemBackground))
-        .cornerRadius(12)
+        .modifier(CardModifier())
     }
 }
 
@@ -190,9 +198,7 @@ struct AnalyticsChartsView: View {
                         LegacyFPSView(fpsHistory: fpsHistory)
                     }
                 }
-                .padding()
-                .background(Color(.systemBackground))
-                .cornerRadius(12)
+                .modifier(CardModifier())
                 .shadow(radius: 2)
                 
                 // Pattern Analysis
@@ -215,9 +221,7 @@ struct AnalyticsChartsView: View {
                             LegacyPatternView(patterns: patternData)
                         }
                     }
-                    .padding()
-                    .background(Color(.systemBackground))
-                    .cornerRadius(12)
+                    .modifier(CardModifier())
                     .shadow(radius: 2)
                 }
                 
@@ -241,14 +245,10 @@ struct AnalyticsChartsView: View {
                                 Text("Weekly Active Users: \(engagement.weeklyActiveUsers)")
                                 Text("Monthly Active Users: \(engagement.monthlyActiveUsers)")
                             }
-                            .padding()
-                            .background(Color(.systemBackground))
-                            .cornerRadius(12)
+                            .modifier(CardModifier())
                         }
                     }
-                    .padding()
-                    .background(Color(.systemBackground))
-                    .cornerRadius(12)
+                    .modifier(CardModifier())
                     .shadow(radius: 2)
                 }
             }

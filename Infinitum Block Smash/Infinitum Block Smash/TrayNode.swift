@@ -35,19 +35,19 @@ class TrayNode: SKNode {
     func updateBlocks(_ blocks: [Block], blockSize: CGFloat) {
         // Remove old nodes
         for node in blockNodes { node.removeFromParent() }
-        blockNodes.removeAll()
+        blockNodes.removeAll(keepingCapacity: true)
 
         guard !blocks.isEmpty else { return }
 
         // 1. Compute union bounding box for all shapes
         var minX = Int.max, maxX = Int.min, minY = Int.max, maxY = Int.min
         let blockBounds: [(minX: Int, maxX: Int, minY: Int, maxY: Int)] = blocks.map { block in
-            let bx = block.shape.cells.map { $0.0 }
-            let by = block.shape.cells.map { $0.1 }
-            let bminX = bx.min() ?? 0
-            let bmaxX = bx.max() ?? 0
-            let bminY = by.min() ?? 0
-            let bmaxY = by.max() ?? 0
+            let xs = block.shape.cells.map { (x, _) in x }
+            let ys = block.shape.cells.map { (_, y) in y }
+            let bminX = xs.min() ?? 0
+            let bmaxX = xs.max() ?? 0
+            let bminY = ys.min() ?? 0
+            let bmaxY = ys.max() ?? 0
             minX = min(minX, bminX)
             maxX = max(maxX, bmaxX)
             minY = min(minY, bminY)
@@ -58,13 +58,14 @@ class TrayNode: SKNode {
         // 2. Compute total width (shapes + spacing) and max height
         let shapeWidths = blockBounds.map { CGFloat($0.maxX - $0.minX + 1) * blockSize }
         let shapeHeights = blockBounds.map { CGFloat($0.maxY - $0.minY + 1) * blockSize }
-        let maxHeight = shapeHeights.max() ?? 0
+        guard let maxHeight = shapeHeights.max(), maxHeight > 0 else { return }
 
         // 3. Calculate scale to fit height first, with a maximum scale of 0.7
         let scaleY = availableHeight / maxHeight
         let scale = min(0.7, scaleY)
         lastScale = scale
-        lastBlockSize = blockSize * scale
+        let scaledBlockSize = blockSize * scale
+        lastBlockSize = scaledBlockSize
 
         // 4. Calculate scaled widths and total width needed for shapes
         let scaledShapeWidths = shapeWidths.map { $0 * scale }
@@ -79,10 +80,10 @@ class TrayNode: SKNode {
         for (i, block) in blocks.enumerated() {
             let shapeWidth = scaledShapeWidths[i]
             let shapeHeight = shapeHeights[i] * scale
-            let node = ShapeNode(block: block, blockSize: blockSize * scale)
+            let node = ShapeNode(block: block, blockSize: scaledBlockSize)
             
             // Center each shape vertically in the tray, accounting for the shape's origin
-            let verticalOffset = -shapeHeight / 2 + blockSize * scale / 2
+            let verticalOffset = -shapeHeight / 2 + scaledBlockSize / 2
             
             node.position = CGPoint(x: xOffset + shapeWidth / 2, y: verticalOffset)
             node.setScale(1.0)

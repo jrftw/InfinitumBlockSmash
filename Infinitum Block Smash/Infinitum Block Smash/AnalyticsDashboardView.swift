@@ -10,6 +10,8 @@ struct AnalyticsDashboardView: View {
     @State private var isLoading = false
     @State private var error: Error?
     
+    @State private var debounceTask: Task<Void, Never>? = nil
+    
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -39,7 +41,9 @@ struct AnalyticsDashboardView: View {
         }
         .navigationTitle("Analytics Dashboard")
         .onChange(of: selectedTimeRange) { _ in
-            Task {
+            debounceTask?.cancel()
+            debounceTask = Task {
+                try? await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds debounce
                 await loadAnalytics()
             }
         }
@@ -111,34 +115,37 @@ private struct AnalyticsContent: View {
             
             PerformanceMetricsView(metrics: metrics)
             
-            if let analytics = analytics {
-                GameAnalyticsView(analytics: analytics)
-            }
-            
-            // Pattern analytics
-            if let patterns = patternAnalytics {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Pattern Analytics")
-                        .font(.headline)
+            if analytics != nil || patternAnalytics != nil {
+                VStack(spacing: 16) {
+                    if let analytics = analytics {
+                        GameAnalyticsView(analytics: analytics)
+                            .modifier(CardModifier())
+                    }
                     
-                    ForEach(Array(patterns.successfulPatterns.keys.prefix(5)), id: \.self) { pattern in
-                        if let count = patterns.successfulPatterns[pattern] {
-                            HStack {
-                                Text(pattern)
-                                Spacer()
-                                Text("Success: \(count)")
-                                    .foregroundColor(.green)
-                                if let failures = patterns.failedPatterns[pattern] {
-                                    Text("Failures: \(failures)")
-                                        .foregroundColor(.red)
+                    // Pattern analytics
+                    if let patterns = patternAnalytics {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Pattern Analytics")
+                                .font(.headline)
+                            
+                            ForEach(Array(patterns.successfulPatterns.keys.prefix(5)), id: \.self) { pattern in
+                                if let count = patterns.successfulPatterns[pattern] {
+                                    HStack {
+                                        Text(pattern)
+                                        Spacer()
+                                        Text("Success: \(count)")
+                                            .foregroundColor(.green)
+                                        if let failures = patterns.failedPatterns[pattern] {
+                                            Text("Failures: \(failures)")
+                                                .foregroundColor(.red)
+                                        }
+                                    }
                                 }
                             }
                         }
+                        .modifier(CardModifier())
                     }
                 }
-                .padding()
-                .background(Color(.systemBackground))
-                .cornerRadius(12)
             }
             
             // Engagement metrics
@@ -165,9 +172,7 @@ private struct AnalyticsContent: View {
                         Text("\(engagement.monthlyActiveUsers)")
                     }
                 }
-                .padding()
-                .background(Color(.systemBackground))
-                .cornerRadius(12)
+                .modifier(CardModifier())
             }
         }
     }
@@ -191,17 +196,16 @@ private struct GameAnalyticsView: View {
                 Text("Average Score")
                 Spacer()
                 Text(String(format: "%.1f", analytics.averageScorePerLevel))
+                    .monospacedDigit()
             }
             
             HStack {
                 Text("Average Session")
                 Spacer()
                 Text(String(format: "%.1f min", analytics.averageSessionDuration / 60))
+                    .monospacedDigit()
             }
         }
-        .padding()
-        .background(Color(.systemBackground))
-        .cornerRadius(12)
     }
 }
 
@@ -220,6 +224,7 @@ struct PerformanceMetricsView: View {
                     Spacer()
                     Text(String(format: "%.1f", fps))
                         .foregroundColor(fps >= 60 ? .green : .red)
+                        .monospacedDigit()
                 }
             }
             
@@ -231,9 +236,7 @@ struct PerformanceMetricsView: View {
                 }
             }
         }
-        .padding()
-        .background(Color(.systemBackground))
-        .cornerRadius(12)
+        .modifier(CardModifier())
     }
 }
 
@@ -275,12 +278,6 @@ struct ErrorView: View {
             }
             .buttonStyle(.bordered)
         }
-        .padding()
-        .background(Color(.systemBackground))
-        .cornerRadius(12)
+        .modifier(CardModifier())
     }
 }
-
-#Preview {
-    AnalyticsDashboardView()
-} 

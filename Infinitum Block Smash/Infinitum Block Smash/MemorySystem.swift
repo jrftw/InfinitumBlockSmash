@@ -174,63 +174,23 @@ final class MemorySystem {
         let startTime = Date()
         let initialMemory = getMemoryUsage()
         
-        // Clear all caches immediately
-        log("[MemorySystem] Clearing all caches")
-        clearAllCaches()
-        
-        // Force garbage collection
         autoreleasepool {
+            log("[MemorySystem] Clearing all caches")
+            clearAllCaches()
+            
             log("[MemorySystem] Clearing URL cache")
             URLCache.shared.removeAllCachedResponses()
             
             log("[MemorySystem] Removing temporary files")
-            let tmp = FileManager.default.temporaryDirectory
-            if let files = try? FileManager.default.contentsOfDirectory(
-                at: tmp,
-                includingPropertiesForKeys: nil
-            ) {
-                for file in files {
-                    try? FileManager.default.removeItem(at: file)
-                }
-                log("[MemorySystem] Removed \(files.count) temporary files")
-            }
+            removeTemporaryFiles()
             
             log("[MemorySystem] Purging SpriteKit textures")
             SKTextureAtlas.preloadTextureAtlases([], withCompletionHandler: {})
-            
-            log("[MemorySystem] Clearing gradient cache")
-            BlockShapeView.clearCache()
-            
-            log("[MemorySystem] Clearing image cache")
-            UIImageView.clearImageCache()
-            
-            // Additional aggressive cleanup
-            log("[MemorySystem] Clearing image caches")
-            UIImageView.clearImageCache()
-            BlockShapeView.clearCache()
-            
-            // Clear any remaining texture caches
-            SKTextureAtlas.preloadTextureAtlases([], withCompletionHandler: {})
-            
-            // Clear any remaining temporary files
-            if let tmp = try? FileManager.default.contentsOfDirectory(
-                at: FileManager.default.temporaryDirectory,
-                includingPropertiesForKeys: nil
-            ) {
-                for file in tmp {
-                    try? FileManager.default.removeItem(at: file)
-                }
-            }
         }
         
         // Reset cache statistics
         cacheHits = 0
         cacheMisses = 0
-        
-        // Force garbage collection
-        autoreleasepool {
-            // Additional cleanup if needed
-        }
         
         let endTime = Date()
         let finalMemory = getMemoryUsage()
@@ -315,6 +275,29 @@ final class MemorySystem {
         return (cacheHits, cacheMisses)
     }
     
+    // MARK: — Helper Functions
+    private func removeTemporaryFiles() {
+        let tmp = FileManager.default.temporaryDirectory
+        if let files = try? FileManager.default.contentsOfDirectory(
+            at: tmp,
+            includingPropertiesForKeys: nil
+        ) {
+            for file in files {
+                try? FileManager.default.removeItem(at: file)
+                if let encodedPath = file.path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
+                    log("[MemorySystem] Removed temp file: \(encodedPath)")
+                } else {
+                    log("[MemorySystem] Removed temp file: \(file.path)")
+                }
+            }
+            if let encodedTmpPath = tmp.path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
+                log("[MemorySystem] Removed \(files.count) temporary files from \(encodedTmpPath)")
+            } else {
+                log("[MemorySystem] Removed \(files.count) temporary files from \(tmp.path)")
+            }
+        }
+    }
+    
     // MARK: — Logging
     private func log(_ message: String) {
         print(message)
@@ -332,6 +315,7 @@ final class MemorySystem {
     
     deinit {
         monitoringTimer?.invalidate()
+        monitoringTimer = nil
         pressureSource.cancel()
     }
 }

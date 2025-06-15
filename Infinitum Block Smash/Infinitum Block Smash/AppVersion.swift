@@ -237,10 +237,10 @@ struct AppVersion {
     }
     
     static func getChangelog(for version: String) -> [String] {
-        return changelog[version] ?? []
+        changelog[version] ?? []
     }
     
     static var currentChangelog: [String] {
-        return getChangelog(for: version)
+        getChangelog(for: version)
     }
 } 

@@ -10,9 +10,26 @@ struct GameTopBar: View {
     // Minimum tap target size for better touch response
     private let minimumTapSize: CGFloat = 44
     
-    // Screen size check
+    @inline(__always)
     private var isSmallScreen: Bool {
         UIScreen.main.bounds.width <= 390 // 6.1" iPhone width
+    }
+    
+    private struct MinimumTapButtonStyle: ButtonStyle {
+        let size: CGFloat
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label
+                .frame(width: size, height: size)
+        }
+    }
+    
+    private func iconButton(systemName: String, action: @escaping () -> Void, foreground: Color) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.title2)
+                .foregroundColor(foreground)
+        }
+        .buttonStyle(MinimumTapButtonStyle(size: minimumTapSize))
     }
     
     var body: some View {
@@ -22,8 +39,8 @@ struct GameTopBar: View {
                 Image(systemName: "pause.circle.fill")
                     .font(isSmallScreen ? .title3 : .title2)
                     .foregroundColor(.white)
-                    .frame(width: minimumTapSize, height: minimumTapSize)
             }
+            .buttonStyle(MinimumTapButtonStyle(size: minimumTapSize))
             .padding(.trailing, 8)
             
             if !isSmallScreen {
@@ -42,38 +59,23 @@ struct GameTopBar: View {
                     Image(systemName: "lightbulb.fill")
                         .font(.title2)
                         .foregroundColor(.white)
-                        .frame(width: minimumTapSize, height: minimumTapSize)
                 }
+                .buttonStyle(MinimumTapButtonStyle(size: minimumTapSize))
                 .disabled(gameState.hintsUsedThisGame >= 3)
                 .opacity(gameState.hintsUsedThisGame >= 3 ? 0.5 : 1.0)
                 .accessibilityLabel("Get Hint (Watch Ad)")
                 
                 // Achievements Button
-                Button(action: { showingAchievements = true }) {
-                    Image(systemName: "rosette")
-                        .font(.title2)
-                        .foregroundColor(.yellow)
-                        .frame(width: minimumTapSize, height: minimumTapSize)
-                }
-                .accessibilityLabel("Achievements")
+                iconButton(systemName: "rosette", action: { showingAchievements = true }, foreground: .yellow)
+                    .accessibilityLabel("Achievements")
                 
                 // Leaderboard Button
-                Button(action: { showingLeaderboard = true }) {
-                    Image(systemName: "trophy.fill")
-                        .font(.title2)
-                        .foregroundColor(.yellow)
-                        .frame(width: minimumTapSize, height: minimumTapSize)
-                }
-                .accessibilityLabel("Leaderboard")
+                iconButton(systemName: "trophy.fill", action: { showingLeaderboard = true }, foreground: .yellow)
+                    .accessibilityLabel("Leaderboard")
                 
                 // Settings Button
-                Button(action: { showingSettings = true }) {
-                    Image(systemName: "gearshape.fill")
-                        .font(.title2)
-                        .foregroundColor(.white)
-                        .frame(width: minimumTapSize, height: minimumTapSize)
-                }
-                .accessibilityLabel("Settings")
+                iconButton(systemName: "gearshape.fill", action: { showingSettings = true }, foreground: .white)
+                    .accessibilityLabel("Settings")
             }
         }
         .padding(.horizontal)

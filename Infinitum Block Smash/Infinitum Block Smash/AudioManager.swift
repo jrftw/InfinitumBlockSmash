@@ -39,8 +39,8 @@ class AudioManager {
             }
         }
         
-        // Clear existing sound effects
-        cleanupSoundEffects()
+        // Initialize sound effects dictionary fresh
+        soundEffects = [:]
         
         // Load only essential sound effects initially
         loadEssentialSoundEffects()
@@ -75,12 +75,16 @@ class AudioManager {
         }
     }
     
+    private func playEffectIfAvailable(_ name: String) {
+        guard !isMuted else { return }
+        soundEffects[name]?.play()
+    }
+    
     func playSoundEffect(_ name: String) {
         if soundEffects[name] == nil {
             loadSoundEffect(name)
         }
-        guard !isMuted else { return }
-        soundEffects[name]?.play()
+        playEffectIfAvailable(name)
     }
     
     func playBackgroundMusic() {
@@ -106,8 +110,7 @@ class AudioManager {
     }
     
     func playSound(_ name: String) {
-        guard !isMuted else { return }
-        soundEffects[name]?.play()
+        playEffectIfAvailable(name)
     }
     
     func setMusicVolume(_ volume: Float) {
@@ -120,22 +123,21 @@ class AudioManager {
         }
     }
     
-    func playPlacementSound() {
+    private func playSystemSound(_ soundID: SystemSoundID) {
         guard !isMuted else { return }
-        // System sound for block placement (a light tap sound)
-        AudioServicesPlaySystemSound(1104) // System sound for a light tap
+        AudioServicesPlaySystemSound(soundID)
+    }
+    
+    func playPlacementSound() {
+        playSystemSound(1104) // System sound for a light tap
     }
     
     func playLevelCompleteSound() {
-        guard !isMuted else { return }
-        // System sound for level completion (a success sound)
-        AudioServicesPlaySystemSound(1519) // System sound for success
+        playSystemSound(1519) // System sound for success
     }
     
     func playFailSound() {
-        guard !isMuted else { return }
-        // System sound for failure (warning sound)
-        AudioServicesPlaySystemSound(1005) // System sound for warning/alert
+        playSystemSound(1005) // System sound for warning/alert
     }
     
     func toggleMute() {
@@ -156,7 +158,6 @@ class AudioManager {
         UserDefaults.standard.set(soundEnabled, forKey: "soundEnabled")
         UserDefaults.standard.set(musicVolume, forKey: "musicVolume")
         UserDefaults.standard.set(sfxVolume, forKey: "sfxVolume")
-        UserDefaults.standard.synchronize()
         
         if soundEnabled {
             playBackgroundMusic()
