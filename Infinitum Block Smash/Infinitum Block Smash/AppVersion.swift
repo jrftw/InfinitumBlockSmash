@@ -23,6 +23,7 @@ struct AppVersion {
     static let changelog: [String: [String]] = [
         
         "1.0.5 (Build 2)": [
+            "Made the hint logic smarter",
             "Leaderboard UI enhancements",
             "Bug Fixes and Improvements"
         ],

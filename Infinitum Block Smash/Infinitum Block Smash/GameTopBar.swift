@@ -61,8 +61,8 @@ struct GameTopBar: View {
                         .foregroundColor(.white)
                 }
                 .buttonStyle(MinimumTapButtonStyle(size: minimumTapSize))
-                .disabled(gameState.hintsUsedThisGame >= 3)
-                .opacity(gameState.hintsUsedThisGame >= 3 ? 0.5 : 1.0)
+                .disabled(gameState.hintManager.hintsUsedThisGame >= 3)
+                .opacity(gameState.hintManager.hintsUsedThisGame >= 3 ? 0.5 : 1.0)
                 .accessibilityLabel("Get Hint (Watch Ad)")
                 
                 // Achievements Button

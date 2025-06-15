@@ -11,11 +11,12 @@ struct GameRulesView: View {
                 • 1 point for each block that touches another block
                 • 2x bonus multiplier for touching 3 or more blocks
                 • 100 points for clearing a row or column
-                • 500 bonus points for creating a group of 10 or more blocks
+                • 500 bonus points for clearing a row/column of the same color
+                • 200 points for creating a group of 10 or more blocks
                 • Chain bonuses for multiple clears
-                • 500 points for diagonal patterns (both / and \\)
-                • 1000 points for X pattern
-                • 1000 points for perfect level (no mistakes)
+                • 500 bonus points for creating a diagonal pattern with same color
+                • 1000 bonus points for creating an X pattern with same color
+                • Perfect level bonus for clearing without mistakes
                 """),
             ("Level Progression", "Complete levels by reaching the score threshold. Each level introduces new shapes and challenges."),
             ("Tips", "Plan your moves carefully to create large groups and special patterns for maximum points!")

@@ -54,8 +54,10 @@ final class GameState: ObservableObject {
     // Ad-related state
     @Published private(set) var levelsCompletedSinceLastAd = 0
     @Published private(set) var adsWatchedThisGame = 0
-    @Published private(set) var hintsUsedThisGame = 0
     @Published private(set) var hasUsedContinueAd = false
+    
+    // Add HintManager
+    let hintManager = HintManager()
     
     // Add frame size property
     var frameSize: CGSize = .zero
@@ -395,7 +397,6 @@ final class GameState: ObservableObject {
         // Reset ad-related state
         levelsCompletedSinceLastAd = 0
         adsWatchedThisGame = 0
-        hintsUsedThisGame = 0
         hasUsedContinueAd = false
         
         // Reset undo state
@@ -403,8 +404,7 @@ final class GameState: ObservableObject {
         unlimitedUndos = false
         
         // Reset hint state
-        lastHintTime = 0
-        cachedHint = nil
+        hintManager.reset()
         
         // Set the seed for the new game
         setSeed(for: level)
@@ -1953,42 +1953,7 @@ final class GameState: ObservableObject {
     
     // Add this method to handle hints
     func showHint() {
-        Task { @MainActor in
-            let currentTime = CACurrentMediaTime()
-            guard currentTime - lastHintTime >= hintCooldown else {
-                print("[Hint] Hint on cooldown")
-                return
-            }
-            
-            let hasUnlimitedHints = await subscriptionManager.hasFeature(.hints)
-            if hintsUsedThisGame >= 3 && !hasUnlimitedHints {
-                return
-            }
-            
-            print("[Hint] Attempting to show hint. Current hints used: \(hintsUsedThisGame)")
-            
-            // Try to use cached hint first
-            if let cached = cachedHint, canPlaceBlock(cached.block, at: CGPoint(x: cached.position.col, y: cached.position.row)) {
-                delegate?.highlightHint(block: cached.block, at: cached.position)
-                if !hasUnlimitedHints {
-                    hintsUsedThisGame += 1
-                }
-                lastHintTime = currentTime
-                return
-            }
-            
-            // If no valid cached hint, find a new one
-            if let (block, position) = findValidMove() {
-                cachedHint = (block, position)
-                delegate?.highlightHint(block: block, at: position)
-                if !hasUnlimitedHints {
-                    hintsUsedThisGame += 1
-                }
-                lastHintTime = currentTime
-            } else {
-                print("[Hint] No valid moves found")
-            }
-        }
+        hintManager.showHint(gameState: self, delegate: delegate)
     }
     
     private func findValidMove() -> (block: Block, position: (row: Int, col: Int))? {
@@ -2047,7 +2012,6 @@ final class GameState: ObservableObject {
     private func resetAdState() {
         levelsCompletedSinceLastAd = 0
         adsWatchedThisGame = 0
-        hintsUsedThisGame = 0
         hasUsedContinueAd = false
     }
     
