@@ -2472,10 +2472,64 @@ final class GameState: ObservableObject {
         // Get adjusted difficulty for next level
         let adjustedDifficulty = adaptiveDifficultyManager.getAdjustedDifficulty(for: level + 1)
         
-        // Apply adjusted difficulty settings
-        levelScoreThreshold = Int(Double(calculateRequiredScore()) * adjustedDifficulty.scoreRequirementMultiplier)
-        randomShapesOnBoard = Int(Double(randomShapesOnBoard) * adjustedDifficulty.randomShapeSpawnRate)
-        requiredShapesToFit = Int(Double(requiredShapesToFit) * adjustedDifficulty.shapeComplexityMultiplier)
+        // Calculate the next level's required score
+        let nextLevel = level + 1
+        let nextLevelRequiredScore: Int
+        switch nextLevel {
+        case 1...5:
+            // Levels 1-5: 1000 points each
+            nextLevelRequiredScore = nextLevel * 1000
+        case 6...10:
+            // Levels 6-10: 1000 points each
+            nextLevelRequiredScore = nextLevel * 1000
+        case 11...25:
+            // Levels 11-25: 1100 points each
+            nextLevelRequiredScore = 10000 + ((nextLevel - 10) * 1100)
+        case 26...50:
+            // Levels 26-50: 1100 points each
+            nextLevelRequiredScore = 26500 + ((nextLevel - 25) * 1100)
+        case 51...100:
+            // Levels 51-100: 1250 points each
+            nextLevelRequiredScore = 52500 + ((nextLevel - 50) * 1250)
+        case 101...200:
+            // Levels 101-200: 1500 points each
+            nextLevelRequiredScore = 112500 + ((nextLevel - 100) * 1500)
+        case 201...300:
+            // Levels 201-300: 1750 points each
+            nextLevelRequiredScore = 262500 + ((nextLevel - 200) * 1750)
+        case 301...500:
+            // Levels 301-500: 2000 points each
+            nextLevelRequiredScore = 437500 + ((nextLevel - 300) * 2000)
+        case 501...:
+            // Level 501+: 2500 points each, increasing by 500 every 200 levels
+            let basePoints = 2500
+            let levelGroup = (nextLevel - 500) / 200
+            let additionalPoints = levelGroup * 500
+            let pointsPerLevel = basePoints + additionalPoints
+            nextLevelRequiredScore = 837500 + ((nextLevel - 500) * pointsPerLevel)
+        default:
+            nextLevelRequiredScore = nextLevel * 1000
+        }
+        
+        // Apply difficulty adjustments while ensuring we don't go below the base threshold
+        let safeNextLevelScore = min(nextLevelRequiredScore, Int.max / 2) // Prevent overflow
+        let safeMultiplier = min(max(adjustedDifficulty.scoreRequirementMultiplier, 0.1), 10.0)
+        let adjustedScore = Double(safeNextLevelScore) * safeMultiplier
+        
+        // Ensure the final value is valid before converting to Int
+        if adjustedScore.isFinite && !adjustedScore.isNaN {
+            levelScoreThreshold = max(nextLevelRequiredScore, Int(adjustedScore))
+        } else {
+            // Fallback to base score if calculation results in invalid value
+            levelScoreThreshold = nextLevelRequiredScore
+        }
+        
+        // Apply other difficulty adjustments
+        let adjustedRandomShapes = Double(randomShapesOnBoard) * adjustedDifficulty.randomShapeSpawnRate
+        randomShapesOnBoard = max(0, Int(adjustedRandomShapes))
+        
+        let adjustedRequiredShapes = Double(requiredShapesToFit) * adjustedDifficulty.shapeComplexityMultiplier
+        requiredShapesToFit = max(1, Int(adjustedRequiredShapes))
         
         // Transfer temporary score to main score
         score = temporaryScore
@@ -2618,8 +2672,43 @@ final class GameState: ObservableObject {
     }
 
     func calculateRequiredScore() -> Int {
-        // Use the current levelScoreThreshold as the base
-        let baseScore = levelScoreThreshold
+        // Calculate the total required score for the current level
+        let totalRequiredScore: Int
+        switch level {
+        case 1...5:
+            // Levels 1-5: 1000 points each
+            totalRequiredScore = level * 1000
+        case 6...10:
+            // Levels 6-10: 1000 points each
+            totalRequiredScore = level * 1000
+        case 11...25:
+            // Levels 11-25: 1100 points each
+            totalRequiredScore = 10000 + ((level - 10) * 1100)
+        case 26...50:
+            // Levels 26-50: 1100 points each
+            totalRequiredScore = 26500 + ((level - 25) * 1100)
+        case 51...100:
+            // Levels 51-100: 1250 points each
+            totalRequiredScore = 52500 + ((level - 50) * 1250)
+        case 101...200:
+            // Levels 101-200: 1500 points each
+            totalRequiredScore = 112500 + ((level - 100) * 1500)
+        case 201...300:
+            // Levels 201-300: 1750 points each
+            totalRequiredScore = 262500 + ((level - 200) * 1750)
+        case 301...500:
+            // Levels 301-500: 2000 points each
+            totalRequiredScore = 437500 + ((level - 300) * 2000)
+        case 501...:
+            // Level 501+: 2500 points each, increasing by 500 every 200 levels
+            let basePoints = 2500
+            let levelGroup = (level - 500) / 200
+            let additionalPoints = levelGroup * 500
+            let pointsPerLevel = basePoints + additionalPoints
+            totalRequiredScore = 837500 + ((level - 500) * pointsPerLevel)
+        default:
+            totalRequiredScore = level * 1000
+        }
         
         // Add bonus for perfect levels
         let perfectBonus = perfectLevels * 500
@@ -2627,7 +2716,7 @@ final class GameState: ObservableObject {
         // Add bonus for consecutive days played
         let streakBonus = consecutiveDays * 200
         
-        return baseScore + perfectBonus + streakBonus
+        return totalRequiredScore + perfectBonus + streakBonus
     }
     
     // MARK: - Tray Management

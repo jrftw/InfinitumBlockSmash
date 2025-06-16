@@ -1438,13 +1438,39 @@ class FirebaseManager: ObservableObject {
         return userId
     }
 
+    private func ensureLeaderboardDocumentExists(type: LeaderboardType, period: String, userId: String, username: String) async throws {
+        let docRef = db.collection(type.collectionName)
+            .document(period)
+            .collection("scores")
+            .document(userId)
+        
+        let snapshot = try await docRef.getDocument()
+        
+        if !snapshot.exists {
+            print("[FirebaseManager] 📝 Creating new leaderboard document for \(type.collectionName)/\(period)/scores/\(userId)")
+            let initialData: [String: Any] = [
+                "username": username,
+                "userId": userId,
+                "timestamp": FieldValue.serverTimestamp(),
+                "lastUpdate": FieldValue.serverTimestamp(),
+                type.scoreField: 0
+            ]
+            try await docRef.setData(initialData)
+            print("[FirebaseManager] ✅ Successfully created leaderboard document")
+        }
+    }
+
     func saveLeaderboardEntry(_ entry: LeaderboardEntry, type: LeaderboardType, period: String) async throws {
         let db = Firestore.firestore()
+        
+        // Ensure the document exists before updating
+        try await ensureLeaderboardDocumentExists(type: type, period: period, userId: entry.id, username: entry.username)
         
         var data: [String: Any] = [
             "username": entry.username,
             type.scoreField: entry.score,
-            "timestamp": entry.timestamp
+            "timestamp": entry.timestamp,
+            "lastUpdate": FieldValue.serverTimestamp()
         ]
         
         if let level = entry.level {
@@ -1459,9 +1485,9 @@ class FirebaseManager: ObservableObject {
             .document(period)
             .collection("scores")
             .document(entry.id)
-            .setData(data)
+            .setData(data, merge: true)
     }
-    
+
     func getLeaderboardEntries(type: LeaderboardType, period: String) async throws -> [LeaderboardEntry] {
         print("[FirebaseManager] 🔄 Getting leaderboard entries for type: \(type), period: \(period)")
         
@@ -1552,7 +1578,7 @@ class FirebaseManager: ObservableObject {
         print("[FirebaseManager] 📊 Successfully parsed \(entries.count) entries")
         return entries
     }
-    
+
     private func refreshAppCheckToken() async {
         do {
             let token = try await AppCheck.appCheck().token(forcingRefresh: true)
