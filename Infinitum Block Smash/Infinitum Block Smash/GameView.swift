@@ -633,15 +633,26 @@ struct GameView: View {
             isAdRetrying = true
             adRetryCount += 1
             
-            // Exponential backoff
-            let delay = pow(2.0, Double(adRetryCount))
+            // Exponential backoff with jitter
+            let baseDelay = pow(2.0, Double(adRetryCount))
+            let jitter = Double.random(in: 0...0.3) * baseDelay
+            let delay = baseDelay + jitter
+            
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 Task {
-                    await adManager.loadInterstitial()
-                    await adManager.loadRewardedInterstitial()
+                    // Attempt to reload all ad types
+                    await adManager.preloadAllAds()
                     isAdRetrying = false
                 }
             }
+        }
+        
+        // Track the error silently
+        Task {
+            AnalyticsManager.shared.trackEvent(.performanceMetric(
+                name: "ad_error",
+                value: 1.0
+            ))
         }
     }
     

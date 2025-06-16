@@ -45,7 +45,7 @@ class AdManager: NSObject, ObservableObject {
     @Published private(set) var adsWatchedThisGame: Int = 0
     
     // Add ad frequency control
-    private let minimumTimeBetweenAds: TimeInterval = 45 // Reduced to 45 seconds
+    private let minimumTimeBetweenAds: TimeInterval = 180 // 3 minutes between ads
     private let maximumAdsPerGame: Int = 8 // Increased to 8 ads per game
     private let maximumAdLoadAttempts: Int = 3
     private let adLoadTimeout: TimeInterval = 10 // 10 seconds timeout for ad loading
@@ -138,19 +138,24 @@ class AdManager: NSObject, ObservableObject {
     
     // MARK: - Ad Preloading
     
-    private func preloadAllAds() async {
+    func preloadAllAds() async {
         // Cancel any existing preload timer
         preloadTimer?.invalidate()
         
         // Start preloading with a small delay to ensure SDK is ready
         try? await Task.sleep(nanoseconds: UInt64(0.5 * 1_000_000_000))
         
-        await preloadBanner()
-        await preloadInterstitial()
-        await preloadRewardedInterstitial()
+        // Preload ads in parallel for better performance
+        async let bannerTask: Void = preloadBanner()
+        async let interstitialTask: Void = preloadInterstitial()
+        async let rewardedTask: Void = preloadRewardedInterstitial()
         
-        // Schedule periodic preloading
-        preloadTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
+        // Wait for all preloads to complete
+        _ = await [bannerTask, interstitialTask, rewardedTask]
+        
+        // Schedule periodic preloading with exponential backoff
+        let nextPreloadInterval = min(300.0 * pow(1.5, Double(retryCount)), 1800.0) // Max 30 minutes
+        preloadTimer = Timer.scheduledTimer(withTimeInterval: nextPreloadInterval, repeats: true) { [weak self] _ in
             Task { [weak self] in
                 await self?.preloadAllAds()
             }
@@ -163,16 +168,36 @@ class AdManager: NSObject, ObservableObject {
         do {
             let request = Request()
             try await withTimeout(seconds: adLoadTimeout) {
-                // Load primary ad
-                self.interstitialAd = try await InterstitialAd.load(with: AdConfig.getInterstitialAdUnitID(), request: request)
-                self.interstitialAd?.fullScreenContentDelegate = self
+                // Load primary ad with retry logic
+                var attempts = 0
+                while attempts < 3 {
+                    do {
+                        self.interstitialAd = try await InterstitialAd.load(with: AdConfig.getInterstitialAdUnitID(), request: request)
+                        self.interstitialAd?.fullScreenContentDelegate = self
+                        break
+                    } catch {
+                        attempts += 1
+                        if attempts == 3 { throw error }
+                        try await Task.sleep(nanoseconds: UInt64(pow(2.0, Double(attempts)) * 1_000_000_000))
+                    }
+                }
                 
                 // Add small delay before loading fallback
                 try await Task.sleep(nanoseconds: UInt64(self.preloadDelay * 1_000_000_000))
                 
-                // Load fallback ad
-                self.fallbackInterstitialAd = try await InterstitialAd.load(with: AdConfig.getInterstitialAdUnitID(), request: request)
-                self.fallbackInterstitialAd?.fullScreenContentDelegate = self
+                // Load fallback ad with retry logic
+                attempts = 0
+                while attempts < 3 {
+                    do {
+                        self.fallbackInterstitialAd = try await InterstitialAd.load(with: AdConfig.getInterstitialAdUnitID(), request: request)
+                        self.fallbackInterstitialAd?.fullScreenContentDelegate = self
+                        break
+                    } catch {
+                        attempts += 1
+                        if attempts == 3 { throw error }
+                        try await Task.sleep(nanoseconds: UInt64(pow(2.0, Double(attempts)) * 1_000_000_000))
+                    }
+                }
                 
                 self.adState = .ready
                 self.retryCount = 0
@@ -180,14 +205,6 @@ class AdManager: NSObject, ObservableObject {
         } catch {
             print("Failed to preload interstitial ads: \(error.localizedDescription)")
             handleAdError(error)
-            
-            // Retry with exponential backoff
-            if retryCount < maxRetryAttempts {
-                retryCount += 1
-                let delay = pow(2.0, Double(retryCount))
-                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                await preloadInterstitial()
-            }
         }
     }
     
@@ -294,7 +311,48 @@ class AdManager: NSObject, ObservableObject {
     // MARK: - Ad Availability Check
     
     func isAdAvailable() async -> Bool {
-        return await shouldShowAds() && adState == .ready
+        // Check network connectivity first
+        guard isNetworkAvailable else {
+            return false
+        }
+        
+        // Check if user has purchased the no-ads feature
+        let hasNoAdsFeature = await subscriptionManager.hasFeature(.noAds)
+        if hasNoAdsFeature {
+            return false
+        }
+        
+        // Check if user has referral-based ad-free time
+        if ReferralManager.shared.hasAdFreeTime() {
+            return false
+        }
+        
+        // Check ad frequency
+        if let lastAdTime = lastAdShownTime {
+            let timeSinceLastAd = Date().timeIntervalSince(lastAdTime)
+            if timeSinceLastAd < minimumTimeBetweenAds {
+                return false
+            }
+        }
+        
+        // Check maximum ads per game
+        if adsWatchedThisGame >= maximumAdsPerGame {
+            return false
+        }
+        
+        // Check if ads are properly preloaded
+        let isInterstitialReady = interstitialAd != nil || fallbackInterstitialAd != nil
+        let isRewardedReady = rewardedInterstitialAd != nil || fallbackRewardedAd != nil
+        
+        // If ads aren't ready, trigger preload
+        if !isInterstitialReady || !isRewardedReady {
+            Task {
+                await preloadAllAds()
+            }
+            return false
+        }
+        
+        return adState == .ready
     }
     
     // MARK: - Timeout Handling
