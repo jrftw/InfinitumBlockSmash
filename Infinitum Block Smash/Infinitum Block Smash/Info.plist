@@ -4,6 +4,14 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Infinitum Block Smash</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
 	<key>CFBundleLocalizations</key>
 	<array>
 		<string>en</string>
@@ -19,35 +27,37 @@
 		<string>fr</string>
 		<string>de</string>
 	</array>
-	<key>CFBundleExecutable</key>
-	<string>$(EXECUTABLE_NAME)</string>
-	<key>CFBundleIdentifier</key>
-	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleShortVersionString</key>
 	<string>1.0.5</string>
-	<key>CFBundleVersion</key>
-	<string>3</string>
-	<key>CFBundleDisplayName</key>
-	<string>Infinitum Block Smash</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.infinitum.blocksmash</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>infinitumblocksmash</string>
 			</array>
-			<key>CFBundleURLName</key>
-			<string>com.infinitum.blocksmash</string>
 		</dict>
 	</array>
+	<key>CFBundleVersion</key>
+	<string>3</string>
+	<key>FirebaseAppDelegateProxyEnabled</key>
+	<false/>
+	<key>FirebaseAutomaticScreenReportingEnabled</key>
+	<true/>
+	<key>FirebaseMessagingAutoInitEnabled</key>
+	<true/>
+	<key>FirebaseMessagingSwizzlingEnabled</key>
+	<true/>
 	<key>GADApplicationIdentifier</key>
 	<string>ca-app-pub-6815311336585204~8428648149</string>
+	<key>GKGameCenterEnabled</key>
+	<true/>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSApplicationQueriesSchemes</key>
@@ -65,17 +75,6 @@
 		<false/>
 		<key>NSExceptionDomains</key>
 		<dict>
-			<key>infinitumlive.com</key>
-			<dict>
-				<key>NSIncludesSubdomains</key>
-				<true/>
-				<key>NSTemporaryExceptionAllowsInsecureHTTPLoads</key>
-				<false/>
-				<key>NSTemporaryExceptionMinimumTLSVersion</key>
-				<string>TLSv1.2</string>
-				<key>NSTemporaryExceptionRequiresForwardSecrecy</key>
-				<true/>
-			</dict>
 			<key>firebaseio.com</key>
 			<dict>
 				<key>NSIncludesSubdomains</key>
@@ -98,6 +97,17 @@
 				<key>NSTemporaryExceptionRequiresForwardSecrecy</key>
 				<true/>
 			</dict>
+			<key>infinitumlive.com</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSTemporaryExceptionAllowsInsecureHTTPLoads</key>
+				<false/>
+				<key>NSTemporaryExceptionMinimumTLSVersion</key>
+				<string>TLSv1.2</string>
+				<key>NSTemporaryExceptionRequiresForwardSecrecy</key>
+				<true/>
+			</dict>
 		</dict>
 	</dict>
 	<key>NSUserNotificationUsageDescription</key>
@@ -106,8 +116,6 @@
 	<string>We use this identifier to provide you with personalized ads and improve your gaming experience. This helps us show you relevant content and track your achievements. Your data is used to enhance gameplay features, analyze app performance, and provide better support. You can change this setting anytime in your device settings.</string>
 	<key>PrivacyPolicyURL</key>
 	<string>https://infinitumlive.com/privacy-policy/</string>
-	<key>SupportURL</key>
-	<string>https://infinitumlive.com/support</string>
 	<key>SKAdNetworkItems</key>
 	<array>
 		<dict>
@@ -263,14 +271,8 @@
 			<string>3qcr597p9d.skadnetwork</string>
 		</dict>
 	</array>
-	<key>FirebaseAppDelegateProxyEnabled</key>
-	<false/>
-	<key>FirebaseAutomaticScreenReportingEnabled</key>
-	<true/>
-	<key>FirebaseMessagingAutoInitEnabled</key>
-	<true/>
-	<key>FirebaseMessagingSwizzlingEnabled</key>
-	<true/>
+	<key>SupportURL</key>
+	<string>https://infinitumlive.com/support</string>
 	<key>UIAppFonts</key>
 	<array/>
 	<key>UIApplicationSceneManifest</key>
@@ -294,8 +296,8 @@
 	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
-		<string>fetch</string>
 		<string>remote-notification</string>
+		<string>fetch</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
@@ -321,13 +323,11 @@
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 	</array>
+	<key>UIUserInterfaceStyle</key>
+	<string>Light</string>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
 	<key>com.apple.developer.devicecheck.appattest-environment</key>
 	<string>production</string>
-	<key>GKGameCenterEnabled</key>
-	<true/>
-	<key>UIUserInterfaceStyle</key>
-	<string>Light</string>
 </dict>
 </plist>
