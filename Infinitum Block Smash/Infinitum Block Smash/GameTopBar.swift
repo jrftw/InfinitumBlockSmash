@@ -20,6 +20,9 @@ struct GameTopBar: View {
         func makeBody(configuration: Configuration) -> some View {
             configuration.label
                 .frame(width: size, height: size)
+                .contentShape(Rectangle()) // Ensures the entire frame is tappable
+                .scaleEffect(configuration.isPressed ? 0.9 : 1.0) // Add press animation
+                .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
         }
     }
     
@@ -28,6 +31,7 @@ struct GameTopBar: View {
             Image(systemName: systemName)
                 .font(.title2)
                 .foregroundColor(foreground)
+                .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1) // Add shadow for better visibility
         }
         .buttonStyle(MinimumTapButtonStyle(size: minimumTapSize))
     }
@@ -39,6 +43,7 @@ struct GameTopBar: View {
                 Image(systemName: "pause.circle.fill")
                     .font(isSmallScreen ? .title3 : .title2)
                     .foregroundColor(.white)
+                    .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
             }
             .buttonStyle(MinimumTapButtonStyle(size: minimumTapSize))
             .padding(.trailing, 8)
@@ -47,6 +52,7 @@ struct GameTopBar: View {
                 Text("Block Smash")
                     .font(.title2.bold())
                     .foregroundColor(.white)
+                    .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
             }
             
             Spacer()
@@ -59,6 +65,7 @@ struct GameTopBar: View {
                     Image(systemName: "lightbulb.fill")
                         .font(.title2)
                         .foregroundColor(.white)
+                        .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
                 }
                 .buttonStyle(MinimumTapButtonStyle(size: minimumTapSize))
                 .disabled(gameState.hintManager.hintsUsedThisGame >= 3)
@@ -80,7 +87,6 @@ struct GameTopBar: View {
         }
         .padding(.horizontal)
         .padding(.top, 8)
-        .background(Color(.sRGB, red: 32/255, green: 36/255, blue: 48/255, opacity: 0.95))
         .zIndex(100) // Ensure top bar is always on top
         .sheet(isPresented: $showingLeaderboard) {
             LeaderboardView()
