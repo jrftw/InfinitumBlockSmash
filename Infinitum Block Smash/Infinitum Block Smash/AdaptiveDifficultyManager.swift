@@ -100,72 +100,50 @@ class AdaptiveDifficultyManager {
     }
     
     func getAdjustedDifficulty(for level: Int) -> DifficultySettings {
-        // Base difficulty increases with level
-        let baseMultiplier = 1.0 + (Double(level) * 0.01)
+        // Return fixed difficulty settings instead of calculated ones
+        var fixedSettings = DifficultySettings()
+        fixedSettings.shapeComplexityMultiplier = 1.0
+        fixedSettings.timeLimitMultiplier = 1.0
+        fixedSettings.scoreRequirementMultiplier = 1.0
+        fixedSettings.chainBonusMultiplier = 1.0
+        fixedSettings.mistakePenaltyMultiplier = 1.0
         
-        // Adjust based on player performance
-        let performanceMultiplier = calculatePerformanceMultiplier()
+        // Fixed number of random shapes based on level ranges
+        switch level {
+        case 1...99:
+            fixedSettings.randomShapeSpawnRate = 0.0 // No random shapes before level 100
+        case 100...199:
+            fixedSettings.randomShapeSpawnRate = 1.0 // 1 random shape
+        case 200...299:
+            fixedSettings.randomShapeSpawnRate = 2.0 // 2 random shapes
+        default:
+            fixedSettings.randomShapeSpawnRate = 3.0 // 3 random shapes for level 300+
+        }
         
-        // Create adjusted settings
-        var adjustedSettings = difficultySettings
-        adjustedSettings.shapeComplexityMultiplier *= baseMultiplier * performanceMultiplier
-        adjustedSettings.randomShapeSpawnRate = min(0.5, baseMultiplier * performanceMultiplier * 0.1)
-        adjustedSettings.timeLimitMultiplier = max(0.5, 2.0 - (baseMultiplier * performanceMultiplier))
-        adjustedSettings.scoreRequirementMultiplier = baseMultiplier * performanceMultiplier
-        adjustedSettings.chainBonusMultiplier = 1.0 + (performanceMultiplier * 0.5)
-        adjustedSettings.mistakePenaltyMultiplier = 1.0 + (baseMultiplier * 0.2)
-        
-        return adjustedSettings
+        return fixedSettings
     }
     
     // MARK: - Private Methods
     private func calculatePerformanceScore() -> Double {
-        let scoreWeight = 0.3
-        let timeWeight = 0.2
-        let chainWeight = 0.2
-        let efficiencyWeight = 0.3
-        
-        let scoreComponent = min(1.0, playerStats.averageScorePerLevel / 10000.0)
-        let timeComponent = min(1.0, playerStats.averageTimePerLevel / 300.0)
-        let chainComponent = min(1.0, playerStats.averageChain / 10.0)
-        let efficiencyComponent = (playerStats.colorMatchingEfficiency + playerStats.shapePlacementEfficiency) / 2
-        
-        return (scoreComponent * scoreWeight) +
-               (timeComponent * timeWeight) +
-               (chainComponent * chainWeight) +
-               (efficiencyComponent * efficiencyWeight)
+        return 1.0 // Return fixed value
     }
     
     private func calculatePerformanceMultiplier() -> Double {
-        guard !playerStats.recentPerformance.isEmpty else { return 1.0 }
-        
-        let averagePerformance = playerStats.recentPerformance.reduce(0.0, +) / Double(playerStats.recentPerformance.count)
-        let trend = calculatePerformanceTrend()
-        
-        // Adjust multiplier based on both average performance and trend
-        return (averagePerformance + trend) / 2
+        return 1.0 // Return fixed value
     }
     
     private func calculatePerformanceTrend() -> Double {
-        guard playerStats.recentPerformance.count >= 2 else { return 0.0 }
-        
-        let recent = playerStats.recentPerformance.last!
-        let previous = playerStats.recentPerformance[playerStats.recentPerformance.count - 2]
-        
-        // Return a value between -0.2 and 0.2 based on the trend
-        return (recent - previous) * 0.2
+        return 0.0 // Return fixed value
     }
     
     private func updateDifficultySettings() {
-        let performanceMultiplier = calculatePerformanceMultiplier()
-        
-        // Adjust settings based on performance
-        difficultySettings.shapeComplexityMultiplier = 1.0 + (performanceMultiplier * 0.5)
-        difficultySettings.randomShapeSpawnRate = min(0.5, performanceMultiplier * 0.1)
-        difficultySettings.timeLimitMultiplier = max(0.5, 2.0 - performanceMultiplier)
-        difficultySettings.scoreRequirementMultiplier = 1.0 + (performanceMultiplier * 0.3)
-        difficultySettings.chainBonusMultiplier = 1.0 + (performanceMultiplier * 0.2)
-        difficultySettings.mistakePenaltyMultiplier = 1.0 + (performanceMultiplier * 0.1)
+        // Set fixed difficulty settings
+        difficultySettings.shapeComplexityMultiplier = 1.0
+        difficultySettings.randomShapeSpawnRate = 0.0
+        difficultySettings.timeLimitMultiplier = 1.0
+        difficultySettings.scoreRequirementMultiplier = 1.0
+        difficultySettings.chainBonusMultiplier = 1.0
+        difficultySettings.mistakePenaltyMultiplier = 1.0
     }
     
     private func savePlayerStats() {

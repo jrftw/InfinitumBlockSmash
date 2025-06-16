@@ -15,6 +15,9 @@ final class LeaderboardService: ObservableObject {
     private let leaderboardLimit = 20
     private var listeners: [String: ListenerRegistration] = [:]
     
+    // Add flag to prevent concurrent updates
+    private static var isUpdatingLeaderboard = false
+    
     @Published var leaderboardUpdates: [String: [FirebaseManager.LeaderboardEntry]] = [:]
     
     private init() {
@@ -282,6 +285,16 @@ final class LeaderboardService: ObservableObject {
     }
     
     func updateLeaderboard(score: Int, level: Int? = nil, time: TimeInterval? = nil, type: LeaderboardType = .score, username: String? = nil) async throws {
+        // Check if already updating
+        guard !Self.isUpdatingLeaderboard else {
+            print("[Leaderboard] ⏭️ Skipping update - another update in progress")
+            return
+        }
+        
+        // Set flag to prevent concurrent updates
+        Self.isUpdatingLeaderboard = true
+        defer { Self.isUpdatingLeaderboard = false }
+        
         print("[Leaderboard] 🔄 Starting leaderboard update")
         print("[Leaderboard] 📊 Score: \(score), Level: \(level ?? -1), Type: \(type)")
         print("[Leaderboard] 👤 User: \(Auth.auth().currentUser?.uid ?? "unknown")")

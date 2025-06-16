@@ -27,6 +27,13 @@ class HintManager: ObservableObject {
             
             print("[Hint] Attempting to show hint. Current hints used: \(hintsUsedThisGame)")
             
+            // First check if there are any valid moves
+            if !gameState.hasValidMoves() {
+                print("[Hint] No valid moves found - game over state")
+                gameState.checkGameOver()
+                return
+            }
+            
             // Try to use cached hint first
             if let cached = cachedHint, gameState.canPlaceBlock(cached.block, at: CGPoint(x: cached.position.col, y: cached.position.row)) {
                 delegate?.highlightHint(block: cached.block, at: cached.position)
@@ -47,7 +54,6 @@ class HintManager: ObservableObject {
                 lastHintTime = currentTime
             } else {
                 print("[Hint] No valid moves found")
-                // Trigger game over check when no valid moves are found
                 gameState.checkGameOver()
             }
         }
@@ -77,6 +83,13 @@ class HintManager: ObservableObject {
                         }
                     }
                 }
+            }
+        }
+        
+        // If no valid moves found in the tray, check for game over
+        if bestMove == nil {
+            await MainActor.run {
+                gameState.checkGameOver()
             }
         }
         

@@ -21,17 +21,26 @@ class ClassicTimedGameState: ObservableObject {
     private let adaptiveDifficultyManager = AdaptiveDifficultyManager()
     
     var timeString: String {
-        let minutes = Int(timeRemaining) / 60
-        let seconds = Int(timeRemaining) % 60
-        return String(format: "%02d:%02d", minutes, seconds)
+        if timeRemaining.isFinite && !timeRemaining.isNaN {
+            let minutes = Int(max(0, timeRemaining)) / 60
+            let seconds = Int(max(0, timeRemaining)) % 60
+            return String(format: "%02d:%02d", minutes, seconds)
+        }
+        return "00:00"
     }
     
     var timeColor: Color {
-        timeRemaining <= 30 ? .red : .white
+        if timeRemaining.isFinite && !timeRemaining.isNaN {
+            return timeRemaining <= 30 ? .red : .white
+        }
+        return .white
     }
     
     var remainingTime: Int {
-        Int(timeRemaining)
+        if timeRemaining.isFinite && !timeRemaining.isNaN {
+            return Int(max(0, timeRemaining))
+        }
+        return 0
     }
     
     init(gameState: GameState) {
@@ -215,8 +224,12 @@ class ClassicTimedGameState: ObservableObject {
     func resumeAfterLevelComplete() {
         // Get the new level's time limit
         let newLevelTimeLimit = getTimeLimit(for: gameState.level)
-        // Add any remaining time from previous level
-        timeRemaining = newLevelTimeLimit + timeRemaining
+        // Add any remaining time from previous level, with safety checks
+        if timeRemaining.isFinite && !timeRemaining.isNaN {
+            timeRemaining = min(newLevelTimeLimit + timeRemaining, 3600) // Cap at 1 hour
+        } else {
+            timeRemaining = newLevelTimeLimit
+        }
         isTimeRunning = true
         startTimer()
     }

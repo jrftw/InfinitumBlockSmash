@@ -25,6 +25,7 @@ struct ContentView: View {
     @State private var totalPlayersCount = 0
     @State private var showingGameModeSelection = false
     @State private var isTopThreePlayer = false
+    @StateObject private var appOpenManager = AppOpenManager.shared
     
     var isLoggedIn: Bool {
         !userID.isEmpty && (!username.isEmpty || isGuest)
@@ -156,6 +157,31 @@ struct ContentView: View {
                         .frame(height: 50)
                         .background(Color.black.opacity(0.1))
                 }
+            }
+            
+            // Add rating and referral prompts
+            if appOpenManager.showingRatingPrompt {
+                Color.black.opacity(0.5)
+                    .ignoresSafeArea()
+                    .overlay(
+                        RatingPromptView(isPresented: $appOpenManager.showingRatingPrompt)
+                            .onDisappear {
+                                appOpenManager.markRatingAsShown()
+                            }
+                    )
+                    .transition(.opacity)
+            }
+            
+            if appOpenManager.showingReferralPrompt {
+                Color.black.opacity(0.5)
+                    .ignoresSafeArea()
+                    .overlay(
+                        ReferralPromptView()
+                            .onDisappear {
+                                appOpenManager.markReferralAsShown()
+                            }
+                    )
+                    .transition(.opacity)
             }
         }
         .onAppear {

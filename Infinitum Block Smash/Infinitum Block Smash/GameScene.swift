@@ -162,6 +162,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Initial theme setup
         updateTheme()
+        
+        // Add observer for game over notification
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleGameOverNotification),
+            name: Notification.Name.gameOver,
+            object: nil
+        )
     }
     
     override func willMove(from view: SKView) {
@@ -1870,6 +1878,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func clearTextureCache() {
         textureCache.removeAll()
     }
+    
+    @objc private func handleGameOverNotification() {
+        handleGameOver()
+    }
 }
 
 extension GameScene: GameStateDelegate {
@@ -1990,4 +2002,5 @@ extension GameScene: GameStateDelegate {
 extension Notification.Name {
     static let memoryWarning = Notification.Name("memoryWarning")
     static let memoryCritical = Notification.Name("memoryCritical")
+    // Removed duplicate gameOver declaration since it's already defined in GameState
 } 

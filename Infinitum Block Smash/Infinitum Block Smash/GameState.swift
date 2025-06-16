@@ -711,8 +711,8 @@ final class GameState: ObservableObject {
             refillTray()
         }
         
-        // Check for game over
-        checkGameOver()
+        // Check game state after placing a block
+        checkGameState()
         
         // Notify delegate
         delegate?.gameStateDidUpdate()
@@ -1280,7 +1280,7 @@ final class GameState: ObservableObject {
         if !canPlaceAny {
             // Try each possible block type
             let allShapes = BlockShape.availableShapes(for: level)
-            let allColors = BlockColor.allCases
+            let allColors = BlockColor.availableColors(for: level)
             
             var canPlaceNewBlock = false
             
@@ -1299,8 +1299,39 @@ final class GameState: ObservableObject {
             // If no valid moves found and not already game over, trigger game over
             if !canPlaceNewBlock && !isGameOver {
                 print("[GameOver] No available moves for any possible block. Game over.")
+                isGameOver = true
                 handleGameOver()
             }
+        }
+    }
+    
+    // Add this method to check for valid moves
+    func hasValidMoves() -> Bool {
+        // First check current tray blocks
+        if tray.contains(where: { canPlaceBlockAnywhere($0) }) {
+            return true
+        }
+        
+        // Then check all possible new blocks
+        let allShapes = BlockShape.availableShapes(for: level)
+        let allColors = BlockColor.availableColors(for: level)
+        
+        for shape in allShapes {
+            for color in allColors {
+                let testBlock = Block(color: color, shape: shape)
+                if canPlaceBlockAnywhere(testBlock) {
+                    return true
+                }
+            }
+        }
+        
+        return false
+    }
+    
+    // Add this method to be called after each move
+    func checkGameState() {
+        if !isGameOver {
+            checkGameOver()
         }
     }
     
