@@ -54,6 +54,19 @@ We use the following third-party services:
 - Analytics data is stored in Firebase Analytics
 - Ad-related data is stored by Google AdMob
 
+### Data Retention
+We maintain the following data retention policies:
+- User account data: Retained until account deletion is requested
+- Game progress and achievements: Retained for 2 years after last activity
+- Analytics data: Retained for 26 months
+- Crash reports: Retained for 90 days
+- Ad interaction data: Retained for 13 months
+- Leaderboard data: Retained for 1 year after last score update
+- Inactive accounts: Data is archived after 1 year of inactivity
+- Deleted accounts: Data is permanently removed after 30 days
+
+You can request immediate data deletion by contacting us through the methods listed below.
+
 ### Data Usage
 We use your data to:
 - Provide and improve game features

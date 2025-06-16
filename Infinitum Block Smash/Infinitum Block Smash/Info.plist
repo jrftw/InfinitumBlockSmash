@@ -2,6 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Basic App Information -->
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -12,6 +13,8 @@
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	
+	<!-- Localization Support -->
 	<key>CFBundleLocalizations</key>
 	<array>
 		<string>en</string>
@@ -27,12 +30,18 @@
 		<string>fr</string>
 		<string>de</string>
 	</array>
+	
+	<!-- App Version Information -->
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleShortVersionString</key>
 	<string>1.0.5</string>
+	<key>CFBundleVersion</key>
+	<string>3</string>
+	
+	<!-- URL Scheme Configuration for Deep Linking -->
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -44,8 +53,8 @@
 			</array>
 		</dict>
 	</array>
-	<key>CFBundleVersion</key>
-	<string>3</string>
+	
+	<!-- Firebase Configuration -->
 	<key>FirebaseAppDelegateProxyEnabled</key>
 	<false/>
 	<key>FirebaseAutomaticScreenReportingEnabled</key>
@@ -54,21 +63,39 @@
 	<true/>
 	<key>FirebaseMessagingSwizzlingEnabled</key>
 	<true/>
+	
+	<!-- AdMob Configuration -->
 	<key>GADApplicationIdentifier</key>
 	<string>ca-app-pub-6815311336585204~8428648149</string>
+	
+	<!-- Game Center Configuration -->
 	<key>GKGameCenterEnabled</key>
 	<true/>
+	
+	<!-- Encryption Compliance -->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	
+	<!-- URL Scheme Queries -->
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>https</string>
 		<string>mailto</string>
 	</array>
+	
+	<!-- iOS Requirements -->
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	
+	<!-- External URLs -->
 	<key>MarketingURL</key>
 	<string>https://infinitumlive.com/apps</string>
+	<key>PrivacyPolicyURL</key>
+	<string>https://infinitumlive.com/privacy-policy/</string>
+	<key>SupportURL</key>
+	<string>https://infinitumlive.com/support</string>
+	
+	<!-- App Transport Security Configuration -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
@@ -110,169 +137,44 @@
 			</dict>
 		</dict>
 	</dict>
+	
+	<!-- Privacy Descriptions -->
 	<key>NSUserNotificationUsageDescription</key>
 	<string>We use notifications to send you daily reminders to play and keep you updated about your achievements and game events.</string>
 	<key>NSUserTrackingUsageDescription</key>
 	<string>We use this identifier to provide you with personalized ads and improve your gaming experience. This helps us show you relevant content and track your achievements. Your data is used to enhance gameplay features, analyze app performance, and provide better support. You can change this setting anytime in your device settings.</string>
-	<key>PrivacyPolicyURL</key>
-	<string>https://infinitumlive.com/privacy-policy/</string>
+	
+	<!-- Ad Network Configuration -->
 	<key>SKAdNetworkItems</key>
 	<array>
+		<!-- Google AdMob -->
 		<dict>
 			<key>SKAdNetworkIdentifier</key>
 			<string>cstr6suwn9.skadnetwork</string>
 		</dict>
+		<!-- Facebook Audience Network (commonly used with AdMob) -->
 		<dict>
 			<key>SKAdNetworkIdentifier</key>
 			<string>4fzdc2evr5.skadnetwork</string>
 		</dict>
+		<!-- Unity Ads (commonly used with AdMob) -->
 		<dict>
 			<key>SKAdNetworkIdentifier</key>
 			<string>4pfyvq9l8r.skadnetwork</string>
 		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>2fnua5tdw4.skadnetwork</string>
-		</dict>
+		<!-- AppLovin (commonly used with AdMob) -->
 		<dict>
 			<key>SKAdNetworkIdentifier</key>
 			<string>ydx93a7ass.skadnetwork</string>
 		</dict>
+		<!-- IronSource (commonly used with AdMob) -->
 		<dict>
 			<key>SKAdNetworkIdentifier</key>
 			<string>5a6flpkh64.skadnetwork</string>
 		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>p78axxw29g.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>v72qych5uu.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>ludvb6z3bs.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>c6k4g5qg8m.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>s39g8k73mm.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>3qy4746246.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>3sh42y64q3.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>f38h382jlk.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>hs6bdukanm.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>prcb7njmu6.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>v4nxqhlyqp.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>wzmmz9fp6w.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>yclnxrl5pm.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>t38b2kh725.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>7ug5zh24hu.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>9rd848q2bz.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>n6fk4nfna4.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>kbd757ywx3.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>9t245vhmpl.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>2u9pt9hc89.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>8s468mfl3y.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>av6w8kgt66.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>klf5c3l5u5.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>ppxm28t8ap.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>424m5254lk.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>uw77j35x4d.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>578prtvx9j.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>4dzt52r2t5.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>e5fvkxwrpn.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>8c4e2ghe7u.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>zq492l623r.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>3qcr597p9d.skadnetwork</string>
-		</dict>
 	</array>
-	<key>SupportURL</key>
-	<string>https://infinitumlive.com/support</string>
+	
+	<!-- UI Configuration -->
 	<key>UIAppFonts</key>
 	<array/>
 	<key>UIApplicationSceneManifest</key>
@@ -292,6 +194,8 @@
 			</array>
 		</dict>
 	</dict>
+	
+	<!-- Input and Background Configuration -->
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>
@@ -299,13 +203,19 @@
 		<string>remote-notification</string>
 		<string>fetch</string>
 	</array>
+	
+	<!-- Launch Screen Configuration -->
 	<key>UILaunchScreen</key>
 	<dict/>
+	
+	<!-- Device Requirements -->
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
 		<string>armv7</string>
 		<string>metal</string>
 	</array>
+	
+	<!-- UI Behavior Configuration -->
 	<key>UIRequiresFullScreen</key>
 	<true/>
 	<key>UIRequiresPersistentWiFi</key>
@@ -314,6 +224,8 @@
 	<true/>
 	<key>UIStatusBarStyle</key>
 	<string>UIStatusBarStyleLightContent</string>
+	
+	<!-- Orientation Support -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
@@ -323,10 +235,14 @@
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 	</array>
+	
+	<!-- UI Style Configuration -->
 	<key>UIUserInterfaceStyle</key>
 	<string>Light</string>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	
+	<!-- Device Check Configuration -->
 	<key>com.apple.developer.devicecheck.appattest-environment</key>
 	<string>production</string>
 </dict>
