@@ -10,8 +10,8 @@ final class CacheManager {
     private let memoryCache = NSCache<NSString, AnyObject>()
     private let fileManager = FileManager.default
     private let cacheDirectory: URL
-    private let maxCacheSize: Int64 = 100 * 1024 * 1024 // 100MB
-    private let cacheExpirationInterval: TimeInterval = 3600 // 1 hour
+    private let maxCacheSize: Int64 = 50 * 1024 * 1024 // 50MB
+    private let cacheExpirationInterval: TimeInterval = 1800 // 30 minutes
     private let compressionQueue = DispatchQueue(label: "com.infinitum.blocksmash.compression", qos: .utility)
     private let cacheQueue = DispatchQueue(label: "com.infinitum.blocksmash.cache", qos: .utility)
     
@@ -19,13 +19,13 @@ final class CacheManager {
     private var cacheHits = 0
     private var cacheMisses = 0
     private var lastCleanupTime = Date()
-    private let cleanupInterval: TimeInterval = 300 // 5 minutes
+    private let cleanupInterval: TimeInterval = 180 // 3 minutes
     private var lastStatsLogTime = Date()
-    private let statsLogInterval: TimeInterval = 60 // 1 minute
+    private let statsLogInterval: TimeInterval = 30 // 30 seconds
     
     private init() {
-        memoryCache.countLimit = 200
-        memoryCache.totalCostLimit = 75 * 1024 * 1024
+        memoryCache.countLimit = 100
+        memoryCache.totalCostLimit = 25 * 1024 * 1024 // 25MB
         
         let cachesDirectory = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
         cacheDirectory = cachesDirectory.appendingPathComponent("GameCache")
@@ -142,7 +142,7 @@ final class CacheManager {
         }
         
         // Trim memory cache if needed
-        if memoryCache.totalCostLimit > 75 * 1024 * 1024 {
+        if memoryCache.totalCostLimit > 25 * 1024 * 1024 {
             memoryCache.removeAllObjects()
         }
         

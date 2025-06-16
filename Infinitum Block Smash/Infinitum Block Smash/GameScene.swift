@@ -43,6 +43,21 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var particleEmitterPool: [SKEmitterNode] = []
     private let maxPoolSize = 20
     
+    // MARK: - Texture Management
+    private var activeTextures: Set<SKTexture> = []
+    
+    // MARK: - Node Pooling
+    private var previewNodePool: [SKShapeNode] = []
+    private var highlightNodePool: [SKShapeNode] = []
+    
+    // MARK: - Texture Management
+    private var textureCache: [String: SKTexture] = [:]
+    private let maxTextureCacheSize = 50
+    
+    // MARK: - Node Management
+    private var activeNodes: Set<SKNode> = []
+    private let maxActiveNodes = 1000
+    
     // MARK: - Initialization
     init(size: CGSize, gameState: GameState) {
         self.gameState = gameState
@@ -151,7 +166,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     override func willMove(from view: SKView) {
         super.willMove(from: view)
-        prepareForSceneTransition()
+        Task { @MainActor in
+            await cleanupResources()
+            await prepareForSceneTransition()
+        }
         NotificationCenter.default.removeObserver(self)
         
         if let observer = themeObserver {
@@ -162,13 +180,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     deinit {
         print("[DEBUG] GameScene deinit called")
         // Cleanup
-        gridNode?.removeFromParent()
-        trayNode?.removeFromParent()
+        gridNode?.children.forEach { cleanupNode($0) }
+        trayNode?.children.forEach { cleanupNode($0) }
         particleEmitter?.removeFromParent()
         glowNode?.removeFromParent()
         
         // Cleanup all particle emitters
-        activeParticleEmitters.forEach { $0.removeFromParent() }
+        activeParticleEmitters.forEach { cleanupNode($0) }
         activeParticleEmitters.removeAll()
         
         // Clear any cached images
@@ -178,6 +196,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             particleEmitter = nil
             glowNode = nil
         }
+        
+        // Clear node pools
+        NodePool.shared.clearAllPools()
         
         NotificationCenter.default.removeObserver(self)
     }
@@ -1083,7 +1104,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         cleanupUnusedNodes()
         
         // Clear textures
-        cleanupTextures()
+        await cleanupTextures()
         
         // Clear audio resources
         cleanupAudio()
@@ -1094,29 +1115,57 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Additional aggressive cleanup
         autoreleasepool {
             // Clear any remaining particle effects
-            activeParticleEmitters.forEach { $0.removeFromParent() }
+            activeParticleEmitters.forEach { cleanupNode($0) }
             activeParticleEmitters.removeAll()
             
             // Clear any remaining cached nodes
+            cachedNodes.values.forEach { cleanupNode($0) }
             cachedNodes.removeAll()
             
             // Clear any remaining block nodes
-            blockNodes.forEach { $0.removeFromParent() }
+            blockNodes.forEach { cleanupNode($0) }
             blockNodes.removeAll()
             
             // Clear any remaining preview or drag nodes
-            previewNode?.removeFromParent()
-            previewNode = nil
-            dragNode?.removeFromParent()
-            dragNode = nil
+            if let preview = previewNode {
+                cleanupNode(preview)
+                previewNode = nil
+            }
+            if let drag = dragNode {
+                cleanupNode(drag)
+                dragNode = nil
+            }
             
             // Clear any remaining hint highlights
-            hintHighlight?.removeFromParent()
-            hintHighlight = nil
+            if let hint = hintHighlight {
+                cleanupNode(hint)
+                hintHighlight = nil
+            }
+            
+            // Clear any remaining temporary nodes in the scene
+            children.forEach { node in
+                if node.name?.hasPrefix("temp_") == true {
+                    cleanupNode(node)
+                }
+            }
         }
+        
+        // Clear any remaining textures from memory
+        await SKTexture.preload([])
+        await SKTextureAtlas.preloadTextureAtlases([])
+        
+        // Clear node pools
+        NodePool.shared.cleanupPools()
         
         // Notify GameState
         await gameState.handleCriticalMemory()
+        
+        // Force garbage collection
+        autoreleasepool {
+            // Clear any remaining references
+            gridNode?.children.forEach { cleanupNode($0) }
+            trayNode?.children.forEach { cleanupNode($0) }
+        }
     }
     
     private func performNormalCleanup() async {
@@ -1156,12 +1205,30 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     @objc private func handleMemoryWarningNotification() {
         Task { @MainActor in
+            print("[Memory] Received memory warning")
+            
+            // Clear textures
+            await clearAllTextures()
+            
+            // Cleanup node pools
+            NodePool.shared.cleanupPools()
+            
+            // Perform normal cleanup
             await performNormalCleanup()
         }
     }
     
     @objc private func handleMemoryCriticalNotification() {
         Task { @MainActor in
+            print("[Memory] Received critical memory warning")
+            
+            // Clear all textures
+            await clearAllTextures()
+            
+            // Clear all node pools
+            NodePool.shared.clearAllPools()
+            
+            // Perform aggressive cleanup
             await performAggressiveCleanup()
         }
     }
@@ -1477,27 +1544,20 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         texture.usesMipmaps = true
     }
     
-    private func cleanupResources() {
-        // Stop all animations
-        setBackgroundAnimationsActive(false)
+    private func cleanupResources() async {
+        // Clear node pools
+        previewNodePool.removeAll()
+        highlightNodePool.removeAll()
         
-        // Remove all particle effects
-        cleanupParticleEffects()
+        // Clear texture cache
+        clearTextureCache()
         
-        // Clear node cache
-        clearNodeCache()
+        // Clear active nodes
+        activeNodes.forEach { cleanupNode($0) }
+        activeNodes.removeAll()
         
-        // Remove unused nodes
-        cleanupUnusedNodes()
-        
-        // Clear textures
-        cleanupTextures()
-        
-        // Clear audio resources
-        cleanupAudio()
-        
-        // Clear temporary data
-        cleanupTemporaryData()
+        // Clear any remaining nodes
+        children.forEach { cleanupNode($0) }
     }
     
     private func cleanupUnusedNodes() {
@@ -1516,15 +1576,25 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
     }
     
-    private func cleanupTextures() {
-        // Clear texture cache
-        SKTextureAtlas.preloadTextureAtlases([], withCompletionHandler: {})
+    private func cleanupTextures() async {
+        // Remove textures that are no longer in use
+        activeTextures.forEach { texture in
+            if texture.description.contains("unused") {
+                activeTextures.remove(texture)
+            }
+        }
         
-        // Clear gradient cache
-        BlockShapeView.clearCache()
+        // Force texture cleanup
+        await SKTextureAtlas.preloadTextureAtlases([])
+        await SKTexture.preload([])
+    }
+    
+    private func clearAllTextures() async {
+        activeTextures.removeAll()
         
-        // Clear image cache
-        UIImageView.clearImageCache()
+        // Force texture cleanup
+        await SKTextureAtlas.preloadTextureAtlases([])
+        await SKTexture.preload([])
     }
     
     private func cleanupAudio() {
@@ -1583,37 +1653,33 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
     }
     
-    private func prepareForSceneTransition() {
+    private func prepareForSceneTransition() async {
         // Stop all animations
         setBackgroundAnimationsActive(false)
         
-        // Pause all actions
-        scene?.isPaused = true
-        
-        // Clean up resources
-        cleanupResources()
-        
-        // Clear all nodes
-        removeAllChildren()
-        
-        // Clear physics world
-        physicsWorld.removeAllJoints()
-        
-        // Clear all actions
-        removeAllActions()
-        
-        // Clear all particle effects
+        // Remove all particle effects
         cleanupParticleEffects()
         
-        // Clear all cached nodes
+        // Clear node cache
         clearNodeCache()
         
-        // Clear object pools
-        blockNodePool.removeAll()
-        particleEmitterPool.removeAll()
+        // Remove unused nodes
+        cleanupUnusedNodes()
+        
+        // Clear textures
+        await clearAllTextures()
+        
+        // Clear audio resources
+        cleanupAudio()
         
         // Clear temporary data
         cleanupTemporaryData()
+        
+        // Clear any remaining nodes
+        autoreleasepool {
+            gridNode?.children.forEach { cleanupNode($0) }
+            trayNode?.children.forEach { cleanupNode($0) }
+        }
     }
     
     private func reviewAndCleanupLongLivedReferences() {
@@ -1698,6 +1764,111 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             print("[Memory] Removing orphaned hint highlight")
             self.hintHighlight = nil
         }
+    }
+    
+    // MARK: - Node Cleanup
+    private func cleanupNode(_ node: SKNode) {
+        if let previewNode = node as? SKShapeNode, previewNodePool.contains(where: { $0 === previewNode }) {
+            returnPreviewNode(previewNode)
+        } else if let highlightNode = node as? SKShapeNode, highlightNodePool.contains(where: { $0 === highlightNode }) {
+            returnHighlightNode(highlightNode)
+        } else {
+            node.removeFromParent()
+            untrackNode(node)
+        }
+    }
+    
+    private func getPreviewNode() -> SKShapeNode {
+        if let node = previewNodePool.popLast() {
+            node.alpha = 1.0
+            node.isHidden = false
+            return node
+        }
+        return createPreviewNode()
+    }
+    
+    private func getHighlightNode() -> SKShapeNode {
+        if let node = highlightNodePool.popLast() {
+            node.alpha = 1.0
+            node.isHidden = false
+            return node
+        }
+        return createHighlightNode()
+    }
+    
+    private func returnPreviewNode(_ node: SKShapeNode) {
+        node.removeFromParent()
+        node.alpha = 0
+        node.isHidden = true
+        if previewNodePool.count < maxPoolSize {
+            previewNodePool.append(node)
+        }
+    }
+    
+    private func returnHighlightNode(_ node: SKShapeNode) {
+        node.removeFromParent()
+        node.alpha = 0
+        node.isHidden = true
+        if highlightNodePool.count < maxPoolSize {
+            highlightNodePool.append(node)
+        }
+    }
+    
+    private func createPreviewNode() -> SKShapeNode {
+        let node = SKShapeNode(rectOf: CGSize(width: 40, height: 40))
+        node.fillColor = .clear
+        node.strokeColor = .white
+        node.lineWidth = 2
+        node.alpha = 0.5
+        trackNode(node)
+        return node
+    }
+    
+    private func createHighlightNode() -> SKShapeNode {
+        let node = SKShapeNode(rectOf: CGSize(width: 40, height: 40))
+        node.fillColor = .clear
+        node.strokeColor = .yellow
+        node.lineWidth = 2
+        node.alpha = 0.5
+        trackNode(node)
+        return node
+    }
+    
+    private func trackNode(_ node: SKNode) {
+        activeNodes.insert(node)
+        if activeNodes.count > maxActiveNodes {
+            // Remove oldest nodes if we exceed the limit
+            let excess = activeNodes.count - maxActiveNodes
+            let nodesToRemove = Array(activeNodes.prefix(excess))
+            nodesToRemove.forEach { cleanupNode($0) }
+        }
+    }
+    
+    private func untrackNode(_ node: SKNode) {
+        activeNodes.remove(node)
+    }
+    
+    private func loadBlockTexture(for block: Block) -> SKTexture {
+        let textureName = "block_\(block.shape.rawValue)_\(block.color.rawValue)"
+        return getTexture(named: textureName)
+    }
+    
+    private func getTexture(named name: String) -> SKTexture {
+        if let cachedTexture = textureCache[name] {
+            return cachedTexture
+        }
+        
+        let texture = SKTexture(imageNamed: name)
+        if textureCache.count >= maxTextureCacheSize {
+            // Remove oldest texture if cache is full
+            textureCache.removeValue(forKey: textureCache.keys.first!)
+        }
+        textureCache[name] = texture
+        return texture
+    }
+    
+    private func clearTextureCache() {
+        textureCache.removeAll()
     }
 }
 

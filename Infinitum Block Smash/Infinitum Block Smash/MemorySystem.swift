@@ -17,13 +17,13 @@ final class MemorySystem {
     static let shared = MemorySystem()
     
     // MARK: — Thresholds
-    private let warningThreshold: Double = 0.40   // 40% - ~120-150MB
-    private let criticalThreshold: Double = 0.60  // 60% - ~180-200MB
-    private let extremeThreshold: Double = 0.80   // 80% - ~240-250MB
+    private let warningThreshold: Double = 0.30   // 30% - ~90-120MB
+    private let criticalThreshold: Double = 0.45  // 45% - ~135-150MB
+    private let extremeThreshold: Double = 0.60   // 60% - ~180-200MB
     
     // Memory targets
-    private let targetMemoryUsage: Double = 120.0  // Target 120MB
-    private let maxMemoryUsage: Double = 200.0     // Max 200MB
+    private let targetMemoryUsage: Double = 100.0  // Target 100MB
+    private let maxMemoryUsage: Double = 150.0     // Max 150MB
     
     // MARK: — Timing
     private var lastCleanupDate = Date.distantPast

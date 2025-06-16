@@ -98,16 +98,26 @@ struct BlockShapeView: View {
                 }
             }
 
+            // More aggressive memory trimming
             if totalMemory > maxCacheMemoryBytes {
                 // Sort by size (largest first)
                 let sorted = imageSizes.sorted { $0.size > $1.size }
 
-                // Remove largest images until we're under the limit
+                // Remove largest images until we're under 75% of the limit
                 var memoryUsed = totalMemory
+                let targetMemory = Int(Double(maxCacheMemoryBytes) * 0.75)
+                
                 for entry in sorted {
                     gradientCache.removeValue(forKey: entry.key)
                     memoryUsed -= entry.size
-                    if memoryUsed <= maxCacheMemoryBytes { break }
+                    if memoryUsed <= targetMemory { break }
+                }
+                
+                // If still over limit, remove all but the 10 smallest images
+                if memoryUsed > maxCacheMemoryBytes {
+                    let smallestImages = imageSizes.sorted { $0.size < $1.size }.prefix(10)
+                    let keysToKeep = Set(smallestImages.map { $0.key })
+                    gradientCache = gradientCache.filter { keysToKeep.contains($0.key) }
                 }
             }
             
