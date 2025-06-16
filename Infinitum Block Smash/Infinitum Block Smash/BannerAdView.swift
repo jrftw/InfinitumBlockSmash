@@ -34,7 +34,40 @@ struct BannerAdView: UIViewRepresentable {
     class Coordinator: NSObject, BannerViewDelegate {
         func bannerView(_ bannerView: BannerView, didFailToReceiveAdWithError error: Error) {
             print("Banner failed to load: \(error.localizedDescription)")
-            // Silent fail: do not update UI
+            
+            // Track ad failure with detailed error information
+            Task {
+                let errorCode = (error as NSError).code
+                
+                // Track the failure event with detailed metrics
+                AnalyticsManager.shared.trackEvent(.performanceMetric(
+                    name: "banner_ad_failure",
+                    value: 1.0
+                ))
+                
+                // Track specific error types
+                if errorCode == -1009 {
+                    AnalyticsManager.shared.trackEvent(.performanceMetric(
+                        name: "banner_ad_network_error",
+                        value: 1.0
+                    ))
+                } else if errorCode == -1001 {
+                    AnalyticsManager.shared.trackEvent(.performanceMetric(
+                        name: "banner_ad_timeout",
+                        value: 1.0
+                    ))
+                }
+            }
+        }
+        
+        func bannerViewDidReceiveAd(_ bannerView: BannerView) {
+            // Track successful ad load
+            Task {
+                AnalyticsManager.shared.trackEvent(.performanceMetric(
+                    name: "banner_ad_success",
+                    value: 1.0
+                ))
+            }
         }
     }
 } 

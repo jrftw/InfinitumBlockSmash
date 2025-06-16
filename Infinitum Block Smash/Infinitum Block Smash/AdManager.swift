@@ -1,6 +1,7 @@
 import GoogleMobileAds
 import SwiftUI
 import StoreKit
+import Network
 
 // MARK: - Ad Configuration
 struct AdConfig {
@@ -50,8 +51,12 @@ class AdManager: NSObject, ObservableObject {
     private let adLoadTimeout: TimeInterval = 10 // 10 seconds timeout for ad loading
     private let preloadDelay: TimeInterval = 2 // Delay before preloading next ad
     private let maxRetryAttempts: Int = 3
+    private let adRefreshInterval: TimeInterval = 300 // 5 minutes refresh interval
     private var retryCount: Int = 0
     private var preloadTimer: Timer?
+    private var refreshTimer: Timer?
+    private var networkMonitor: NWPathMonitor?
+    private var isNetworkAvailable: Bool = true
     
     enum AdState {
         case idle
@@ -81,6 +86,7 @@ class AdManager: NSObject, ObservableObject {
     
     private override init() {
         super.init()
+        setupNetworkMonitoring()
         // Initialize the Google Mobile Ads SDK
         MobileAds.shared.start(completionHandler: { [weak self] (status: InitializationStatus) in
             print("Google Mobile Ads SDK initialization status: \(status)")
@@ -89,6 +95,31 @@ class AdManager: NSObject, ObservableObject {
                 await self?.preloadAllAds()
             }
         })
+    }
+    
+    private func setupNetworkMonitoring() {
+        networkMonitor = NWPathMonitor()
+        networkMonitor?.pathUpdateHandler = { [weak self] path in
+            Task { @MainActor [weak self] in
+                let wasAvailable = self?.isNetworkAvailable ?? false
+                self?.isNetworkAvailable = path.status == .satisfied
+                
+                // If network became available, try to preload ads
+                if !wasAvailable && self?.isNetworkAvailable == true {
+                    await self?.preloadAllAds()
+                }
+            }
+        }
+        networkMonitor?.start(queue: DispatchQueue.global(qos: .background))
+    }
+    
+    private func startAdRefreshTimer() {
+        refreshTimer?.invalidate()
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: adRefreshInterval, repeats: true) { [weak self] _ in
+            Task { [weak self] in
+                await self?.preloadAllAds()
+            }
+        }
     }
     
     func checkTopThreeStatus() async {
@@ -197,6 +228,12 @@ class AdManager: NSObject, ObservableObject {
     // MARK: - Ad Display Logic
     
     private func shouldShowAds() async -> Bool {
+        // Check network connectivity first
+        guard isNetworkAvailable else {
+            adError = .networkError
+            return false
+        }
+        
         // Check if user has purchased the no-ads feature
         let hasNoAdsFeature = await subscriptionManager.hasFeature(.noAds)
         if hasNoAdsFeature {
@@ -433,6 +470,10 @@ class AdManager: NSObject, ObservableObject {
         retryCount = 0
         preloadTimer?.invalidate()
         preloadTimer = nil
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+        networkMonitor?.cancel()
+        networkMonitor = nil
     }
     
     func resetGameState() async {

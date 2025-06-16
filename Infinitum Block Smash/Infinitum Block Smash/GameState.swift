@@ -1255,26 +1255,30 @@ final class GameState: ObservableObject {
         // First check if any current tray blocks can be placed
         let canPlaceAny = tray.contains { canPlaceBlockAnywhere($0) }
         
-        // If no current blocks can be placed, try refilling the tray
+        // If no current blocks can be placed, check if any new blocks could be placed
         if !canPlaceAny {
-            // Save current tray
-            let currentTray = tray
+            // Try each possible block type
+            let allShapes = BlockShape.availableShapes(for: level)
+            let allColors = BlockColor.allCases
             
-            // Try refilling the tray
-            refillTray()
+            var canPlaceNewBlock = false
             
-            // Check if any blocks in the new tray can be placed
-            let canPlaceAfterRefill = tray.contains { canPlaceBlockAnywhere($0) }
-            
-            // If still no valid moves and not already game over, trigger game over
-            if !canPlaceAfterRefill && !isGameOver {
-                print("[GameOver] No available moves for any tray shape, even after refill. Game over.")
-                handleGameOver()
+            // Check if any combination of shape and color could be placed
+            for shape in allShapes {
+                for color in allColors {
+                    let testBlock = Block(color: color, shape: shape)
+                    if canPlaceBlockAnywhere(testBlock) {
+                        canPlaceNewBlock = true
+                        break
+                    }
+                }
+                if canPlaceNewBlock { break }
             }
             
-            // Restore original tray if no game over
-            if !isGameOver {
-                tray = currentTray
+            // If no valid moves found and not already game over, trigger game over
+            if !canPlaceNewBlock && !isGameOver {
+                print("[GameOver] No available moves for any possible block. Game over.")
+                handleGameOver()
             }
         }
     }

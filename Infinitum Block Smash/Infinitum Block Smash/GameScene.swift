@@ -390,24 +390,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func setupTray() {
         let blockSize = GameConstants.blockSize
         let trayHeight = blockSize * 4.5
-        let screenWidth = UIScreen.main.bounds.width
-        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
         
-        // Adjust vertical position based on screen size
-        let verticalOffset: CGFloat
-        if isIPad {
-            verticalOffset = frame.height * 0.12 // Reduced from 0.25 to 0.12 for iPad
-        } else if screenWidth <= 375 {
-            verticalOffset = frame.height * 0.08 // 8% offset for smaller screens
-        } else if screenWidth >= 428 {
-            verticalOffset = frame.height * 0.04 // 4% offset for larger screens
-        } else {
-            verticalOffset = frame.height * 0.06 // 6% offset for medium screens
-        }
+        // Calculate the bottom of the grid
+        let gridBottom = frame.midY - CGFloat(GameConstants.gridSize) * blockSize / 2
         
+        // Add a buffer space between grid and tray
+        let bufferSpace = blockSize * 1.5
+        
+        // Position tray below the grid with buffer
         trayNode.position = CGPoint(
             x: frame.midX,
-            y: frame.midY - CGFloat(GameConstants.gridSize) * blockSize / 2 - trayHeight / 2 - blockSize * 1.2 - verticalOffset
+            y: gridBottom - trayHeight / 2 - bufferSpace
         )
         trayNode.zPosition = 10
         trayNode.updateBlocks(gameState.tray, blockSize: blockSize)
