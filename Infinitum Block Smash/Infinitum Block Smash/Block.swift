@@ -178,19 +178,20 @@ enum BlockShape: String, CaseIterable, Codable {
         }
     }
 
-    static func availableShapes(for level: Int) -> [BlockShape] {
+    static func availableShapes(for level: Int, adjustedDifficulty: AdaptiveDifficultyManager.DifficultySettings? = nil) -> [BlockShape] {
         var result: [BlockShape] = []
         result.reserveCapacity(33)
-
+        
+        // Base shape availability based on level
         if level <= 25 { result.append(.single) }
         if level <= 35 { result += [.tinyLUp, .tinyLDown, .tinyLLeft, .tinyLRight, .tinyI] }
-
+        
         result += [
             .bar2H, .bar2V, .bar3H, .bar3V, .bar4H, .bar4V, .square,
             .lUp, .lDown, .lLeft, .lRight,
             .tUp, .tDown, .tLeft, .tRight
         ]
-
+        
         if level >= 10 { result += [.plus] }
         if level >= 15 { result += [.zShape] }
         if level >= 20 { result += [.cross, .uShape, .vShape, .wShape] }
@@ -202,7 +203,19 @@ enum BlockShape: String, CaseIterable, Codable {
         if level >= 150 { result.append(.hexagon) }
         if level >= 200 { result.append(.spiral) }
         if level >= 300 { result.append(.zigzag) }
-
+        
+        // Apply adaptive difficulty adjustments if available
+        if let difficulty = adjustedDifficulty {
+            // Filter shapes based on complexity multiplier
+            let maxComplexity = Int(11.0 * difficulty.shapeComplexityMultiplier)
+            result = result.filter { $0.complexity <= maxComplexity }
+            
+            // Ensure we have at least some basic shapes available
+            if result.isEmpty {
+                result = [.bar2H, .bar2V, .bar3H, .bar3V, .square]
+            }
+        }
+        
         return result
     }
 }

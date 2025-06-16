@@ -18,6 +18,8 @@ class ClassicTimedGameState: ObservableObject {
     private let gameState: GameState
     private let timePerLevel: TimeInterval = 60 // 1 minute per level
     
+    private let adaptiveDifficultyManager = AdaptiveDifficultyManager()
+    
     var timeString: String {
         let minutes = Int(timeRemaining) / 60
         let seconds = Int(timeRemaining) % 60
@@ -56,30 +58,37 @@ class ClassicTimedGameState: ObservableObject {
             .store(in: &cancellables)
     }
     
-    // Time limits for different level ranges
     private func getTimeLimit(for level: Int) -> TimeInterval {
+        let baseTimeLimit: TimeInterval
+        
         switch level {
         case 1...5:
-            return 60 // 1 minute for first 5 levels
+            baseTimeLimit = 60 // 1 minute for first 5 levels
         case 6...10:
-            return 90 // 1.5 minutes
+            baseTimeLimit = 90 // 1.5 minutes
         case 11...15:
-            return 120 // 2 minutes
+            baseTimeLimit = 120 // 2 minutes
         case 16...20:
-            return 150 // 2.5 minutes
+            baseTimeLimit = 150 // 2.5 minutes
         case 21...25:
-            return 180 // 3 minutes
+            baseTimeLimit = 180 // 3 minutes
         case 26...30:
-            return 210 // 3.5 minutes
+            baseTimeLimit = 210 // 3.5 minutes
         case 31...35:
-            return 240 // 4 minutes
+            baseTimeLimit = 240 // 4 minutes
         case 36...40:
-            return 270 // 4.5 minutes
+            baseTimeLimit = 270 // 4.5 minutes
         case 41...45:
-            return 300 // 5 minutes
+            baseTimeLimit = 300 // 5 minutes
         default:
-            return 300 // Cap at 5 minutes
+            baseTimeLimit = 300 // Cap at 5 minutes
         }
+        
+        // Get adjusted difficulty settings
+        let adjustedDifficulty = adaptiveDifficultyManager.getAdjustedDifficulty(for: level)
+        
+        // Apply time limit multiplier
+        return baseTimeLimit * adjustedDifficulty.timeLimitMultiplier
     }
     
     func resetGame() {

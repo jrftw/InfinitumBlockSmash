@@ -101,6 +101,66 @@ struct StatsView: View {
                     }
                 }
                 .padding(.top)
+
+                // Player Skill Section
+                VStack(alignment: .leading, spacing: 15) {
+                    HStack {
+                        Text("Player Skill")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                        
+                        Button(action: {
+                            showingInfoFor = InfoItem(
+                                id: "player_skill",
+                                title: "Player Skill",
+                                description: "Your skill level is calculated based on your perfect levels, chain bonuses, and average score per level. Higher skill levels unlock more complex gameplay mechanics!"
+                            )
+                        }) {
+                            Image(systemName: "info.circle")
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                    }
+                    .padding(.horizontal)
+                    
+                    VStack(spacing: 12) {
+                        // Overall Skill Level
+                        SkillCard(
+                            title: "Overall Skill Level",
+                            value: "\(gameState.calculatePlayerSkill())/5",
+                            icon: "star.fill",
+                            color: .yellow,
+                            description: "Your overall skill level based on all factors"
+                        )
+                        
+                        // Skill Components
+                        SkillCard(
+                            title: "Perfect Levels Bonus",
+                            value: "\(gameState.perfectLevels * 2)",
+                            icon: "checkmark.circle.fill",
+                            color: .green,
+                            description: "Bonus from completing levels perfectly"
+                        )
+                        
+                        SkillCard(
+                            title: "Chain Bonus",
+                            value: "\(gameState.currentChain)",
+                            icon: "link",
+                            color: .blue,
+                            description: "Current chain multiplier"
+                        )
+                        
+                        SkillCard(
+                            title: "Score Efficiency",
+                            value: "\(Int(Double(gameState.score) / Double(max(1, gameState.level)) / 1000))",
+                            icon: "chart.line.uptrend.xyaxis",
+                            color: .purple,
+                            description: "Average score per level (in thousands)"
+                        )
+                    }
+                    .padding(.horizontal)
+                }
+                .padding(.top)
             }
         }
         .background(
@@ -270,4 +330,55 @@ struct InfoItem: Identifiable {
     let id: String
     let title: String
     let description: String
+}
+
+struct SkillCard: View {
+    let title: String
+    let value: String
+    let icon: String
+    let color: Color
+    let description: String
+    @State private var showingInfo = false
+    
+    var body: some View {
+        HStack(spacing: 15) {
+            Image(systemName: icon)
+                .font(.system(size: 24))
+                .foregroundColor(color)
+                .frame(width: 40)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.white)
+                
+                Text(value)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.white.opacity(0.9))
+            }
+            
+            Spacer()
+            
+            Button(action: {
+                showingInfo = true
+            }) {
+                Image(systemName: "info.circle")
+                    .foregroundColor(.white.opacity(0.7))
+            }
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 15)
+                .fill(Color.white.opacity(0.1))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 15)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                )
+        )
+        .alert(title, isPresented: $showingInfo) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(description)
+        }
+    }
 } 

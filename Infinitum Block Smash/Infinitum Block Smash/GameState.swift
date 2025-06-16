@@ -116,10 +116,10 @@ final class GameState: ObservableObject {
     
     private let adManager = AdManager.shared
     
-    // New properties for level-based shape spawning
+    // Add difficulty-related properties
+    private var levelScoreThreshold: Int = 1000
     private var randomShapesOnBoard: Int = 0
     private var requiredShapesToFit: Int = 3
-    private var levelScoreThreshold: Int = 1000
     
     private let subscriptionManager = SubscriptionManager.shared
     
@@ -182,6 +182,19 @@ final class GameState: ObservableObject {
     private var lastHintTime: TimeInterval = 0
     private let hintCooldown: TimeInterval = 1.0 // 1 second cooldown
     private var cachedHint: (block: Block, position: (row: Int, col: Int))?
+    
+    // Add AdaptiveDifficultyManager
+    private let adaptiveDifficultyManager = AdaptiveDifficultyManager()
+    
+    // Add tracking properties
+    private var levelStartTime: Date?
+    private var mistakes: Int = 0
+    private var totalMoves: Int = 0
+    private var quickPlacements: Int = 0
+    private var colorMatches: Int = 0
+    private var totalColors: Int = 0
+    private var successfulShapePlacements: Int = 0
+    private var totalShapePlacements: Int = 0
     
     // MARK: - Initialization
     init() {
@@ -419,6 +432,9 @@ final class GameState: ObservableObject {
         
         // Notify delegate
         delegate?.gameStateDidUpdate()
+        
+        // Reset tracking properties
+        resetTrackingProperties()
     }
     
     func setSeed(for level: Int) {
@@ -426,7 +442,11 @@ final class GameState: ObservableObject {
     }
     
     func nextBlockRandom() -> Block {
-        var availableShapes = BlockShape.availableShapes(for: level)
+        // Get adjusted difficulty settings
+        let adjustedDifficulty = adaptiveDifficultyManager.getAdjustedDifficulty(for: level)
+        
+        // Get available shapes with adjusted difficulty
+        var availableShapes = BlockShape.availableShapes(for: level, adjustedDifficulty: adjustedDifficulty)
         
         // Remove single blocks and tiny shapes from base available shapes
         if level <= 25 {
@@ -468,6 +488,7 @@ final class GameState: ObservableObject {
         
         let shape = availableShapes.randomElement(using: &rng) ?? .bar2H
         let color = BlockColor.availableColors(for: level).randomElement(using: &rng) ?? .red
+        
         return Block(color: color, shape: shape)
     }
     
@@ -2086,7 +2107,7 @@ final class GameState: ObservableObject {
         adjustShapeComplexity(playerSkill: playerSkill)
     }
 
-    private func calculatePlayerSkill() -> Int {
+    func calculatePlayerSkill() -> Int {
         // Calculate player skill based on various factors
         let perfectLevelsWeight = perfectLevels * 2
         let chainBonusWeight = currentChain
@@ -2429,6 +2450,33 @@ final class GameState: ObservableObject {
         print("[Level] Score threshold met for level \(level). Level complete!")
         levelComplete = true
         
+        // Update adaptive difficulty stats
+        if let startTime = levelStartTime {
+            let timeSpent = Date().timeIntervalSince(startTime)
+            adaptiveDifficultyManager.updatePlayerStats(
+                score: score,
+                level: level,
+                timeSpent: timeSpent,
+                isPerfect: isPerfectLevel,
+                chainCount: currentChain,
+                mistakes: mistakes,
+                totalMoves: totalMoves,
+                quickPlacements: quickPlacements,
+                colorMatches: colorMatches,
+                totalColors: totalColors,
+                successfulShapePlacements: successfulShapePlacements,
+                totalShapePlacements: totalShapePlacements
+            )
+        }
+        
+        // Get adjusted difficulty for next level
+        let adjustedDifficulty = adaptiveDifficultyManager.getAdjustedDifficulty(for: level + 1)
+        
+        // Apply adjusted difficulty settings
+        levelScoreThreshold = Int(Double(calculateRequiredScore()) * adjustedDifficulty.scoreRequirementMultiplier)
+        randomShapesOnBoard = Int(Double(randomShapesOnBoard) * adjustedDifficulty.randomShapeSpawnRate)
+        requiredShapesToFit = Int(Double(requiredShapesToFit) * adjustedDifficulty.shapeComplexityMultiplier)
+        
         // Transfer temporary score to main score
         score = temporaryScore
         
@@ -2452,53 +2500,19 @@ final class GameState: ObservableObject {
             print("[HighScore] New high score for level \(level): \(score)")
         }
         
-        // Update leaderboard only if not a guest user
-        if !UserDefaults.standard.bool(forKey: "isGuest") {
-            Task {
-                do {
-                    print("[Leaderboard] Updating leaderboard after level completion - Score: \(score)")
-                    
-                    // Update classic score leaderboard
-                    try await LeaderboardService.shared.updateLeaderboard(
-                        score: score,
-                        level: level,
-                        type: .score
-                    )
-                    print("[Leaderboard] ✅ Classic score leaderboard updated")
-                    
-                    // Update achievement leaderboard
-                    try await LeaderboardService.shared.updateLeaderboard(
-                        score: score,
-                        level: level,
-                        type: .achievement
-                    )
-                    print("[Leaderboard] ✅ Achievement leaderboard updated")
-                    
-                    // Update timed leaderboard if in timed mode
-                    if UserDefaults.standard.bool(forKey: "isTimedMode") {
-                        try await LeaderboardService.shared.updateLeaderboard(
-                            score: score,
-                            level: level,
-                            time: totalPlayTime,
-                            type: .timed
-                        )
-                        print("[Leaderboard] ✅ Timed leaderboard updated")
-                    }
-                    
-                    // Refresh leaderboard high score
-                    await fetchLeaderboardHighScore()
-                    
-                    // Post level completed notification
-                    NotificationCenter.default.post(name: .levelCompleted, object: nil)
-                } catch {
-                    print("[Leaderboard] ❌ Error updating leaderboard after level completion: \(error.localizedDescription)")
-                }
-            }
-        } else {
-            print("[Leaderboard] 👤 Guest user - skipping leaderboard update")
-            // Still post level completed notification
-            NotificationCenter.default.post(name: .levelCompleted, object: nil)
-        }
+        // Reset tracking properties for next level
+        resetTrackingProperties()
+    }
+    
+    private func resetTrackingProperties() {
+        levelStartTime = Date()
+        mistakes = 0
+        totalMoves = 0
+        quickPlacements = 0
+        colorMatches = 0
+        totalColors = 0
+        successfulShapePlacements = 0
+        totalShapePlacements = 0
     }
     
     private func saveGameState() async throws {
@@ -2604,18 +2618,8 @@ final class GameState: ObservableObject {
     }
 
     func calculateRequiredScore() -> Int {
-        // Enhanced scoring system with dynamic thresholds
-        let baseScore = if level <= 5 {
-            level * 1000
-        } else if level <= 10 {
-            level * 2000
-        } else if level <= 50 {
-            level * 3000
-        } else if level <= 100 {
-            level * 5000
-        } else {
-            level * 10000
-        }
+        // Use the current levelScoreThreshold as the base
+        let baseScore = levelScoreThreshold
         
         // Add bonus for perfect levels
         let perfectBonus = perfectLevels * 500
