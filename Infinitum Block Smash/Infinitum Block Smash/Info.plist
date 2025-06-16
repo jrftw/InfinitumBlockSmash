@@ -324,13 +324,9 @@
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
 	<key>com.apple.developer.devicecheck.appattest-environment</key>
-	<string>development</string>
+	<string>production</string>
 	<key>GKGameCenterEnabled</key>
 	<true/>
-	<key>NSCameraUsageDescription</key>
-	<string>We need camera access to allow you to take photos for your profile picture and share your achievements.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>We need photo library access to let you choose profile pictures and share your game achievements.</string>
 	<key>UIUserInterfaceStyle</key>
 	<string>Light</string>
 </dict>
