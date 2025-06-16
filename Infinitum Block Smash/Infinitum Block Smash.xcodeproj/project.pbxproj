@@ -135,7 +135,6 @@
 				79C391182DECF0A000016986 /* Sources */,
 				79C391192DECF0A000016986 /* Frameworks */,
 				79C3911A2DECF0A000016986 /* Resources */,
-				79343A382E00D363001A046D /* ShellScript */,
 			);
 			buildRules = (
 			);
@@ -235,26 +234,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		79343A382E00D363001A046D /* ShellScript */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "   \"${SRCROOT}/upload-symbols.sh\"\n\n";
-		};
-/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		79C391182DECF0A000016986 /* Sources */ = {
