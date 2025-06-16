@@ -44,14 +44,14 @@ struct ContentView: View {
             .ignoresSafeArea()
             
             if isLoggedIn {
-                VStack(spacing: 12) {
+                VStack(spacing: 8) {
                     // App Icon
                     Image("AppIcon")
                         .resizable()
                         .frame(width: 100, height: 100)
                         .clipShape(RoundedRectangle(cornerRadius: 25))
                         .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 5)
-                        .padding(.top, 8)
+                        .padding(.top, 4)
                     
                     // App Title
                     VStack(spacing: 2) {
@@ -89,7 +89,7 @@ struct ContentView: View {
                     }
                     
                     // Menu Buttons
-                    VStack(spacing: 12) {
+                    VStack(spacing: 10) {
                         if gameState.hasSavedGame() {
                             MenuButton(title: "Resume Game", icon: "play.fill", onDelete: {
                                 gameState.deleteSavedGame()
@@ -133,9 +133,10 @@ struct ContentView: View {
                             isGuest = false
                         }
                     }
-                    .padding(.top, 20)
+                    .padding(.top, 12)
                 }
-                .padding()
+                .padding(.horizontal)
+                .padding(.top, 8)
                 .onChange(of: userID) { newValue in
                     if !newValue.isEmpty {
                         // User logged in, load cloud data
