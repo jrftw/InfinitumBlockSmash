@@ -107,6 +107,12 @@ struct LeaderboardView: View {
                 Text("Last updated: \(lastUpdated, style: .relative) ago")
                     .font(.caption)
                     .foregroundColor(.gray)
+                
+                if selectedPeriod != "alltime" {
+                    Text("• Reset in: \(timeUntilNextReset)")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
             }
             
             Spacer()
@@ -116,6 +122,28 @@ struct LeaderboardView: View {
                 .foregroundColor(.gray)
         }
         .padding(.horizontal)
+    }
+    
+    private var timeUntilNextReset: String {
+        let calendar = Calendar.current
+        let now = Date()
+        
+        switch selectedPeriod {
+        case "daily":
+            let tomorrow = calendar.startOfDay(for: now.addingTimeInterval(86400))
+            let components = calendar.dateComponents([.hour, .minute], from: now, to: tomorrow)
+            return "\(components.hour ?? 0)h \(components.minute ?? 0)m"
+        case "weekly":
+            let nextWeek = calendar.date(byAdding: .weekOfYear, value: 1, to: calendar.startOfWeek(for: now))!
+            let components = calendar.dateComponents([.day, .hour], from: now, to: nextWeek)
+            return "\(components.day ?? 0)d \(components.hour ?? 0)h"
+        case "monthly":
+            let nextMonth = calendar.date(byAdding: .month, value: 1, to: calendar.startOfMonth(for: now))!
+            let components = calendar.dateComponents([.day, .hour], from: now, to: nextMonth)
+            return "\(components.day ?? 0)d \(components.hour ?? 0)h"
+        default:
+            return ""
+        }
     }
     
     private var offlineBanner: some View {
