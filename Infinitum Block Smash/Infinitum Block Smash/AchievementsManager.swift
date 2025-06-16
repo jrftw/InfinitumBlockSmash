@@ -570,24 +570,28 @@ class AchievementsManager: ObservableObject {
                             .collection("scores")
                             .document(userId)
                         
-                        // Get current score if it exists
-                        let currentDoc = try await docRef.getDocument()
-                        _ = currentDoc.data()?["points"] as? Int ?? 0
+                        // Get current score from server
+                        let doc = try await docRef.getDocument(source: .server)
+                        let currentPoints = doc.data()?["points"] as? Int ?? 0
                         
-                        // Always update achievement scores
-                        let data: [String: Any] = [
-                            "username": username,
-                            "points": totalPoints,
-                            "timestamp": FieldValue.serverTimestamp(),
-                            "userId": userId,
-                            "lastUpdate": FieldValue.serverTimestamp()
-                        ]
-                        
-                        print("[Achievement Leaderboard] 📝 Writing data to Firestore: \(data)")
-                        print("[Achievement Leaderboard] 📝 Writing to path: achievement_leaderboard/\(period)/scores/\(userId)")
-                        
-                        try await docRef.setData(data)
-                        print("[Achievement Leaderboard] ✅ Successfully updated \(period) leaderboard")
+                        // Only update if new score is higher
+                        if totalPoints > currentPoints {
+                            let data: [String: Any] = [
+                                "username": username,
+                                "points": totalPoints,
+                                "timestamp": FieldValue.serverTimestamp(),
+                                "userId": userId,
+                                "lastUpdate": FieldValue.serverTimestamp()
+                            ]
+                            
+                            print("[Achievement Leaderboard] 📝 Writing data to Firestore: \(data)")
+                            print("[Achievement Leaderboard] 📝 Writing to path: achievement_leaderboard/\(period)/scores/\(userId)")
+                            
+                            try await docRef.setData(data)
+                            print("[Achievement Leaderboard] ✅ Successfully updated \(period) leaderboard")
+                        } else {
+                            print("[Achievement Leaderboard] ⏭️ Skipping \(period) update - Current score (\(currentPoints)) is higher than new score (\(totalPoints))")
+                        }
                         
                     } catch {
                         print("[Achievement Leaderboard] ❌ Error updating \(period) leaderboard: \(error.localizedDescription)")
@@ -597,7 +601,7 @@ class AchievementsManager: ObservableObject {
                 
                 print("[Achievement Leaderboard] ✅ Successfully updated all leaderboards")
             } catch {
-                print("[Achievement Leaderboard] ❌ Error updating leaderboard: \(error.localizedDescription)")
+                print("[Achievement Leaderboard] ❌ Error getting user data: \(error.localizedDescription)")
             }
         }
     }

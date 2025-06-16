@@ -48,7 +48,7 @@ class AdManager: NSObject, ObservableObject {
     private let minimumTimeBetweenAds: TimeInterval = 180 // 3 minutes between ads
     private let maximumAdsPerGame: Int = 8 // Increased to 8 ads per game
     private let maximumAdLoadAttempts: Int = 3
-    private let adLoadTimeout: TimeInterval = 10 // 10 seconds timeout for ad loading
+    private let adLoadTimeout: TimeInterval = 5 // 5 seconds timeout for ad loading
     private let preloadDelay: TimeInterval = 2 // Delay before preloading next ad
     private let maxRetryAttempts: Int = 3
     private let adRefreshInterval: TimeInterval = 300 // 5 minutes refresh interval

@@ -1246,7 +1246,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     override func update(_ currentTime: TimeInterval) {
-        // Check if we need to perform memory cleanup
+        // Check for memory cleanup
         if currentTime - lastMemoryCleanup >= memoryCleanupInterval {
             Task { @MainActor in
                 print("[Memory] Performing periodic memory cleanup")
@@ -1254,7 +1254,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 lastMemoryCleanup = currentTime
             }
         }
-        
+
         // Update game state
         Task {
             await gameState.update()

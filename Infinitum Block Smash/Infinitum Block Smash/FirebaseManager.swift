@@ -97,6 +97,21 @@ class FirebaseManager: ObservableObject {
     private let rtdb = Database.database().reference()
     private var appCheckToken: String?
     
+    // Rate limiting properties
+    private var operationTimestamps: [String: [Date]] = [:]
+    private let maxOperationsPerMinute: [String: Int] = [
+        "leaderboard": 10,
+        "progress": 20,
+        "analytics": 5,
+        "userData": 15
+    ]
+    private let operationWindow: TimeInterval = 60 // 1 minute window
+    
+    // Retry properties
+    private var retryCounts: [String: Int] = [:]
+    private let maxRetries = 3
+    private let baseRetryDelay: TimeInterval = 1.0
+    
     @Published private(set) var isAuthenticated = false
     @Published private(set) var currentUser: User?
     @Published private(set) var username: String?
@@ -758,15 +773,40 @@ class FirebaseManager: ObservableObject {
                     .collection("scores")
                     .document(userId)
                 
-                let snapshot = try await docRef.getDocument()
-                let currentScore = snapshot.data()?["score"] as? Int ?? 0
+                // Get current score from server
+                let doc = try await docRef.getDocument(source: .server)
+                let currentData = doc.data()
                 
-                // For achievement leaderboard, always update
-                // For other leaderboards, update if no score exists or new score is higher
-                let shouldUpdate = type == .achievement || 
-                                 currentScore == 0 || 
-                                 score > currentScore ||
-                                 (type == .timed && time != nil && (currentScore == 0 || time! < TimeInterval(currentScore)))
+                // Get current score based on leaderboard type
+                let currentScore: Int
+                let currentTime: TimeInterval?
+                
+                switch type {
+                case .achievement:
+                    currentScore = currentData?["points"] as? Int ?? 0
+                    currentTime = nil
+                case .timed:
+                    currentScore = currentData?["score"] as? Int ?? 0
+                    currentTime = currentData?["time"] as? TimeInterval
+                case .score:
+                    currentScore = currentData?["score"] as? Int ?? 0
+                    currentTime = currentData?["time"] as? TimeInterval
+                }
+                
+                // Determine if we should update based on leaderboard type and period
+                let shouldUpdate: Bool
+                
+                switch type {
+                case .achievement:
+                    // For achievement leaderboard, always update if score is higher
+                    shouldUpdate = score > currentScore
+                case .timed:
+                    // For timed leaderboard, update if time is better (lower) or score is higher
+                    shouldUpdate = (time != nil && (currentTime == nil || time! < currentTime!)) || score > currentScore
+                case .score:
+                    // For classic leaderboard, update if score is higher
+                    shouldUpdate = score > currentScore
+                }
                 
                 // Always write to daily and weekly if the score is from today/this week
                 let isToday = calendar.isDateInToday(startDate)
@@ -776,19 +816,30 @@ class FirebaseManager: ObservableObject {
                     // Include all required fields with UTC timestamp
                     var data: [String: Any] = [
                         "username": username,
-                        "score": score,
                         "timestamp": FieldValue.serverTimestamp(),
                         "lastUpdate": FieldValue.serverTimestamp(),
                         "userId": userId,
                         "periodStart": Timestamp(date: startDate)
                     ]
                     
-                    if let level = level {
-                        data["level"] = level
+                    // Add appropriate score field based on leaderboard type
+                    switch type {
+                    case .achievement:
+                        data["points"] = score
+                    case .timed:
+                        data["score"] = score
+                        if let time = time {
+                            data["time"] = time
+                        }
+                    case .score:
+                        data["score"] = score
+                        if let time = time {
+                            data["time"] = time
+                        }
                     }
                     
-                    if let time = time {
-                        data["time"] = time
+                    if let level = level {
+                        data["level"] = level
                     }
                     
                     print("[Firebase] 📝 Writing data to Firestore: \(data)")
@@ -818,7 +869,7 @@ class FirebaseManager: ObservableObject {
             print("[Firebase] ❌ No authenticated user found")
             throw FirebaseError.notAuthenticated
         }
-        
+
         // Get username from Firestore
         let db = Firestore.firestore()
         let userDoc = try await db.collection("users").document(userId).getDocument()
@@ -826,27 +877,30 @@ class FirebaseManager: ObservableObject {
             print("[Firebase] ❌ No username found for user: \(userId)")
             throw FirebaseError.invalidData
         }
-        
+
         // Use all periods
         let periods = ["daily", "weekly", "monthly", "alltime"]
-        
+
         for period in periods {
             do {
                 print("[Firebase] 🔄 Attempting to update \(period) leaderboard for user \(userId)")
-                
+
                 let docRef = db.collection("classic_timed_leaderboard")
                     .document(period)
                     .collection("scores")
                     .document(userId)
-                
+
                 let snapshot = try await docRef.getDocument()
                 let currentScore = snapshot.data()?["score"] as? Int ?? 0
-                
-                if score <= currentScore {
-                    print("[Firebase] ⏭️ Skipping \(period) update - Score not better")
+                let currentTime = snapshot.data()?["time"] as? TimeInterval
+
+                let shouldUpdate = (time != nil && (currentTime == nil || time! < currentTime!)) || score > currentScore
+
+                if !shouldUpdate {
+                    print("[Firebase] ⏭️ Skipping \(period) update - Score not better (Current: \(currentScore), New: \(score))")
                     continue
                 }
-                
+
                 // Include all required fields
                 var data: [String: Any] = [
                     "username": username,
@@ -855,20 +909,20 @@ class FirebaseManager: ObservableObject {
                     "lastUpdate": FieldValue.serverTimestamp(),
                     "userId": userId
                 ]
-                
+
                 if let level = level {
                     data["level"] = level
                 }
-                
+
                 if let time = time {
                     data["time"] = time
                 }
-                
+
                 print("[Firebase] 📝 Writing data to Firestore: \(data)")
-                
+
                 try await docRef.setData(data)
                 print("[Firebase] ✅ Successfully updated \(period) leaderboard")
-                
+
             } catch {
                 print("[Firebase] ❌ Error updating \(period) leaderboard: \(error.localizedDescription)")
                 print("[Firebase] ❌ Error details: \(error)")
@@ -1098,30 +1152,52 @@ class FirebaseManager: ObservableObject {
     func saveGameProgress(_ progress: GameProgress) async throws {
         let userId = try validateUserId()
         
-        // Add metadata to progress data
-        var progressData = progress.dictionary
-        progressData["userId"] = userId
-        progressData["deviceId"] = UIDevice.current.identifierForVendor?.uuidString ?? ""
-        progressData["lastUpdate"] = Date().timeIntervalSince1970
-        progressData["lastSaveTime"] = Date().timeIntervalSince1970
+        // Apply rate limiting
+        try checkRateLimit(for: "progress")
         
-        // Ensure we're using the correct keys for personal high score and highest level
-        progressData["personalHighScore"] = progress.highScore
-        progressData["personalHighestLevel"] = progress.highestLevel
-        
-        // Save to Firestore
-        let firestoreRef = db.collection("users").document(userId)
-            .collection("progress")
-            .document("data")
-        try await firestoreRef.setData(progressData, merge: true)
-        
-        // Save to RTDB for real-time sync
-        let rtdbRef = rtdb.child("users").child(userId)
-            .child("progress")
-            .child("data")
-        try await rtdbRef.setValue(progressData)
-        
-        print("[Firebase] Game progress saved for user: \(userId)")
+        do {
+            // Add metadata to progress data
+            var progressData = progress.dictionary
+            progressData["userId"] = userId
+            progressData["deviceId"] = UIDevice.current.identifierForVendor?.uuidString ?? ""
+            progressData["lastUpdate"] = Date().timeIntervalSince1970
+            progressData["lastSaveTime"] = Date().timeIntervalSince1970
+            
+            // Ensure we're using the correct keys for personal high score and highest level
+            progressData["personalHighScore"] = progress.highScore
+            progressData["personalHighestLevel"] = progress.highestLevel
+            
+            // Save to Firestore with retry logic
+            let firestoreRef = db.collection("users").document(userId)
+                .collection("progress")
+                .document("data")
+            
+            do {
+                try await firestoreRef.setData(progressData, merge: true)
+                resetRetryCount(for: "progress")
+            } catch {
+                try await exponentialBackoff(for: "progress")
+                try await firestoreRef.setData(progressData, merge: true)
+                resetRetryCount(for: "progress")
+            }
+            
+            // Save to RTDB for real-time sync
+            let rtdbRef = rtdb.child("users").child(userId)
+                .child("progress")
+                .child("data")
+            
+            do {
+                try await rtdbRef.setValue(progressData)
+            } catch {
+                try await exponentialBackoff(for: "progress")
+                try await rtdbRef.setValue(progressData)
+            }
+            
+            print("[Firebase] Game progress saved for user: \(userId)")
+        } catch {
+            print("[Firebase] Error saving game progress: \(error)")
+            throw error
+        }
     }
     
     func performInitialDeviceSync() async throws {
@@ -1461,31 +1537,47 @@ class FirebaseManager: ObservableObject {
     }
 
     func saveLeaderboardEntry(_ entry: LeaderboardEntry, type: LeaderboardType, period: String) async throws {
-        let db = Firestore.firestore()
+        // Apply rate limiting
+        try checkRateLimit(for: "leaderboard")
         
-        // Ensure the document exists before updating
-        try await ensureLeaderboardDocumentExists(type: type, period: period, userId: entry.id, username: entry.username)
-        
-        var data: [String: Any] = [
-            "username": entry.username,
-            type.scoreField: entry.score,
-            "timestamp": entry.timestamp,
-            "lastUpdate": FieldValue.serverTimestamp()
-        ]
-        
-        if let level = entry.level {
-            data["level"] = level
+        do {
+            let db = Firestore.firestore()
+            
+            // Ensure the document exists before updating
+            try await ensureLeaderboardDocumentExists(type: type, period: period, userId: entry.id, username: entry.username)
+            
+            var data: [String: Any] = [
+                "username": entry.username,
+                type.scoreField: entry.score,
+                "timestamp": entry.timestamp,
+                "lastUpdate": FieldValue.serverTimestamp()
+            ]
+            
+            if let level = entry.level {
+                data["level"] = level
+            }
+            
+            if let time = entry.time {
+                data["time"] = time
+            }
+            
+            let docRef = db.collection(type.collectionName)
+                .document(period)
+                .collection("scores")
+                .document(entry.id)
+            
+            do {
+                try await docRef.setData(data, merge: true)
+                resetRetryCount(for: "leaderboard")
+            } catch {
+                try await exponentialBackoff(for: "leaderboard")
+                try await docRef.setData(data, merge: true)
+                resetRetryCount(for: "leaderboard")
+            }
+        } catch {
+            print("[Firebase] Error saving leaderboard entry: \(error)")
+            throw error
         }
-        
-        if let time = entry.time {
-            data["time"] = time
-        }
-        
-        try await db.collection(type.collectionName)
-            .document(period)
-            .collection("scores")
-            .document(entry.id)
-            .setData(data, merge: true)
     }
 
     func getLeaderboardEntries(type: LeaderboardType, period: String) async throws -> [LeaderboardEntry] {
@@ -1816,6 +1908,42 @@ class FirebaseManager: ObservableObject {
             print("[FirebaseManager] Error clearing game progress: \(error)")
             throw error
         }
+    }
+
+    // MARK: - Rate Limiting Methods
+    private func checkRateLimit(for operation: String) throws {
+        let now = Date()
+        let timestamps = operationTimestamps[operation] ?? []
+        let windowStart = now.addingTimeInterval(-operationWindow)
+        
+        // Remove old timestamps
+        let recentTimestamps = timestamps.filter { $0 > windowStart }
+        operationTimestamps[operation] = recentTimestamps
+        
+        // Check if we're over the limit
+        if let limit = maxOperationsPerMinute[operation],
+           recentTimestamps.count >= limit {
+            throw FirebaseError.retryLimitExceeded
+        }
+        
+        // Add new timestamp
+        operationTimestamps[operation, default: []].append(now)
+    }
+    
+    private func exponentialBackoff(for operation: String) async throws {
+        let retryCount = retryCounts[operation] ?? 0
+        if retryCount >= maxRetries {
+            retryCounts[operation] = 0
+            throw FirebaseError.retryLimitExceeded
+        }
+        
+        let delay = baseRetryDelay * pow(2.0, Double(retryCount))
+        try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+        retryCounts[operation] = retryCount + 1
+    }
+    
+    private func resetRetryCount(for operation: String) {
+        retryCounts[operation] = 0
     }
 }
 

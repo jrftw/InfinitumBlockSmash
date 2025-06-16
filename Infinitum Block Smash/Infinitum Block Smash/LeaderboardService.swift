@@ -386,8 +386,8 @@ final class LeaderboardService: ObservableObject {
                     print("[Leaderboard] 📝 Writing data to Firestore: \(data)")
                     print("[Leaderboard] 📝 Writing to path: \(type.collectionName)/\(period)/scores/\(userId)")
                     
-                    // Write the document with merge
-                    try await docRef.setData(data, merge: true)
+                    // Write the document without merge to ensure complete replacement
+                    try await docRef.setData(data)
                     print("[Leaderboard] ✅ Successfully updated \(period) leaderboard")
                     
                     // Verify the update

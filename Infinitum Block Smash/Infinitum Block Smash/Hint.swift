@@ -28,9 +28,9 @@ class HintManager: ObservableObject {
             print("[Hint] Attempting to show hint. Current hints used: \(hintsUsedThisGame)")
             
             // First check if there are any valid moves
-            if !gameState.hasValidMoves() {
+            if !gameState.canPlaceAnyTrayBlock() {
                 print("[Hint] No valid moves found - game over state")
-                gameState.checkGameOver()
+                gameState.checkGameState()
                 return
             }
             
@@ -54,7 +54,7 @@ class HintManager: ObservableObject {
                 lastHintTime = currentTime
             } else {
                 print("[Hint] No valid moves found")
-                gameState.checkGameOver()
+                gameState.checkGameState()
             }
         }
     }
@@ -89,7 +89,7 @@ class HintManager: ObservableObject {
         // If no valid moves found in the tray, check for game over
         if bestMove == nil {
             await MainActor.run {
-                gameState.checkGameOver()
+                gameState.checkGameState()
             }
         }
         

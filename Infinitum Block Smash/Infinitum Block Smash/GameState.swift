@@ -196,6 +196,10 @@ final class GameState: ObservableObject {
     private var successfulShapePlacements: Int = 0
     private var totalShapePlacements: Int = 0
     
+    // Add debounce properties
+    private var lastGameOverCheck: TimeInterval = 0
+    private let gameOverCheckDebounce: TimeInterval = 0.5 // Half second debounce
+    
     // MARK: - Initialization
     init() {
         // Run data migration if needed
@@ -500,20 +504,25 @@ final class GameState: ObservableObject {
         }
         
         // Check for game over after refilling
-        checkGameOver()
+        checkGameState()
         
         delegate?.gameStateDidUpdate()
     }
     
     func canPlaceBlockAnywhere(_ block: Block) -> Bool {
+        print("[Placement] Checking if block \(block.shape)-\(block.color) can be placed anywhere")
+        var validPositions = 0
+        
         for row in 0..<GameConstants.gridSize {
             for col in 0..<GameConstants.gridSize {
                 if canPlaceBlock(block, at: CGPoint(x: col, y: row)) {
-                    return true
+                    validPositions += 1
                 }
             }
         }
-        return false
+        
+        print("[Placement] Found \(validPositions) valid positions for block \(block.shape)-\(block.color)")
+        return validPositions > 0
     }
     
     // Call this before placing a block
@@ -691,8 +700,7 @@ final class GameState: ObservableObject {
                 hasAnyTouches = true
                 totalTouchingPoints += touchingCount
                 // Add base points for each touch
-                addScore(touchingCount, at: CGPoint(x: CGFloat(x) * GameConstants.blockSize, y: CGFloat(y) * GameConstants.blockSize))
-                print("[Touch] Block at (\(x),\(y)) touches \(touchingCount) blocks. +\(touchingCount) points!")
+                addScore(touchingCount * 10, at: CGPoint(x: CGFloat(x) * GameConstants.blockSize, y: CGFloat(y) * GameConstants.blockSize))
             }
         }
         
@@ -709,10 +717,10 @@ final class GameState: ObservableObject {
         // Refill tray if needed
         if tray.count < requiredShapesToFit {
             refillTray()
+        } else {
+            // Only check game state if we didn't refill the tray
+            checkGameState()
         }
-        
-        // Check game state after placing a block
-        checkGameState()
         
         // Notify delegate
         delegate?.gameStateDidUpdate()
@@ -1272,71 +1280,46 @@ final class GameState: ObservableObject {
         }
     }
     
-    func checkGameOver() {
-        // First check if any current tray blocks can be placed
-        let canPlaceAny = tray.contains { canPlaceBlockAnywhere($0) }
-        
-        // If no current blocks can be placed, check if any new blocks could be placed
-        if !canPlaceAny {
-            // Try each possible block type
-            let allShapes = BlockShape.availableShapes(for: level)
-            let allColors = BlockColor.availableColors(for: level)
-            
-            var canPlaceNewBlock = false
-            
-            // Check if any combination of shape and color could be placed
-            for shape in allShapes {
-                for color in allColors {
-                    let testBlock = Block(color: color, shape: shape)
-                    if canPlaceBlockAnywhere(testBlock) {
-                        canPlaceNewBlock = true
-                        break
-                    }
-                }
-                if canPlaceNewBlock { break }
-            }
-            
-            // If no valid moves found and not already game over, trigger game over
-            if !canPlaceNewBlock && !isGameOver {
-                print("[GameOver] No available moves for any possible block. Game over.")
-                isGameOver = true
-                handleGameOver()
-            }
-        }
-    }
-    
-    // Add this method to check for valid moves
-    func hasValidMoves() -> Bool {
-        // First check current tray blocks
-        if tray.contains(where: { canPlaceBlockAnywhere($0) }) {
-            return true
-        }
-        
-        // Then check all possible new blocks
-        let allShapes = BlockShape.availableShapes(for: level)
-        let allColors = BlockColor.availableColors(for: level)
-        
-        for shape in allShapes {
-            for color in allColors {
-                let testBlock = Block(color: color, shape: shape)
-                if canPlaceBlockAnywhere(testBlock) {
-                    return true
-                }
-            }
-        }
-        
-        return false
-    }
-    
-    // Add this method to be called after each move
     func checkGameState() {
+        let currentTime = CACurrentMediaTime()
+        guard currentTime - lastGameOverCheck >= gameOverCheckDebounce else {
+            print("[GameState] Skipping game over check - too soon since last check")
+            return
+        }
+        lastGameOverCheck = currentTime
+        
+        print("[GameState] Checking game state...")
         if !isGameOver {
-            checkGameOver()
+            // First check if any current tray blocks can be placed
+            let canPlaceAny = tray.contains { canPlaceBlockAnywhere($0) }
+            print("[GameState] Can place any current tray blocks: \(canPlaceAny)")
+            print("[GameState] Current tray blocks: \(tray.map { "\($0.shape)-\($0.color)" })")
+
+            // If no current blocks can be placed, trigger game over
+            if !canPlaceAny {
+                print("[GameOver] No available moves for current tray blocks. Game over triggered.")
+                print("[GameOver] Current grid state:")
+                for (rowIndex, row) in grid.enumerated() {
+                    print("[GameOver] Row \(rowIndex): \(row.map { $0?.rawValue ?? "nil" })")
+                }
+                isGameOver = true
+                DispatchQueue.main.async { [weak self] in
+                    print("[GameOver] Dispatching game over handler...")
+                    self?.handleGameOver()
+                }
+            }
+        } else {
+            print("[GameState] Game is already over, skipping state check")
         }
     }
-    
+
     private func handleGameOver() {
         print("[GameState] Handling game over")
+        print("[GameState] Final score: \(score)")
+        print("[GameState] Final level: \(level)")
+        print("[GameState] Blocks placed: \(blocksPlaced)")
+        print("[GameState] Lines cleared: \(linesCleared)")
+        
         isGameOver = true
         
         // Transfer temporary score to main score
@@ -1367,6 +1350,7 @@ final class GameState: ObservableObject {
         if !isPaused {
             gamesCompleted += 1
             saveStatistics() // Save statistics when game is over
+            print("[GameState] Game completed count incremented to: \(gamesCompleted)")
         }
         
         // Update play time
@@ -1421,26 +1405,20 @@ final class GameState: ObservableObject {
         }
         
         // Post game over notification
+        print("[GameState] Posting game over notification")
         NotificationCenter.default.post(name: .gameOver, object: nil)
         
         // Show interstitial ad when game is over, but don't wait for it
         Task {
             if await AdManager.shared.isAdAvailable() {
+                print("[GameState] Showing interstitial ad")
                 await AdManager.shared.showInterstitial()
+            } else {
+                print("[GameState] No interstitial ad available")
             }
         }
     }
     
-    private func hasValidMoves() -> Bool {
-        for row in 0..<GameConstants.gridSize {
-            for col in 0..<GameConstants.gridSize {
-                if grid[row][col] == nil {
-                    return true
-                }
-            }
-        }
-        return false
-    }
     
     // Award points for grouping 10 or more contiguous squares
     private func checkGroups() {
@@ -2896,6 +2874,18 @@ final class GameState: ObservableObject {
         perfectLevels = 0
         totalPlayTime = 0
         gameStartTime = Date()
+    }
+
+    func canPlaceAnyTrayBlock() -> Bool {
+        print("[Placement] Checking if any tray blocks can be placed")
+        for block in tray {
+            if canPlaceBlockAnywhere(block) {
+                print("[Placement] Found valid placement for tray block: \(block.shape)-\(block.color)")
+                return true
+            }
+        }
+        print("[Placement] No valid placements found for any tray blocks")
+        return false
     }
 }
 

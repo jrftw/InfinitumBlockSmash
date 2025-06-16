@@ -4,6 +4,7 @@ struct ReferralPromptView: View {
     @StateObject private var referralManager = ReferralManager.shared
     @State private var showingShareSheet = false
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var appOpenManager = AppOpenManager.shared
     
     var body: some View {
         ZStack {
@@ -46,7 +47,7 @@ struct ReferralPromptView: View {
                 
                 HStack(spacing: 20) {
                     Button(action: {
-                        dismiss()
+                        appOpenManager.markReferralAsShown()
                     }) {
                         Text("Maybe Later")
                             .foregroundColor(.gray)
