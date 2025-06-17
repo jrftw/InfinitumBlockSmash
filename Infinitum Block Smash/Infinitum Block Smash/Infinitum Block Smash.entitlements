@@ -4,18 +4,10 @@
 <dict>
 	<key>aps-environment</key>
 	<string>production</string>
-	<key>com.apple.developer.game-center</key>
-	<true/>
 	<key>com.apple.developer.applesignin</key>
 	<array>
 		<string>Default</string>
 	</array>
-	<key>com.apple.developer.in-app-payments</key>
-	<array>
-		<string>merchant.com.infinitum.blocksmash</string>
-	</array>
-	<key>com.apple.developer.ubiquity-kvstore-identifier</key>
-	<string>AD7SJSPX55.com.infinitum.blocksmash</string>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>applinks:infinitumlive.com</string>
@@ -24,5 +16,7 @@
 	</array>
 	<key>com.apple.developer.devicecheck.appattest-environment</key>
 	<string>production</string>
+	<key>com.apple.developer.game-center</key>
+	<true/>
 </dict>
 </plist>
