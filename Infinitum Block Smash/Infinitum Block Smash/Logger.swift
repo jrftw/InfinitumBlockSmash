@@ -3,6 +3,7 @@ import os.log
 import FirebaseCrashlytics
 
 /// A centralized logging system that allows for granular control of different types of logs
+/// Last updated: 2024-03-17
 class Logger {
     static let shared = Logger()
     
@@ -12,6 +13,8 @@ class Logger {
         case score = "Score"
         case leaderboard = "Leaderboard"
         case leaderboardWrite = "LeaderboardWrite"
+        case leaderboardCache = "LeaderboardCache"
+        case highscore = "Highscore"
         
         // Core Systems
         case memorySystem = "MemorySystem"
@@ -48,6 +51,12 @@ class Logger {
         case gamePhysics = "GamePhysics"
         case gameAudio = "GameAudio"
         case gameInput = "GameInput"
+        case placement = "Placement"
+        case level = "Level"
+        case lineClear = "LineClear"
+        case preview = "Preview"
+        case bonus = "Bonus"
+        case achievements = "Achievements"
         
         // System Components
         case systemMemory = "SystemMemory"
@@ -76,6 +85,8 @@ class Logger {
             case .score: return LoggerConfig.scoreEnabled
             case .leaderboard: return LoggerConfig.leaderboardEnabled
             case .leaderboardWrite: return LoggerConfig.leaderboardWriteEnabled
+            case .leaderboardCache: return LoggerConfig.leaderboardCacheEnabled
+            case .highscore: return LoggerConfig.highscoreEnabled
             
             // Core Systems
             case .memorySystem: return LoggerConfig.memorySystemEnabled
@@ -112,6 +123,12 @@ class Logger {
             case .gamePhysics: return LoggerConfig.gamePhysicsEnabled
             case .gameAudio: return LoggerConfig.gameAudioEnabled
             case .gameInput: return LoggerConfig.gameInputEnabled
+            case .placement: return LoggerConfig.placementEnabled
+            case .level: return LoggerConfig.levelEnabled
+            case .lineClear: return LoggerConfig.lineClearEnabled
+            case .preview: return LoggerConfig.previewEnabled
+            case .bonus: return LoggerConfig.bonusEnabled
+            case .achievements: return LoggerConfig.achievementsEnabled
             
             // System Components
             case .systemMemory: return LoggerConfig.systemMemoryEnabled
@@ -257,6 +274,8 @@ extension Logger.Category: CaseIterable {
             .score,
             .leaderboard,
             .leaderboardWrite,
+            .leaderboardCache,
+            .highscore,
             
             // Core Systems
             .memorySystem,
@@ -293,6 +312,12 @@ extension Logger.Category: CaseIterable {
             .gamePhysics,
             .gameAudio,
             .gameInput,
+            .placement,
+            .level,
+            .lineClear,
+            .preview,
+            .bonus,
+            .achievements,
             
             // System Components
             .systemMemory,

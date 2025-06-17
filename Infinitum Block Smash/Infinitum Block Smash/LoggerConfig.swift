@@ -1,6 +1,8 @@
 import Foundation
 
 /// Configuration for the logging system
+/// Updated with new logging categories for game components
+/// Last updated: 2024-03-17
 struct LoggerConfig {
     // MARK: - Global Settings
     static let loggingEnabled = true
@@ -16,6 +18,8 @@ struct LoggerConfig {
     static let scoreEnabled = true
     static let leaderboardEnabled = true
     static let leaderboardWriteEnabled = true
+    static let leaderboardCacheEnabled = true
+    static let highscoreEnabled = true
     
     // MARK: - Core Systems
     static let memorySystemEnabled = false
@@ -52,6 +56,12 @@ struct LoggerConfig {
     static let gamePhysicsEnabled = false
     static let gameAudioEnabled = false
     static let gameInputEnabled = false
+    static let placementEnabled = false
+    static let levelEnabled = false
+    static let lineClearEnabled = false
+    static let previewEnabled = false
+    static let bonusEnabled = false
+    static let achievementsEnabled = false
     
     // MARK: - System Components
     static let systemMemoryEnabled = false
