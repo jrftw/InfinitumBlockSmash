@@ -153,9 +153,14 @@ struct ContentView: View {
             VStack {
                 Spacer()
                 if !isTopThreePlayer {
-                    BannerAdView()
-                        .frame(height: 50)
-                        .background(Color.black.opacity(0.1))
+                    HStack {
+                        Spacer()
+                        BannerAdView()
+                            .frame(width: 320, height: 50)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .background(Color.black.opacity(0.1))
                 }
             }
             

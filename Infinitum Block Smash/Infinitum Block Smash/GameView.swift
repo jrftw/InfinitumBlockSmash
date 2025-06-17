@@ -488,10 +488,14 @@ struct GameView: View {
     private var bannerAdView: some View {
         VStack {
             Spacer()
-            BannerAdView()
-                .frame(maxWidth: .infinity)
-                .frame(height: 50)
-                .background(Color.black.opacity(0.1))
+            HStack {
+                Spacer()
+                BannerAdView()
+                    .frame(width: 320, height: 50)
+                Spacer()
+            }
+            .frame(maxWidth: .infinity)
+            .background(Color.black.opacity(0.1))
         }
     }
     

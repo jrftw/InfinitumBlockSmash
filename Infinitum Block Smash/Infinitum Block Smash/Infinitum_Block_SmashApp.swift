@@ -366,6 +366,7 @@ extension AppDelegate: InAppMessagingDisplayDelegate {
 struct Infinitum_Block_SmashApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var gameState = GameState()
+    @StateObject private var startupManager = StartupManager()
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("userID") private var userID: String = ""
     @AppStorage("username") private var username: String = ""
@@ -373,7 +374,9 @@ struct Infinitum_Block_SmashApp: App {
     
     var body: some Scene {
         WindowGroup {
-            if ForcePublicVersion.shared.isEnabled {
+            if !startupManager.isReady {
+                LaunchLoadingView()
+            } else if ForcePublicVersion.shared.isEnabled {
                 // Show the public version update prompt
                 PublicVersionUpdateView()
             } else if VersionCheckService.shared.isUpdateRequired {
@@ -426,18 +429,6 @@ struct Infinitum_Block_SmashApp: App {
             @unknown default:
                 break
             }
-        }
-    }
-}
-
-// MARK: - Loading View
-struct LoadingView: View {
-    var body: some View {
-        VStack {
-            ProgressView()
-                .scaleEffect(1.5)
-            Text("Checking for updates...")
-                .padding()
         }
     }
 }
@@ -542,5 +533,17 @@ struct HomeView: View {
     
     private var onlineUsersCountText: String {
         "\(onlineUsersCount) players online"
+    }
+}
+
+// MARK: - Loading View
+struct LoadingView: View {
+    var body: some View {
+        VStack {
+            ProgressView()
+                .scaleEffect(1.5)
+            Text("Checking for updates...")
+                .padding()
+        }
     }
 }
