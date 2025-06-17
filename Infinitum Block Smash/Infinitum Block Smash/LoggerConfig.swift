@@ -8,11 +8,11 @@ struct LoggerConfig {
     static let loggingEnabled = true
     
     // MARK: - Log Levels
-    static let debugLevelEnabled = false
+    static let debugLevelEnabled = true
     static let infoLevelEnabled = true
-    static let warningLevelEnabled = false
-    static let errorLevelEnabled = false
-    static let criticalLevelEnabled = false
+    static let warningLevelEnabled = true
+    static let errorLevelEnabled = true
+    static let criticalLevelEnabled = true
     
     // MARK: - Score and Leaderboard Categories
     static let scoreEnabled = true
@@ -22,20 +22,20 @@ struct LoggerConfig {
     static let highscoreEnabled = true
     
     // MARK: - Core Systems
-    static let memorySystemEnabled = false
-    static let networkMonitorEnabled = false
+    static let memorySystemEnabled = true
+    static let networkMonitorEnabled = true
     static let firebaseManagerEnabled = true
-    static let gameStateEnabled = false
-    static let gameSceneEnabled = false
-    static let analyticsManagerEnabled = false
-    static let subscriptionManagerEnabled = false
-    static let crashReporterEnabled = false
-    static let securityLoggerEnabled = false
-    static let appCheckEnabled = false
-    static let gameCenterEnabled = false
-    static let inAppMessagingEnabled = false
-    static let cacheManagerEnabled = false
-    static let forceLogoutEnabled = false
+    static let gameStateEnabled = true
+    static let gameSceneEnabled = true
+    static let analyticsManagerEnabled = true
+    static let subscriptionManagerEnabled = true
+    static let crashReporterEnabled = true
+    static let securityLoggerEnabled = true
+    static let appCheckEnabled = true
+    static let gameCenterEnabled = true
+    static let inAppMessagingEnabled = true
+    static let cacheManagerEnabled = true
+    static let forceLogoutEnabled = true
     
     // MARK: - Firebase Components
     static let firebaseAuthEnabled = true
@@ -48,44 +48,44 @@ struct LoggerConfig {
     static let firebaseMessagingEnabled = true
     
     // MARK: - Game Components
-    static let gameUIEnabled = false
-    static let gameGridEnabled = false
-    static let gameTrayEnabled = false
-    static let gameBlocksEnabled = false
-    static let gameParticlesEnabled = false
-    static let gamePhysicsEnabled = false
-    static let gameAudioEnabled = false
-    static let gameInputEnabled = false
-    static let placementEnabled = false
-    static let levelEnabled = false
-    static let lineClearEnabled = false
-    static let previewEnabled = false
-    static let bonusEnabled = false
-    static let achievementsEnabled = false
+    static let gameUIEnabled = true
+    static let gameGridEnabled = true
+    static let gameTrayEnabled = true
+    static let gameBlocksEnabled = true
+    static let gameParticlesEnabled = true
+    static let gamePhysicsEnabled = true
+    static let gameAudioEnabled = true
+    static let gameInputEnabled = true
+    static let placementEnabled = true
+    static let levelEnabled = true
+    static let lineClearEnabled = true
+    static let previewEnabled = true
+    static let bonusEnabled = true
+    static let achievementsEnabled = true
     
     // MARK: - Debug Categories
-    static let debugGameSceneEnabled = false
-    static let debugGameStateEnabled = false
-    static let debugGameProviderEnabled = false
+    static let debugGameSceneEnabled = true
+    static let debugGameStateEnabled = true
+    static let debugGameProviderEnabled = true
     
     // MARK: - System Components
-    static let systemMemoryEnabled = false
-    static let systemNetworkEnabled = false
-    static let systemStorageEnabled = false
-    static let systemPerformanceEnabled = false
-    static let systemSecurityEnabled = false
+    static let systemMemoryEnabled = true
+    static let systemNetworkEnabled = true
+    static let systemStorageEnabled = true
+    static let systemPerformanceEnabled = true
+    static let systemSecurityEnabled = true
     
     // MARK: - Feature Components
-    static let featureSubscriptionEnabled = false
-    static let featureAnalyticsEnabled = false
-    static let featureInAppPurchaseEnabled = false
-    static let featureGameCenterEnabled = false
-    static let featureNotificationsEnabled = false
+    static let featureSubscriptionEnabled = true
+    static let featureAnalyticsEnabled = true
+    static let featureInAppPurchaseEnabled = true
+    static let featureGameCenterEnabled = true
+    static let featureNotificationsEnabled = true
     
     // MARK: - General Categories
-    static let generalEnabled = false
-    static let debugEnabled = false
-    static let errorEnabled = false
-    static let warningEnabled = false
-    static let infoEnabled = false
+    static let generalEnabled = true
+    static let debugEnabled = true
+    static let errorEnabled = true
+    static let warningEnabled = true
+    static let infoEnabled = true
 } 
