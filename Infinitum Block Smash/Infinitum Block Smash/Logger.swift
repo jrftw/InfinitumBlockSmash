@@ -58,6 +58,11 @@ class Logger {
         case bonus = "Bonus"
         case achievements = "Achievements"
         
+        // Debug Categories
+        case debugGameScene = "DebugGameScene"
+        case debugGameState = "DebugGameState"
+        case debugGameProvider = "DebugGameProvider"
+        
         // System Components
         case systemMemory = "SystemMemory"
         case systemNetwork = "SystemNetwork"
@@ -129,6 +134,11 @@ class Logger {
             case .preview: return LoggerConfig.previewEnabled
             case .bonus: return LoggerConfig.bonusEnabled
             case .achievements: return LoggerConfig.achievementsEnabled
+            
+            // Debug Categories
+            case .debugGameScene: return LoggerConfig.debugGameSceneEnabled
+            case .debugGameState: return LoggerConfig.debugGameStateEnabled
+            case .debugGameProvider: return LoggerConfig.debugGameProviderEnabled
             
             // System Components
             case .systemMemory: return LoggerConfig.systemMemoryEnabled
@@ -318,6 +328,11 @@ extension Logger.Category: CaseIterable {
             .preview,
             .bonus,
             .achievements,
+            
+            // Debug Categories
+            .debugGameScene,
+            .debugGameState,
+            .debugGameProvider,
             
             // System Components
             .systemMemory,

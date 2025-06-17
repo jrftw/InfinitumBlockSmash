@@ -736,21 +736,36 @@ class FirebaseManager: ObservableObject {
     
     // MARK: - Leaderboard
     
-    func submitScore(_ score: Int, level: Int? = nil, time: TimeInterval? = nil, type: LeaderboardType = .score) async throws {
+    func submitScore(_ score: Int, level: Int? = nil, time: TimeInterval? = nil, type: LeaderboardType = .score, isFinalSubmission: Bool = false) async throws {
         guard let userId = Auth.auth().currentUser?.uid else {
-            print("[Firebase] ❌ No authenticated user found")
+            print("[Leaderboard] ❌ No authenticated user found")
             throw FirebaseError.notAuthenticated
+        }
+        
+        // Check rate limiting unless it's a final submission
+        if !isFinalSubmission {
+            let operationKey = "leaderboard_\(type.collectionName)"
+            if let timestamps = operationTimestamps[operationKey] {
+                let recentOperations = timestamps.filter { Date().timeIntervalSince($0) < operationWindow }
+                if recentOperations.count >= maxOperationsPerMinute["leaderboard"] ?? 10 {
+                    print("[Leaderboard] ⚠️ Rate limit reached for leaderboard updates")
+                    return
+                }
+                operationTimestamps[operationKey] = recentOperations + [Date()]
+            } else {
+                operationTimestamps[operationKey] = [Date()]
+            }
         }
         
         // Get username from Firestore
         let db = Firestore.firestore()
         let userDoc = try await db.collection("users").document(userId).getDocument()
         guard let username = userDoc.data()?["username"] as? String else {
-            print("[Firebase] ❌ No username found for user: \(userId)")
+            print("[Leaderboard] ❌ No username found for user: \(userId)")
             throw FirebaseError.invalidData
         }
         
-        print("[Firebase] 📊 Submitting score: \(score) for user: \(userId)")
+        print("[Leaderboard] 📊 Submitting score: \(score) for user: \(username)")
         
         // Get current time in UTC
         let now = Date()
@@ -759,14 +774,14 @@ class FirebaseManager: ObservableObject {
         // Define period boundaries
         let periods: [(name: String, startDate: Date)] = [
             ("daily", calendar.startOfDay(for: now)),
-            ("weekly", calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now))!),
-            ("monthly", calendar.date(from: calendar.dateComponents([.year, .month], from: now))!),
+            ("weekly", calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)) ?? now),
+            ("monthly", calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? now),
             ("alltime", Date.distantPast)
         ]
         
         for (period, startDate) in periods {
             do {
-                print("[Firebase] 🔄 Attempting to update \(period) leaderboard for user \(userId)")
+                print("[Leaderboard] 📝 Writing \(period.uppercased()) leaderboard...")
                 
                 let docRef = db.collection(type.collectionName)
                     .document(period)
@@ -777,20 +792,56 @@ class FirebaseManager: ObservableObject {
                 let doc = try await docRef.getDocument(source: .server)
                 let currentData = doc.data()
                 
+                // Check if document needs to be created
+                let needsCreation = !doc.exists
+                if needsCreation {
+                    print("[Leaderboard] 📄 Creating new \(period.uppercased()) leaderboard entry")
+                }
+                
                 // Get current score based on leaderboard type
                 let currentScore: Int
                 let currentTime: TimeInterval?
+                let currentTimestamp: Timestamp?
                 
-                switch type {
-                case .achievement:
-                    currentScore = currentData?["points"] as? Int ?? 0
+                if let data = currentData {
+                    switch type {
+                    case .achievement:
+                        currentScore = data["points"] as? Int ?? 0
+                        currentTime = nil
+                    case .timed:
+                        currentScore = data["score"] as? Int ?? 0
+                        currentTime = data["time"] as? TimeInterval
+                    case .score:
+                        currentScore = data["score"] as? Int ?? 0
+                        currentTime = data["time"] as? TimeInterval
+                    }
+                    currentTimestamp = data["timestamp"] as? Timestamp
+                } else {
+                    currentScore = 0
                     currentTime = nil
-                case .timed:
-                    currentScore = currentData?["score"] as? Int ?? 0
-                    currentTime = currentData?["time"] as? TimeInterval
-                case .score:
-                    currentScore = currentData?["score"] as? Int ?? 0
-                    currentTime = currentData?["time"] as? TimeInterval
+                    currentTimestamp = nil
+                }
+                
+                // Check for period reset
+                let isPeriodReset: Bool
+                if let timestamp = currentTimestamp {
+                    let lastUpdate = timestamp.dateValue()
+                    switch period {
+                    case "daily":
+                        isPeriodReset = !calendar.isDate(lastUpdate, inSameDayAs: now)
+                    case "weekly":
+                        isPeriodReset = !calendar.isDate(lastUpdate, equalTo: now, toGranularity: .weekOfYear)
+                    case "monthly":
+                        isPeriodReset = !calendar.isDate(lastUpdate, equalTo: now, toGranularity: .month)
+                    default:
+                        isPeriodReset = false
+                    }
+                } else {
+                    isPeriodReset = true
+                }
+                
+                if isPeriodReset {
+                    print("[Leaderboard] 🔄 \(period.uppercased()) period has reset - updating score")
                 }
                 
                 // Determine if we should update based on leaderboard type and period
@@ -808,11 +859,8 @@ class FirebaseManager: ObservableObject {
                     shouldUpdate = score > currentScore
                 }
                 
-                // Always write to daily and weekly if the score is from today/this week
-                let isToday = calendar.isDateInToday(startDate)
-                let isThisWeek = calendar.isDate(startDate, equalTo: now, toGranularity: .weekOfYear)
-                
-                if shouldUpdate || isToday || isThisWeek {
+                // Always write if it's a final submission, period reset, or new document
+                if shouldUpdate || isFinalSubmission || isPeriodReset || needsCreation {
                     // Include all required fields with UTC timestamp
                     var data: [String: Any] = [
                         "username": username,
@@ -842,26 +890,28 @@ class FirebaseManager: ObservableObject {
                         data["level"] = level
                     }
                     
-                    print("[Firebase] 📝 Writing data to Firestore: \(data)")
-                    print("[Firebase] 📝 Writing to path: \(type.collectionName)/\(period)/scores/\(userId)")
+                    print("[Leaderboard] 📊 Writing score \(score) to \(period.uppercased()) leaderboard")
+                    if let time = time {
+                        print("[Leaderboard] ⏱️ Time: \(String(format: "%.2f", time))s")
+                    }
                     
                     try await docRef.setData(data)
-                    print("[Firebase] ✅ Successfully updated \(period) leaderboard")
+                    print("[Leaderboard] ✅ Successfully updated \(period.uppercased()) leaderboard")
                     
                     // Invalidate cache for this leaderboard
                     LeaderboardCache.shared.invalidateCache(type: type, period: period)
                 } else {
-                    print("[Firebase] ⏭️ Skipping \(period) update - Score not better (Current: \(currentScore), New: \(score))")
+                    print("[Leaderboard] ⏭️ Skipping \(period.uppercased()) update - Current score (\(currentScore)) is higher than new score (\(score))")
                 }
                 
             } catch {
-                print("[Firebase] ❌ Error updating \(period) leaderboard: \(error.localizedDescription)")
-                print("[Firebase] ❌ Error details: \(error)")
+                print("[Leaderboard] ❌ Error updating \(period.uppercased()) leaderboard: \(error.localizedDescription)")
+                print("[Leaderboard] ❌ Error details: \(error)")
                 throw FirebaseError.updateFailed(error)
             }
         }
         
-        print("[Firebase] ✅ Successfully submitted all scores")
+        print("[Leaderboard] 🎉 Successfully submitted all scores")
     }
     
     func submitTimedScore(_ score: Int, level: Int? = nil, time: TimeInterval? = nil) async throws {

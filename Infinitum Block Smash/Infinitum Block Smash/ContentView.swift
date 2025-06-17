@@ -195,9 +195,9 @@ struct ContentView: View {
                 Task {
                     do {
                         try await gameState.loadSavedGame()
-                        print("[ContentView] Successfully loaded saved game")
+                        Logger.shared.log("Successfully loaded saved game", category: .gameState, level: .info)
                     } catch {
-                        print("[ContentView] Error loading saved game: \(error.localizedDescription)")
+                        Logger.shared.log("Error loading saved game: \(error.localizedDescription)", category: .gameState, level: .error)
                     }
                 }
             }
@@ -215,7 +215,7 @@ struct ContentView: View {
             cleanup()
         }
         .fullScreenCover(isPresented: $showingGameView) {
-            GameView(gameState: gameState)
+            GameView()
         }
         .sheet(isPresented: $showingLeaderboard) {
             LeaderboardView()
@@ -318,7 +318,7 @@ struct ContentView: View {
             do {
                 totalPlayersCount = try await FirebaseManager.shared.getTotalPlayersCount()
             } catch {
-                print("Error getting total players count: \(error)")
+                Logger.shared.log("Error getting total players count: \(error)", category: .firebaseManager, level: .error)
                 totalPlayersCount = 0
             }
         }
@@ -333,7 +333,7 @@ struct ContentView: View {
             do {
                 onlineUsersCount = try await FirebaseManager.shared.getOnlineUsersCount()
             } catch {
-                print("Error getting online users count: \(error)")
+                Logger.shared.log("Error getting online users count: \(error)", category: .firebaseManager, level: .error)
                 onlineUsersCount = 0
             }
         }
@@ -344,7 +344,7 @@ struct ContentView: View {
             do {
                 dailyPlayersCount = try await FirebaseManager.shared.getDailyPlayersCount()
             } catch {
-                print("Error getting daily players count: \(error)")
+                Logger.shared.log("Error getting daily players count: \(error)", category: .firebaseManager, level: .error)
                 dailyPlayersCount = 0
             }
         }

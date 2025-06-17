@@ -12,7 +12,7 @@ struct GameSceneProvider: View {
         SpriteView(scene: scene ?? GameScene(size: sceneSize, gameState: gameState))
             .ignoresSafeArea()
             .onAppear {
-                print("[DEBUG] GameSceneProvider onAppear")
+                Logger.shared.debug("GameSceneProvider onAppear", category: .debugGameProvider)
                 if scene == nil {
                     let newScene = GameScene(size: sceneSize, gameState: gameState)
                     newScene.scaleMode = .aspectFill

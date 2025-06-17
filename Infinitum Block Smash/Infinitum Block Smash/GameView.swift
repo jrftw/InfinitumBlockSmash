@@ -10,7 +10,7 @@ import FirebaseAuth
 typealias AdError = AdManager.AdError
 
 struct GameView: View {
-    @ObservedObject var gameState: GameState
+    @StateObject private var gameState = GameState()
     @StateObject private var adManager = AdManager.shared
     @State private var showingSettings = false
     @State private var showingAchievements = false
@@ -40,8 +40,7 @@ struct GameView: View {
     @State private var isAdRetrying = false
     
     private enum SettingsAction {
-        case resume
-        case restart
+        case resumeGame
         case endGame
         case showTutorial
         case showAchievements
@@ -463,7 +462,17 @@ struct GameView: View {
                     presentationMode.wrappedValue.dismiss()
                 },
                 onEndGame: {
-                    gameState.resetGame()
+                    if !UserDefaults.standard.bool(forKey: "isGuest") && gameState.score > 0 {
+                        Task {
+                            try? await LeaderboardService.shared.updateLeaderboard(
+                                score: gameState.score,
+                                level: gameState.level,
+                                time: gameState.totalTime,
+                                type: .score
+                            )
+                        }
+                    }
+                    gameState.endGameFromSettings()
                     presentationMode.wrappedValue.dismiss()
                 }
             )
@@ -494,25 +503,19 @@ struct GameView: View {
     
     private func handleSettingsAction(_ action: SettingsAction) {
         switch action {
-        case .resume:
-            gameState.isPaused = false
+        case .resumeGame:
             isPaused = false
-        case .restart:
-            // Check username before restarting
-            if !UserDefaults.standard.bool(forKey: "isGuest") {
-                if let username = UserDefaults.standard.string(forKey: "username"), !username.isEmpty {
-                    gameState.resetGame()
-                    isPaused = false
-                } else {
-                    // Show alert or handle missing username
-                    print("[GameView] Cannot start game: Username not set")
-                    // You might want to show an alert here
-                }
-            } else {
-                gameState.resetGame()
-                isPaused = false
-            }
         case .endGame:
+            if !UserDefaults.standard.bool(forKey: "isGuest") && gameState.score > 0 {
+                Task {
+                    try? await LeaderboardService.shared.updateLeaderboard(
+                        score: gameState.score,
+                        level: gameState.level,
+                        time: gameState.totalTime,
+                        type: .score
+                    )
+                }
+            }
             gameState.endGameFromSettings()
             isPaused = false
             presentationMode.wrappedValue.dismiss()

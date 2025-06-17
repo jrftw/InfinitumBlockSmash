@@ -8,11 +8,11 @@ struct LoggerConfig {
     static let loggingEnabled = true
     
     // MARK: - Log Levels
-    static let debugLevelEnabled = true
+    static let debugLevelEnabled = false
     static let infoLevelEnabled = true
-    static let warningLevelEnabled = true
-    static let errorLevelEnabled = true
-    static let criticalLevelEnabled = true
+    static let warningLevelEnabled = false
+    static let errorLevelEnabled = false
+    static let criticalLevelEnabled = false
     
     // MARK: - Score and Leaderboard Categories
     static let scoreEnabled = true
@@ -24,7 +24,7 @@ struct LoggerConfig {
     // MARK: - Core Systems
     static let memorySystemEnabled = false
     static let networkMonitorEnabled = false
-    static let firebaseManagerEnabled = false
+    static let firebaseManagerEnabled = true
     static let gameStateEnabled = false
     static let gameSceneEnabled = false
     static let analyticsManagerEnabled = false
@@ -38,14 +38,14 @@ struct LoggerConfig {
     static let forceLogoutEnabled = false
     
     // MARK: - Firebase Components
-    static let firebaseAuthEnabled = false
-    static let firebaseFirestoreEnabled = false
-    static let firebaseRTDBEnabled = false
-    static let firebaseAnalyticsEnabled = false
-    static let firebaseCrashlyticsEnabled = false
-    static let firebasePerformanceEnabled = false
-    static let firebaseRemoteConfigEnabled = false
-    static let firebaseMessagingEnabled = false
+    static let firebaseAuthEnabled = true
+    static let firebaseFirestoreEnabled = true
+    static let firebaseRTDBEnabled = true
+    static let firebaseAnalyticsEnabled = true
+    static let firebaseCrashlyticsEnabled = true
+    static let firebasePerformanceEnabled = true
+    static let firebaseRemoteConfigEnabled = true
+    static let firebaseMessagingEnabled = true
     
     // MARK: - Game Components
     static let gameUIEnabled = false
@@ -62,6 +62,11 @@ struct LoggerConfig {
     static let previewEnabled = false
     static let bonusEnabled = false
     static let achievementsEnabled = false
+    
+    // MARK: - Debug Categories
+    static let debugGameSceneEnabled = false
+    static let debugGameStateEnabled = false
+    static let debugGameProviderEnabled = false
     
     // MARK: - System Components
     static let systemMemoryEnabled = false

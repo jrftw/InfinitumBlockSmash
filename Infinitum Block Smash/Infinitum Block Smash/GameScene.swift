@@ -62,47 +62,31 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     init(size: CGSize, gameState: GameState) {
         self.gameState = gameState
         super.init(size: size)
-        print("[DEBUG] GameScene init(size:) called")
+        Logger.shared.debug("GameScene init(size:) called", category: .debugGameScene)
         setupScene()
-        
-        // Set up memory critical notification handler
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleMemoryWarningNotification),
-            name: .memoryWarning,
-            object: nil
-        )
-        
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleMemoryCriticalNotification),
-            name: .memoryCritical,
-            object: nil
-        )
     }
     
     required init?(coder aDecoder: NSCoder) {
+        // Create a new GameState instance for coder initialization
+        self.gameState = GameState()
         super.init(coder: aDecoder)
-        print("[DEBUG] GameScene init(coder:) called")
+        Logger.shared.debug("GameScene init(coder:) called", category: .debugGameScene)
+        setupScene()
     }
     
     override func didMove(to view: SKView) {
-        print("[DEBUG] didMove(to:) called")
-        guard gameState != nil else {
-            print("[ERROR] GameState not initialized")
-            return
-        }
+        Logger.shared.debug("didMove(to:) called", category: .debugGameScene)
         
         // Optimize textures
         optimizeTextures()
         
         if gridNode == nil {
-            print("[DEBUG] Creating new gridNode")
+            Logger.shared.debug("Creating new gridNode", category: .debugGameScene)
             gridNode = SKNode()
             addChild(gridNode)
         }
         if trayNode == nil {
-            print("[DEBUG] Creating new trayNode")
+            Logger.shared.debug("Creating new trayNode", category: .debugGameScene)
             let blockSize = GameConstants.blockSize
             let trayHeight = blockSize * 4.5
             let trayWidth = frame.width * 0.92
@@ -119,7 +103,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         gameState.frameSize = size
         
         // Setup scene components
-        setupScene()
         setupGrid()
         setupTray()
         setupUI()
@@ -127,7 +110,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Set delegate if not already set
         if gameState.delegate !== self {
-            print("[DEBUG] Setting GameState delegate")
+            Logger.shared.debug("Setting GameState delegate", category: .debugGameScene)
             gameState.delegate = self
         }
         
@@ -147,7 +130,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             await setupMemoryManagement()
         }
         
-        print("[DEBUG] Scene setup complete. trayNode in parent: \(trayNode.parent != nil)")
+        Logger.shared.debug("Scene setup complete. trayNode in parent: \(trayNode?.parent != nil)", category: .debugGameScene)
         
         super.didMove(to: view)
         setBackgroundAnimationsActive(true)
@@ -172,21 +155,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         )
     }
     
-    override func willMove(from view: SKView) {
-        super.willMove(from: view)
-        Task { @MainActor in
-            await cleanupResources()
-            await prepareForSceneTransition()
-        }
-        NotificationCenter.default.removeObserver(self)
-        
-        if let observer = themeObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
-    }
-    
     deinit {
-        print("[DEBUG] GameScene deinit called")
+        Logger.shared.debug("GameScene deinit called", category: .debugGameScene)
         // Cleanup
         gridNode?.children.forEach { cleanupNode($0) }
         trayNode?.children.forEach { cleanupNode($0) }
@@ -726,7 +696,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let touchPoint = touch.location(in: self)
         let gridPoint = convertToGridCoordinates(touchPoint)
         
-        print("[Preview] Touch at screen: \(touchPoint), grid: \(gridPoint)")
+        Logger.shared.log("Touch at screen: \(touchPoint), grid: \(gridPoint)", category: .preview, level: .debug)
         
         // Record input event for latency tracking
         PerformanceMonitor.shared.recordInputEvent()
@@ -737,7 +707,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Explicitly cleanup previous preview and highlights
         if let oldPreview = previewNode {
-            print("[Preview] Removing old preview node")
+            Logger.shared.log("Removing old preview node", category: .preview, level: .debug)
             oldPreview.removeFromParent()
             previewNode = nil
         }
@@ -745,14 +715,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Remove any existing highlight containers
         gridNode.children.forEach { node in
             if node.name?.hasPrefix("highlight_") == true {
-                print("[Preview] Removing old highlight container")
+                Logger.shared.log("Removing old highlight container", category: .preview, level: .debug)
                 node.removeFromParent()
             }
         }
         
         // Only show preview if placement is valid
         if gameState.canPlaceBlock(draggingBlock, at: gridPoint) {
-            print("[Preview] Creating preview at grid position: \(gridPoint)")
+            Logger.shared.log("Creating preview at grid position: \(gridPoint)", category: .preview, level: .debug)
             
             // Create preview node for the entire shape
             let preview = SKNode()
@@ -772,7 +742,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                     y: CGFloat(dy) * GameConstants.blockSize
                 )
                 preview.addChild(cellNode)
-                print("[Preview] Added preview cell at relative position: (\(dx), \(dy))")
+                Logger.shared.log("Added preview cell at relative position: (\(dx), \(dy))", category: .preview, level: .debug)
             }
             
             // Calculate the grid's total size (BASE size)
@@ -788,7 +758,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             // Check which lines would be cleared
             let (rowsToClear, columnsToClear) = gameState.wouldClearLines(block: draggingBlock, at: gridPoint)
             
-            print("[Preview] Creating highlights for \(rowsToClear.count) rows and \(columnsToClear.count) columns")
+            Logger.shared.log("Creating highlights for \(rowsToClear.count) rows and \(columnsToClear.count) columns", category: .preview, level: .debug)
             
             // Create highlights for rows and columns that would be cleared
             let highlightColor = SKColor.from(draggingBlock.color.color)
@@ -802,14 +772,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 let highlight = createLineHighlight(for: row, isRow: true, color: highlightColor, blockSize: GameConstants.blockSize)
                 highlight.name = "highlight_row_\(row)" // Add name for easier cleanup
                 highlightContainer.addChild(highlight)
-                print("[Preview] Added row highlight at row: \(row)")
+                Logger.shared.log("Added row highlight at row: \(row)", category: .preview, level: .debug)
             }
             
             for col in columnsToClear {
                 let highlight = createLineHighlight(for: col, isRow: false, color: highlightColor, blockSize: GameConstants.blockSize)
                 highlight.name = "highlight_column_\(col)" // Add name for easier cleanup
                 highlightContainer.addChild(highlight)
-                print("[Preview] Added column highlight at column: \(col)")
+                Logger.shared.log("Added column highlight at column: \(col)", category: .preview, level: .debug)
             }
             
             // Add both preview and highlights to gridNode
@@ -818,7 +788,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             previewNode = preview
             dragNode.alpha = 0.7
         } else {
-            print("[Preview] Invalid placement at grid position: \(gridPoint)")
+            Logger.shared.log("Invalid placement at grid position: \(gridPoint)", category: .preview, level: .debug)
             dragNode.alpha = 1.0
         }
     }
@@ -1097,7 +1067,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func performAggressiveCleanup() async {
-        print("[DEBUG] Performing aggressive memory cleanup")
+        Logger.shared.debug("Performing aggressive memory cleanup", category: .debugGameScene)
         
         // Stop all animations
         setBackgroundAnimationsActive(false)
@@ -1177,7 +1147,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func performNormalCleanup() async {
-        print("[DEBUG] Performing normal memory cleanup")
+        Logger.shared.debug("Performing normal memory cleanup", category: .debugGameScene)
         
         // Clean up finished particle effects
         cleanupParticleEffects()
@@ -1213,7 +1183,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     @objc private func handleMemoryWarningNotification() {
         Task { @MainActor in
-            print("[Memory] Received memory warning")
+            Logger.shared.debug("[Memory] Received memory warning", category: .debugGameScene)
             
             // Clear textures
             await clearAllTextures()
@@ -1228,7 +1198,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     @objc private func handleMemoryCriticalNotification() {
         Task { @MainActor in
-            print("[Memory] Received critical memory warning")
+            Logger.shared.debug("[Memory] Received critical memory warning", category: .debugGameScene)
             
             // Clear all textures
             await clearAllTextures()
@@ -1249,7 +1219,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Check for memory cleanup
         if currentTime - lastMemoryCleanup >= memoryCleanupInterval {
             Task { @MainActor in
-                print("[Memory] Performing periodic memory cleanup")
+                Logger.shared.debug("[Memory] Performing periodic memory cleanup", category: .debugGameScene)
                 await cleanupMemory()
                 lastMemoryCleanup = currentTime
             }
@@ -1324,11 +1294,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     // Add this method to handle hint highlighting
     func highlightHint(block: Block, at position: (row: Int, col: Int)) {
-        print("[Hint] Highlighting hint for block \(block.shape) at position: row \(position.row), col \(position.col)")
+        Logger.shared.debug("[Hint] Highlighting hint for block \(block.shape) at position: row \(position.row), col \(position.col)", category: .debugGameScene)
         
         // Remove existing hint highlight if any
         if hintHighlight != nil {
-            print("[Hint] Removing existing hint highlight")
+            Logger.shared.debug("[Hint] Removing existing hint highlight", category: .debugGameScene)
             hintHighlight?.removeFromParent()
         }
         
@@ -1347,7 +1317,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             let x = -totalWidth / 2 + CGFloat(position.col + dx) * blockSize + blockSize / 2
             let y = -totalHeight / 2 + CGFloat(position.row + dy) * blockSize + blockSize / 2
             
-            print("[Hint] Creating highlight cell at grid position: x \(x), y \(y)")
+            Logger.shared.debug("[Hint] Creating highlight cell at grid position: x \(x), y \(y)", category: .debugGameScene)
             
             let highlight = SKShapeNode(rectOf: CGSize(width: blockSize * 0.9, height: blockSize * 0.9))
             highlight.fillColor = .clear
@@ -1369,11 +1339,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Add to grid node
         gridNode.addChild(highlightContainer)
         hintHighlight = highlightContainer
-        print("[Hint] Hint highlight added to grid node")
+        Logger.shared.debug("[Hint] Hint highlight added to grid node", category: .debugGameScene)
         
         // Remove highlight after 3 seconds
         DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
-            print("[Hint] Removing hint highlight after timeout")
+            Logger.shared.debug("[Hint] Removing hint highlight after timeout", category: .debugGameScene)
             self?.hintHighlight?.removeFromParent()
             self?.hintHighlight = nil
         }
@@ -1382,7 +1352,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // Add the old method for backward compatibility
     func highlightHint(at position: (row: Int, col: Int)) {
         // This is kept for backward compatibility but should not be used
-        print("[Hint] Warning: Using deprecated highlightHint method")
+        Logger.shared.debug("[Hint] Warning: Using deprecated highlightHint method", category: .debugGameScene)
     }
     
     private func updateTheme() {
@@ -1691,85 +1661,85 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func reviewAndCleanupLongLivedReferences() {
-        print("[Memory] Reviewing long-lived references")
+        Logger.shared.debug("[Memory] Reviewing long-lived references", category: .debugGameScene)
         
         // Review and cleanup block nodes
         let blockNodesCount = blockNodes.count
         blockNodes = blockNodes.filter { node in
             if node.parent == nil {
-                print("[Memory] Removing orphaned block node")
+                Logger.shared.debug("[Memory] Removing orphaned block node", category: .debugGameScene)
                 return false
             }
             return true
         }
         if blockNodes.count != blockNodesCount {
-            print("[Memory] Removed \(blockNodesCount - blockNodes.count) orphaned block nodes")
+            Logger.shared.debug("[Memory] Removed \(blockNodesCount - blockNodes.count) orphaned block nodes", category: .debugGameScene)
         }
         
         // Review and cleanup particle emitters
         let emitterCount = activeParticleEmitters.count
         activeParticleEmitters = activeParticleEmitters.filter { emitter in
             if emitter.parent == nil {
-                print("[Memory] Removing orphaned particle emitter")
+                Logger.shared.debug("[Memory] Removing orphaned particle emitter", category: .debugGameScene)
                 return false
             }
             return true
         }
         if activeParticleEmitters.count != emitterCount {
-            print("[Memory] Removed \(emitterCount - activeParticleEmitters.count) orphaned particle emitters")
+            Logger.shared.debug("[Memory] Removed \(emitterCount - activeParticleEmitters.count) orphaned particle emitters", category: .debugGameScene)
         }
         
         // Review and cleanup cached nodes
         let cachedNodesCount = cachedNodes.count
         cachedNodes = cachedNodes.filter { key, node in
             if node.parent == nil {
-                print("[Memory] Removing orphaned cached node: \(key)")
+                Logger.shared.debug("[Memory] Removing orphaned cached node: \(key)", category: .debugGameScene)
                 return false
             }
             return true
         }
         if cachedNodes.count != cachedNodesCount {
-            print("[Memory] Removed \(cachedNodesCount - cachedNodes.count) orphaned cached nodes")
+            Logger.shared.debug("[Memory] Removed \(cachedNodesCount - cachedNodes.count) orphaned cached nodes", category: .debugGameScene)
         }
         
         // Review and cleanup node pools
         let blockPoolCount = blockNodePool.count
         blockNodePool = blockNodePool.filter { node in
             if node.parent != nil {
-                print("[Memory] Removing node from pool that is still in use")
+                Logger.shared.debug("[Memory] Removing node from pool that is still in use", category: .debugGameScene)
                 return false
             }
             return true
         }
         if blockNodePool.count != blockPoolCount {
-            print("[Memory] Removed \(blockPoolCount - blockNodePool.count) nodes from block pool")
+            Logger.shared.debug("[Memory] Removed \(blockPoolCount - blockNodePool.count) nodes from block pool", category: .debugGameScene)
         }
         
         let particlePoolCount = particleEmitterPool.count
         particleEmitterPool = particleEmitterPool.filter { emitter in
             if emitter.parent != nil {
-                print("[Memory] Removing emitter from pool that is still in use")
+                Logger.shared.debug("[Memory] Removing emitter from pool that is still in use", category: .debugGameScene)
                 return false
             }
             return true
         }
         if particleEmitterPool.count != particlePoolCount {
-            print("[Memory] Removed \(particlePoolCount - particleEmitterPool.count) emitters from particle pool")
+            Logger.shared.debug("[Memory] Removed \(particlePoolCount - particleEmitterPool.count) emitters from particle pool", category: .debugGameScene)
         }
         
         // Review and cleanup temporary nodes
         if let dragNode = dragNode, dragNode.parent == nil {
-            print("[Memory] Removing orphaned drag node")
+            Logger.shared.debug("[Memory] Removing orphaned drag node", category: .debugGameScene)
             self.dragNode = nil
         }
         
         if let previewNode = previewNode, previewNode.parent == nil {
-            print("[Memory] Removing orphaned preview node")
+            Logger.shared.debug("[Memory] Removing orphaned preview node", category: .debugGameScene)
             self.previewNode = nil
         }
         
         if let hintHighlight = hintHighlight, hintHighlight.parent == nil {
-            print("[Memory] Removing orphaned hint highlight")
+            Logger.shared.debug("[Memory] Removing orphaned hint highlight", category: .debugGameScene)
             self.hintHighlight = nil
         }
     }
@@ -1886,8 +1856,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
 extension GameScene: GameStateDelegate {
     func gameStateDidUpdate() {
-        print("[DEBUG] gameStateDidUpdate called")
-        print("[DEBUG] trayNode in parent before update: \(trayNode.parent != nil)")
+        Logger.shared.debug("gameStateDidUpdate called", category: .debugGameScene)
+        Logger.shared.debug("trayNode in parent before update: \(trayNode.parent != nil)", category: .debugGameScene)
         
         // Update tray
         setupTray()
@@ -1953,7 +1923,7 @@ extension GameScene: GameStateDelegate {
             }
         }
         
-        print("[DEBUG] trayNode in parent after update: \(trayNode.parent != nil)")
+        Logger.shared.debug("trayNode in parent after update: \(trayNode.parent != nil)", category: .debugGameScene)
     }
     
     func gameStateDidClearLines(at positions: [(Int, Int)]) {

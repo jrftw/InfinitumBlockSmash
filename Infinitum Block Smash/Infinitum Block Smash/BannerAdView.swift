@@ -33,7 +33,7 @@ struct BannerAdView: UIViewRepresentable {
     
     class Coordinator: NSObject, BannerViewDelegate {
         func bannerView(_ bannerView: BannerView, didFailToReceiveAdWithError error: Error) {
-            print("Banner failed to load: \(error.localizedDescription)")
+            Logger.shared.log("Banner failed to load: \(error.localizedDescription)", category: .firebaseManager, level: .error)
             
             // Track ad failure with detailed error information
             Task {

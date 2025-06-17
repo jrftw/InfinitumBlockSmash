@@ -332,37 +332,38 @@ final class LeaderboardService: ObservableObject {
             ("monthly", calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? now),
             ("alltime", Date.distantPast)
         ]
-        
-        for (period, startDate) in periods {
+
+        for (period, _) in periods {
             do {
                 print("[Leaderboard] 🔄 Attempting to update \(period) leaderboard for user \(userId)")
-                
+
                 let docRef = db.collection(type.collectionName)
                     .document(period)
                     .collection("scores")
                     .document(userId)
-                
+
                 // Get current score from server
                 let doc = try await docRef.getDocument(source: .server)
                 let currentScore = doc.data()?[type.scoreField] as? Int ?? -1
-                
+
                 if !doc.exists {
                     print("[Leaderboard] ✅ No previous score exists — writing new \(period) score")
                 }
-                
-                // For achievement leaderboard, always update
-                // For other leaderboards, update if no score exists or new score is higher
-                let shouldUpdate = type == .achievement || 
-                                 currentScore == -1 || 
-                                 score > currentScore ||
-                                 (type == .timed && time != nil && (currentScore == -1 || time! < TimeInterval(currentScore)))
-                
-                // Always write to daily and weekly if the score is from today/this week
-                let isToday = calendar.isDateInToday(startDate)
-                let isThisWeek = calendar.isDate(startDate, equalTo: now, toGranularity: .weekOfYear)
-                
-                if shouldUpdate || isToday || isThisWeek {
-                    // Create base data dictionary with UTC timestamp
+
+                let shouldUpdate: Bool
+                if type == .achievement {
+                    shouldUpdate = score > currentScore
+                } else if type == .timed, let newTime = time {
+                    shouldUpdate = currentScore == -1 || newTime < TimeInterval(currentScore) || score > currentScore
+                } else {
+                    shouldUpdate = currentScore == -1 || score > currentScore
+                }
+
+                if !shouldUpdate {
+                    print("[Leaderboard] ❌ Skipping \(period) update — existing score (\(currentScore)) >= new score (\(score))")
+                }
+
+                if shouldUpdate {
                     var data: [String: Any] = [
                         "username": username,
                         "timestamp": FieldValue.serverTimestamp(),
@@ -371,45 +372,39 @@ final class LeaderboardService: ObservableObject {
                         "appVersion": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
                         "buildNumber": Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
                     ]
-                    
-                    // Add score/points based on leaderboard type
+
                     if type == .achievement {
                         data["points"] = score
                     } else {
                         data["score"] = score
                     }
-                    
+
                     if let level = level {
                         data["level"] = level
                     }
-                    
+
                     if let time = time {
                         data["time"] = time
                     }
-                    
+
                     print("[Leaderboard] 📝 Writing data to Firestore: \(data)")
                     print("[Leaderboard] 📝 Writing to path: \(type.collectionName)/\(period)/scores/\(userId)")
-                    
-                    // Write the document with merge to preserve existing fields
+
                     try await docRef.setData(data, merge: true)
                     print("[Leaderboard] ✅ Successfully updated \(period) leaderboard")
-                    
-                    // Verify the update
+
                     if !(try await verifyScoreUpdate(userId: userId, type: type, period: period, expectedScore: score)) {
                         print("[Leaderboard] ⚠️ Score verification failed - scheduling retry")
                         await handleFailedUpdate(userId: userId, type: type, period: period, score: score, level: level, time: time)
                     }
-                } else {
-                    print("[Leaderboard] ⏭️ Skipping \(period) update - Score not better (Current: \(currentScore), New: \(score))")
                 }
-                
             } catch {
                 print("[Leaderboard] ❌ Error updating \(period) leaderboard: \(error.localizedDescription)")
                 print("[Leaderboard] ❌ Error details: \(error)")
                 throw LeaderboardError.updateFailed(error)
             }
         }
-        
+
         print("[Leaderboard] ✅ Successfully submitted all scores")
     }
     
@@ -453,27 +448,27 @@ final class LeaderboardService: ObservableObject {
             let calendar = Calendar.current
             let startOfDay = calendar.startOfDay(for: now)
             
-            var startDate: Date?
+            var queryStartDate: Date?
             switch period {
             case "daily":
-                startDate = startOfDay
+                queryStartDate = startOfDay
             case "weekly":
                 // Get start of current week (Sunday)
                 let weekday = calendar.component(.weekday, from: now)
                 let daysToSubtract = (weekday + 6) % 7 // Convert to Sunday-based week
-                startDate = calendar.date(byAdding: .day, value: -daysToSubtract, to: startOfDay)
+                queryStartDate = calendar.date(byAdding: .day, value: -daysToSubtract, to: startOfDay)
             case "monthly":
                 // Get start of current month
                 let components = calendar.dateComponents([.year, .month], from: now)
-                startDate = calendar.date(from: components)
+                queryStartDate = calendar.date(from: components)
             case "alltime":
-                startDate = nil
+                queryStartDate = nil
             default:
                 throw LeaderboardError.invalidPeriod
             }
             
-            if let startDate = startDate {
-                print("[Leaderboard] 📅 Filtering from date: \(startDate)")
+            if let queryStartDate = queryStartDate {
+                print("[Leaderboard] 📅 Filtering from date: \(queryStartDate)")
             }
             
             // Get total users count
@@ -481,8 +476,8 @@ final class LeaderboardService: ObservableObject {
                 .document(period)
                 .collection("scores")
             
-            if let startDate = startDate {
-                totalUsersQuery.whereField("timestamp", isGreaterThanOrEqualTo: Timestamp(date: startDate))
+            if let queryStartDate = queryStartDate {
+                totalUsersQuery.whereField("timestamp", isGreaterThanOrEqualTo: Timestamp(date: queryStartDate))
             }
             
             print("[Leaderboard] 🔍 Executing total users query")
@@ -497,8 +492,8 @@ final class LeaderboardService: ObservableObject {
                 .order(by: type.scoreField, descending: type.sortOrder == "desc")
                 .limit(to: leaderboardLimit)
             
-            if let startDate = startDate {
-                query = query.whereField("timestamp", isGreaterThanOrEqualTo: Timestamp(date: startDate))
+            if let queryStartDate = queryStartDate {
+                query = query.whereField("timestamp", isGreaterThanOrEqualTo: Timestamp(date: queryStartDate))
             }
             
             print("[Leaderboard] 🔍 Executing entries query")
