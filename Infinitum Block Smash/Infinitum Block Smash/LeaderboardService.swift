@@ -161,7 +161,9 @@ final class LeaderboardService: ObservableObject {
                                     "username": username,
                                     "timestamp": FieldValue.serverTimestamp(),
                                     "userId": userId,
-                                    "lastUpdate": FieldValue.serverTimestamp()
+                                    "lastUpdate": FieldValue.serverTimestamp(),
+                                    "appVersion": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
+                                    "buildNumber": Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
                                 ]
                                 
                                 // Handle different score fields based on collection type
@@ -365,7 +367,9 @@ final class LeaderboardService: ObservableObject {
                         "username": username,
                         "timestamp": FieldValue.serverTimestamp(),
                         "userId": userId,
-                        "lastUpdate": FieldValue.serverTimestamp()
+                        "lastUpdate": FieldValue.serverTimestamp(),
+                        "appVersion": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
+                        "buildNumber": Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
                     ]
                     
                     // Add score/points based on leaderboard type
@@ -386,8 +390,8 @@ final class LeaderboardService: ObservableObject {
                     print("[Leaderboard] 📝 Writing data to Firestore: \(data)")
                     print("[Leaderboard] 📝 Writing to path: \(type.collectionName)/\(period)/scores/\(userId)")
                     
-                    // Write the document without merge to ensure complete replacement
-                    try await docRef.setData(data)
+                    // Write the document with merge to preserve existing fields
+                    try await docRef.setData(data, merge: true)
                     print("[Leaderboard] ✅ Successfully updated \(period) leaderboard")
                     
                     // Verify the update

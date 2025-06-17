@@ -5,7 +5,7 @@ import os.log
 
 final class CacheManager {
     static let shared = CacheManager()
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.infinitum.blocksmash", category: "CacheManager")
+    private let logger = Logger.shared
     
     private let memoryCache = NSCache<NSString, AnyObject>()
     private let fileManager = FileManager.default
@@ -188,7 +188,7 @@ final class CacheManager {
             - Memory Cache: \(self.memoryCache.totalCostLimit / 1024 / 1024)MB limit
             - Disk Cache: \(totalSize / 1024 / 1024)MB used, \(fileCount) files
             - Hit Ratio: \(Double(self.cacheHits) / Double(max(1, self.cacheHits + self.cacheMisses)) * 100)%
-            """)
+            """, category: .cacheManager)
     }
     
     // MARK: - Compression
