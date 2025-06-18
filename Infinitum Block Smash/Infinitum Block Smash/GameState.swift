@@ -866,27 +866,35 @@ final class GameState: ObservableObject {
         var diagonalPatternsFound = Set<String>() // Track which diagonal patterns we've found
         var achievementsToUpdate: [String: Int] = [:] // Track achievements to update
         
-        // First collect all lines that need to be cleared
-        var rowsToClear: Set<Int> = []
-        var columnsToClear: Set<Int> = []
+        // Track rows and columns to clear in a single pass
+        var rowsToClear = Set<Int>()
+        var columnsToClear = Set<Int>()
+        var rowCounts = Array(repeating: 0, count: GameConstants.gridSize)
+        var columnCounts = Array(repeating: 0, count: GameConstants.gridSize)
         
-        // Check rows
+        // Single pass through the grid to check both rows and columns
         for row in 0..<GameConstants.gridSize {
-            if isRowFull(row) {
-                rowsToClear.insert(row)
-                clearedPositions.append((row, -1))  // -1 indicates entire row
-                linesClearedThisTurn += 1
-                addScore(100, at: CGPoint(x: frameSize.width/2, y: CGFloat(row) * GameConstants.blockSize))
+            for col in 0..<GameConstants.gridSize {
+                if grid[row][col] != nil {
+                    rowCounts[row] += 1
+                    columnCounts[col] += 1
+                }
             }
         }
         
-        // Check columns
-        for col in 0..<GameConstants.gridSize {
-            if isColumnFull(col) {
-                columnsToClear.insert(col)
-                clearedPositions.append((-1, col))  // -1 indicates entire column
+        // Check which rows and columns are full
+        for i in 0..<GameConstants.gridSize {
+            if rowCounts[i] == GameConstants.gridSize {
+                rowsToClear.insert(i)
+                clearedPositions.append((i, -1))  // -1 indicates entire row
                 linesClearedThisTurn += 1
-                addScore(100, at: CGPoint(x: CGFloat(col) * GameConstants.blockSize, y: frameSize.height/2))
+                addScore(100, at: CGPoint(x: frameSize.width/2, y: CGFloat(i) * GameConstants.blockSize))
+            }
+            if columnCounts[i] == GameConstants.gridSize {
+                columnsToClear.insert(i)
+                clearedPositions.append((-1, i))  // -1 indicates entire column
+                linesClearedThisTurn += 1
+                addScore(100, at: CGPoint(x: CGFloat(i) * GameConstants.blockSize, y: frameSize.height/2))
             }
         }
         

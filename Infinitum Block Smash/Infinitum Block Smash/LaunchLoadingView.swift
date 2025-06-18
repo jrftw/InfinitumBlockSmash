@@ -11,7 +11,22 @@ struct LaunchLoadingView: View {
         "Tip: You can undo your last move!",
         "Did you know? You can change themes in Settings.",
         "Pro Tip: Try to clear multiple lines at once for a high score!",
-        "Fun Fact: Made in Pittsburgh, PA 🇺🇸"
+        "Fun Fact: Made in Pittsburgh, PA 🇺🇸",
+        "💎 Subscribe to remove ads and unlock all themes!",
+        "🎮 Get 24 hours ad-free by referring a friend and they do too!",
+        "✨ Buy undo packs to fix an oopsie!",
+        "🌟 Unlock exclusive themes with a subscription!",
+        "🎯 Watch ads to get extra hints during gameplay!",
+        "🏆 Subscribe to access all premium features!",
+        "🎨 Customize your game with premium themes!",
+        "⏰ Daily rewards get better with subscription!",
+        "🎁 Support our app by watching ads!",
+        "🔮 Unlock stuff with premium!",
+        "📊 Track your stats with detailed analytics!",
+        "🎁 Premium users get exclusive stuffffffff!",
+        "🎪 Join our discord server for more fun!",
+        "🐞 Report bugs to support@infinitumlive.com",
+        "🌟 Join the test flight for Early access to new features!"
     ]
     
     var body: some View {

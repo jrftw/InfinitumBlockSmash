@@ -1212,296 +1212,155 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func cleanupMemory() async {
-        await performNormalCleanup()
-    }
-
-    override func update(_ currentTime: TimeInterval) {
-        // Check for memory cleanup
-        if currentTime - lastMemoryCleanup >= memoryCleanupInterval {
-            Task { @MainActor in
-                Logger.shared.debug("[Memory] Performing periodic memory cleanup", category: .debugGameScene)
-                await cleanupMemory()
-                lastMemoryCleanup = currentTime
-            }
-        }
-
-        // Update game state
-        Task {
-            await gameState.update()
-        }
-    }
-
-    private func handleGameOver() {
-        // Play fail sound
-        AudioManager.shared.playFailSound()
+        // Track memory usage before cleanup
+        let initialMemoryUsage = MemorySystem.shared.currentMemoryUsage()
+        Logger.shared.debug("[Memory] Starting granular cleanup. Initial usage: \(initialMemoryUsage)MB", category: .debugGameScene)
         
-        // Create a container node for the game over overlay
-        let overlayNode = SKNode()
-        overlayNode.zPosition = 1000
+        // 1. Cleanup unused textures
+        await cleanupUnusedTextures()
         
-        // Create a semi-transparent black background
-        let background = SKShapeNode(rectOf: size)
-        background.fillColor = .black
-        background.alpha = 0.7
-        background.strokeColor = .clear
-        overlayNode.addChild(background)
+        // 2. Cleanup unused nodes
+        cleanupUnusedNodes()
         
-        // Create game over text
-        let gameOverLabel = SKLabelNode(text: "Game Over")
-        gameOverLabel.fontName = "AvenirNext-Bold"
-        gameOverLabel.fontSize = 36
-        gameOverLabel.fontColor = .white
-        gameOverLabel.position = CGPoint(x: 0, y: 50)
-        overlayNode.addChild(gameOverLabel)
+        // 3. Cleanup particle effects
+        cleanupParticleEffects()
         
-        // Create score text
-        let scoreLabel = SKLabelNode(text: "Final Score: \(gameState.score)")
-        scoreLabel.fontName = "AvenirNext-Regular"
-        scoreLabel.fontSize = 24
-        scoreLabel.fontColor = .white
-        scoreLabel.position = CGPoint(x: 0, y: 0)
-        overlayNode.addChild(scoreLabel)
+        // 4. Cleanup cached nodes
+        cleanupCachedNodes()
         
-        // Create level text
-        let levelLabel = SKLabelNode(text: "Level Reached: \(gameState.level)")
-        levelLabel.fontName = "AvenirNext-Regular"
-        levelLabel.fontSize = 20
-        levelLabel.fontColor = .yellow
-        levelLabel.position = CGPoint(x: 0, y: -30)
-        overlayNode.addChild(levelLabel)
+        // 5. Cleanup temporary data
+        cleanupTemporaryData()
         
-        // Create Try Again button
-        let tryAgainButton = SKLabelNode(text: "Try Again")
-        tryAgainButton.fontName = "AvenirNext-Bold"
-        tryAgainButton.fontSize = 24
-        tryAgainButton.fontColor = .white
-        tryAgainButton.position = CGPoint(x: 0, y: -80)
-        tryAgainButton.name = "tryAgainButton"
-        overlayNode.addChild(tryAgainButton)
-        
-        // Create Main Menu button
-        let mainMenuButton = SKLabelNode(text: "Main Menu")
-        mainMenuButton.fontName = "AvenirNext-Bold"
-        mainMenuButton.fontSize = 24
-        mainMenuButton.fontColor = .white
-        mainMenuButton.position = CGPoint(x: 0, y: -120)
-        mainMenuButton.name = "mainMenuButton"
-        overlayNode.addChild(mainMenuButton)
-        
-        // Add the overlay to the scene
-        addChild(overlayNode)
-    }
-
-    // Add this method to handle hint highlighting
-    func highlightHint(block: Block, at position: (row: Int, col: Int)) {
-        Logger.shared.debug("[Hint] Highlighting hint for block \(block.shape) at position: row \(position.row), col \(position.col)", category: .debugGameScene)
-        
-        // Remove existing hint highlight if any
-        if hintHighlight != nil {
-            Logger.shared.debug("[Hint] Removing existing hint highlight", category: .debugGameScene)
-            hintHighlight?.removeFromParent()
-        }
-        
-        // Create new hint highlight container
-        let highlightContainer = SKNode()
-        highlightContainer.zPosition = 5 // Higher than grid but lower than UI
-        
-        // Create new hint highlight for each cell in the shape
-        let blockSize = GameConstants.blockSize
-        let gridSize = GameConstants.gridSize
-        let totalWidth = CGFloat(gridSize) * blockSize
-        let totalHeight = CGFloat(gridSize) * blockSize
-        
-        // Create highlight for each cell in the shape
-        for (dx, dy) in block.shape.cells {
-            let x = -totalWidth / 2 + CGFloat(position.col + dx) * blockSize + blockSize / 2
-            let y = -totalHeight / 2 + CGFloat(position.row + dy) * blockSize + blockSize / 2
-            
-            Logger.shared.debug("[Hint] Creating highlight cell at grid position: x \(x), y \(y)", category: .debugGameScene)
-            
-            let highlight = SKShapeNode(rectOf: CGSize(width: blockSize * 0.9, height: blockSize * 0.9))
-            highlight.fillColor = .clear
-            highlight.strokeColor = .yellow
-            highlight.lineWidth = 3
-            highlight.position = CGPoint(x: x, y: y)
-            highlight.alpha = 0.7
-            
-            // Add pulsing animation
-            let pulse = SKAction.sequence([
-                SKAction.fadeAlpha(to: 0.3, duration: 0.5),
-                SKAction.fadeAlpha(to: 0.7, duration: 0.5)
-            ])
-            highlight.run(SKAction.repeatForever(pulse))
-            
-            highlightContainer.addChild(highlight)
-        }
-        
-        // Add to grid node
-        gridNode.addChild(highlightContainer)
-        hintHighlight = highlightContainer
-        Logger.shared.debug("[Hint] Hint highlight added to grid node", category: .debugGameScene)
-        
-        // Remove highlight after 3 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
-            Logger.shared.debug("[Hint] Removing hint highlight after timeout", category: .debugGameScene)
-            self?.hintHighlight?.removeFromParent()
-            self?.hintHighlight = nil
-        }
+        // Track memory usage after cleanup
+        let finalMemoryUsage = MemorySystem.shared.currentMemoryUsage()
+        let memoryReduction = initialMemoryUsage - finalMemoryUsage
+        Logger.shared.debug("[Memory] Granular cleanup complete. Memory reduced by: \(memoryReduction)MB", category: .debugGameScene)
     }
     
-    // Add the old method for backward compatibility
-    func highlightHint(at position: (row: Int, col: Int)) {
-        // This is kept for backward compatibility but should not be used
-        Logger.shared.debug("[Hint] Warning: Using deprecated highlightHint method", category: .debugGameScene)
-    }
-    
-    private func updateTheme() {
-        // Get the current theme
-        let theme = ThemeManager.shared.getCurrentTheme()
+    private func cleanupUnusedTextures() async {
+        // Get list of currently used textures
+        let usedTextures = Set(activeTextures)
         
-        // Update grid appearance
-        if let gridBackground = gridNode.childNode(withName: "gridBackground") as? SKShapeNode {
-            gridBackground.fillColor = SKColor.from(theme.colors.background)
-        }
-        
-        // Update grid lines
-        gridNode.children.forEach { node in
-            if node.name == "gridLine", let line = node as? SKShapeNode {
-                line.fillColor = SKColor.from(theme.colors.secondary)
+        // Remove textures that haven't been used in the last 5 minutes
+        let fiveMinutesAgo = Date().addingTimeInterval(-300)
+        for (name, texture) in textureCache {
+            if !usedTextures.contains(texture) {
+                textureCache.removeValue(forKey: name)
+                Logger.shared.debug("[Memory] Removed unused texture: \(name)", category: .debugGameScene)
             }
         }
         
-        // Update debug border if present
-        if let debugBorder = gridNode.childNode(withName: "debugBorder") as? SKShapeNode {
-            debugBorder.strokeColor = SKColor.from(theme.colors.primary)
-        }
-        
-        // Update all blocks with new theme colors
-        gridNode.children.forEach { node in
-            if let blockNode = node as? SKShapeNode, blockNode.name?.hasPrefix("block_") == true {
-                // Update block appearance based on the current theme
-                if let block = gameState.grid[Int(blockNode.name!.split(separator: "_")[1])!][Int(blockNode.name!.split(separator: "_")[2])!] {
-                    // Update gradient fill
-                    let colors = [block.gradientColors.start, block.gradientColors.end]
-                    let locations: [CGFloat] = [0.0, 1.0]
-                    if let gradientImage = createGradientImage(size: CGSize(width: GameConstants.blockSize, height: GameConstants.blockSize),
-                                                             colors: colors,
-                                                             locations: locations) {
-                        blockNode.fillTexture = SKTexture(image: gradientImage)
-                        blockNode.fillColor = .white
-                    } else {
-                        blockNode.fillColor = SKColor.from(Color(cgColor: block.gradientColors.start))
-                    }
-                    
-                    // Update shadow
-                    if let shadowNode = blockNode.children.first(where: { $0.zPosition == -1 }) as? SKShapeNode {
-                        shadowNode.fillColor = UIColor(cgColor: block.shadowColor)
-                    }
-                }
-            }
-        }
-        
-        // Redraw grid to ensure all elements are updated
-        renderGrid(gridNode: gridNode, gameState: gameState, blockSize: GameConstants.blockSize)
+        // Force texture cleanup for removed textures
+        await SKTextureAtlas.preloadTextureAtlases([])
     }
     
-    @objc private func handleThemeChange() {
-        updateTheme()
-    }
-    
-    private func cleanupParticleEffects() {
-        // Remove old particle emitters
-        while activeParticleEmitters.count > maxParticleEmitters {
-            if let oldestEmitter = activeParticleEmitters.first {
-                oldestEmitter.removeFromParent()
-                returnParticleEmitterToPool(oldestEmitter)
-                activeParticleEmitters.removeFirst()
-            }
+    private func cleanupUnusedNodes() {
+        // Track nodes that are still in use
+        var usedNodes = Set<SKNode>()
+        
+        // Add active nodes to used set
+        usedNodes.formUnion(activeNodes)
+        
+        // Add nodes that are part of the current game state
+        if let gridNode = gridNode {
+            usedNodes.formUnion(gridNode.children)
+        }
+        if let trayNode = trayNode {
+            usedNodes.formUnion(trayNode.children)
         }
         
-        // Clean up any finished particle emitters
-        activeParticleEmitters = activeParticleEmitters.filter { emitter in
-            if emitter.particleBirthRate == 0 && emitter.particleLifetime == 0 {
-                emitter.removeFromParent()
-                returnParticleEmitterToPool(emitter)
-                return false
+        // Cleanup preview and drag nodes if they're not in use
+        if let preview = previewNode, !usedNodes.contains(preview) {
+            preview.removeFromParent()
+            previewNode = nil
+            Logger.shared.debug("[Memory] Removed unused preview node", category: .debugGameScene)
+        }
+        
+        if let drag = dragNode, !usedNodes.contains(drag) {
+            drag.removeFromParent()
+            dragNode = nil
+            Logger.shared.debug("[Memory] Removed unused drag node", category: .debugGameScene)
+        }
+        
+        // Cleanup hint highlight if not in use
+        if let hint = hintHighlight, !usedNodes.contains(hint) {
+            hint.removeFromParent()
+            hintHighlight = nil
+            Logger.shared.debug("[Memory] Removed unused hint highlight", category: .debugGameScene)
+        }
+    }
+    
+    private func cleanupCachedNodes() {
+        // Remove cached nodes that haven't been accessed recently
+        let currentTime = Date()
+        let unusedNodes = cachedNodes.filter { key, node in
+            if let lastAccess = node.userData?["lastAccess"] as? Date {
+                return currentTime.timeIntervalSince(lastAccess) > 300 // 5 minutes
             }
             return true
         }
-    }
-    
-    private func optimizeParticleEmitter(_ emitter: SKEmitterNode) {
-        // Reduce particle count
-        emitter.particleBirthRate = min(emitter.particleBirthRate, 50)
         
-        // Reduce lifetime
-        emitter.particleLifetime = min(emitter.particleLifetime, 1.0)
-        
-        // Reduce particle size
-        emitter.particleSize = CGSize(
-            width: min(emitter.particleSize.width, 10),
-            height: min(emitter.particleSize.height, 10)
-        )
-        
-        // Reduce alpha
-        emitter.particleAlpha = min(emitter.particleAlpha, 0.8)
-        
-        // Reduce speed
-        emitter.particleSpeed = min(emitter.particleSpeed, 100)
-        
-        // Reduce acceleration
-        emitter.particleSpeedRange = min(emitter.particleSpeedRange, 50)
-        
-        // Reduce emission angle
-        emitter.emissionAngleRange = min(emitter.emissionAngleRange, .pi / 4)
-    }
-    
-    private func addParticleEffect(at position: CGPoint) {
-        cleanupParticleEffects()
-        
-        guard activeParticleEmitters.count < maxParticleEmitters else { return }
-        
-        if let emitter = getParticleEmitterFromPool() {
-            emitter.position = position
-            emitter.zPosition = 100
-            addChild(emitter)
-            activeParticleEmitters.append(emitter)
-            
-            let wait = SKAction.wait(forDuration: emitter.particleLifetime + 0.1)
-            let remove = SKAction.run { [weak self] in
-                emitter.removeFromParent()
-                self?.activeParticleEmitters.removeAll { $0 === emitter }
-                self?.returnParticleEmitterToPool(emitter)
-            }
-            emitter.run(SKAction.sequence([wait, remove]))
+        for (key, node) in unusedNodes {
+            node.removeFromParent()
+            cachedNodes.removeValue(forKey: key)
+            Logger.shared.debug("[Memory] Removed unused cached node: \(key)", category: .debugGameScene)
         }
     }
     
-    private func manageCachedNodes() {
-        // Limit cache size to 50 nodes
-        if cachedNodes.count > 50 {
-            // Remove oldest entries
-            let excessCount = cachedNodes.count - 50
-            let keysToRemove = Array(cachedNodes.keys.prefix(excessCount))
-            for key in keysToRemove {
-                cachedNodes[key]?.removeFromParent()
-                cachedNodes.removeValue(forKey: key)
-            }
+    private func cleanupTemporaryData() {
+        // Cleanup temporary arrays and data structures
+        if blockNodes.count > maxActiveNodes {
+            let excessNodes = blockNodes.count - maxActiveNodes
+            blockNodes.suffix(excessNodes).forEach { cleanupNode($0) }
+            blockNodes.removeLast(excessNodes)
+            Logger.shared.debug("[Memory] Removed \(excessNodes) excess block nodes", category: .debugGameScene)
+        }
+        
+        // Cleanup particle emitter pool if too large
+        if particleEmitterPool.count > maxPoolSize {
+            let excessEmitters = particleEmitterPool.count - maxPoolSize
+            particleEmitterPool.suffix(excessEmitters).forEach { $0.removeFromParent() }
+            particleEmitterPool.removeLast(excessEmitters)
+            Logger.shared.debug("[Memory] Removed \(excessEmitters) excess particle emitters", category: .debugGameScene)
         }
     }
     
+    private func cleanupNode(_ node: SKNode) {
+        // Remove all actions
+        node.removeAllActions()
+        
+        // Remove all children
+        node.removeAllChildren()
+        
+        // Remove from parent
+        node.removeFromParent()
+        
+        // Clear user data
+        node.userData?.removeAllObjects()
+    }
+    
+    // Add method to track node usage
+    private func trackNodeUsage(_ node: SKNode) {
+        if node.userData == nil {
+            node.userData = NSMutableDictionary()
+        }
+        node.userData?["lastAccess"] = Date()
+    }
+    
+    // Update the cacheNode method to track usage
     private func cacheNode(_ node: SKNode, forKey key: String) {
+        trackNodeUsage(node)
         manageCachedNodes()
         cachedNodes[key] = node
     }
     
+    // Update the getCachedNode method to track usage
     private func getCachedNode(forKey key: String) -> SKNode? {
-        return cachedNodes[key]
-    }
-    
-    private func clearNodeCache() {
-        cachedNodes.values.forEach { $0.removeFromParent() }
-        cachedNodes.removeAll()
+        if let node = cachedNodes[key] {
+            trackNodeUsage(node)
+            return node
+        }
+        return nil
     }
     
     private func optimizeTextures() {
@@ -1536,22 +1395,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Clear any remaining nodes
         children.forEach { cleanupNode($0) }
-    }
-    
-    private func cleanupUnusedNodes() {
-        // Remove unused grid nodes
-        gridNode.children.forEach { node in
-            if !node.isUserInteractionEnabled && node.name?.hasPrefix("block_") == true {
-                node.removeFromParent()
-            }
-        }
-        
-        // Remove unused tray nodes
-        trayNode.children.forEach { node in
-            if !node.isUserInteractionEnabled && node.name?.hasPrefix("tray_") == true {
-                node.removeFromParent()
-            }
-        }
     }
     
     private func cleanupTextures() async {
