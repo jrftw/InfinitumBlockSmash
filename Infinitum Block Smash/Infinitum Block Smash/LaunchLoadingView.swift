@@ -4,7 +4,7 @@ struct LaunchLoadingView: View {
     @State private var progress: Double = 0.0
     @State private var show: Bool = false
     @State private var ellipsis: String = ""
-    @State private var tipIndex: Int = 0
+    @AppStorage("lastTipIndex") private var tipIndex: Int = 0
     private let timer = Timer.publish(every: 0.04, on: .main, in: .common).autoconnect() // 4s total
     private let ellipsisTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
     private let tips = [
@@ -106,6 +106,8 @@ struct LaunchLoadingView: View {
         }
         .onAppear {
             show = true
+            // Advance to next tip on each app launch
+            tipIndex = (tipIndex + 1) % tips.count
         }
         .onReceive(timer) { _ in
             if progress < 1.0 {
