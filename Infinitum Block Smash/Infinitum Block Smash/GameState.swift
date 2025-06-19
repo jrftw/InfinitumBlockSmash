@@ -279,6 +279,9 @@ final class GameState: ObservableObject {
     private var updateTimer: Timer?
     private let updateDebounceInterval: TimeInterval = 0.016 // ~60fps max update rate
     
+    private var lastUndoTime: TimeInterval = 0
+    private let undoDebounceInterval: TimeInterval = 0.1 // Prevent rapid undo operations
+    
     // MARK: - Initialization
     init() {
         // Run data migration if needed
@@ -339,12 +342,13 @@ final class GameState: ObservableObject {
     
     deinit {
         NotificationCenter.default.removeObserver(self)
+        playTimeTimer?.invalidate()
+        playTimeTimer = nil
         Task { [weak self] in
             guard let self = self else { return }
             await cleanupMemory()
             await MainActor.run {
                 self.cancellables.removeAll()
-                self.playTimeTimer?.invalidate()
             }
         }
     }
@@ -633,6 +637,10 @@ final class GameState: ObservableObject {
     }
 
     func undo() async {
+        let now = CACurrentMediaTime()
+        guard now - lastUndoTime >= undoDebounceInterval else { return }
+        lastUndoTime = now
+        
         guard canUndo else { return }
         
         // Check if we can use an undo

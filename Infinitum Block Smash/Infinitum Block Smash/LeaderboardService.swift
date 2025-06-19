@@ -422,6 +422,13 @@ final class LeaderboardService: ObservableObject {
         }
         
         let username = username ?? UserDefaults.standard.string(forKey: "username") ?? "unknown"
+        
+        // Validate username length before writing to leaderboard
+        guard username.count >= 3 else {
+            print("[Leaderboard] ❌ Username too short (\(username.count) chars) - skipping leaderboard update")
+            throw LeaderboardError.invalidData
+        }
+        
         let now = Date()
         let calendar = Calendar.current
         

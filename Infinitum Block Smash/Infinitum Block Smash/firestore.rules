@@ -34,6 +34,12 @@ service cloud.firestore {
              timestamp >= request.time.toMillis() - duration.value(7, 'd');
     }
 
+    function validateUsername(username) {
+      return username is string && 
+             username.size() >= 3 && 
+             username.size() <= 30;
+    }
+
     // Basic authentication check
     function isAuthenticated() {
       return request.auth != null;
@@ -74,7 +80,8 @@ service cloud.firestore {
       allow read: if isAuthenticated() && hasValidAppCheck();
       allow write: if isOwner(userId) && 
                    hasValidAppCheck() &&
-                   isWithinRateLimit(5, 60); // 5 writes per minute
+                   isWithinRateLimit(5, 60) && // 5 writes per minute
+                   (request.resource.data.username == null || validateUsername(request.resource.data.username));
       
       // Achievements subcollection
       match /achievements/{achievementId} {

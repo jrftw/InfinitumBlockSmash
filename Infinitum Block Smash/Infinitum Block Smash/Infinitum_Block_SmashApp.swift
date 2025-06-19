@@ -212,11 +212,20 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
             }
         }
         
-        // Configure Google Mobile Ads
-        MobileAds.shared.start { status in
-            #if DEBUG
-            print("Google Mobile Ads SDK initialization status: \(status)")
-            #endif
+        // Initialize Google Mobile Ads SDK with proper error handling
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            MobileAds.shared.start { status in
+                #if DEBUG
+                print("Google Mobile Ads SDK initialization status: \(status)")
+                #endif
+                
+                // Log any initialization issues
+                if status.adapterStatusesByClassName.isEmpty {
+                    print("⚠️ Google Mobile Ads SDK initialization warning: No adapters available")
+                } else {
+                    print("✅ Google Mobile Ads SDK initialized successfully")
+                }
+            }
         }
         
         // Request App Tracking Transparency on first launch

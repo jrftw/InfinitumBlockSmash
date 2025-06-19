@@ -395,7 +395,7 @@ class FirebaseManager: ObservableObject {
     }
     
     private func signInWithApple() async throws {
-        let nonce = randomNonceString()
+        let nonce = try randomNonceString()
         let appleIDProvider = ASAuthorizationAppleIDProvider()
         let request = appleIDProvider.createRequest()
         request.requestedScopes = [.fullName, .email]
@@ -869,6 +869,12 @@ class FirebaseManager: ObservableObject {
             throw FirebaseError.invalidData
         }
         
+        // Validate username length before writing to leaderboard
+        guard username.count >= 3 else {
+            print("[Leaderboard] ❌ Username too short (\(username.count) chars) - skipping leaderboard update")
+            throw FirebaseError.invalidData
+        }
+        
         print("[Leaderboard] 📊 Submitting score: \(score) for user: \(username)")
         
         // Get current time in UTC
@@ -1054,6 +1060,12 @@ class FirebaseManager: ObservableObject {
             throw FirebaseError.invalidData
         }
 
+        // Validate username length before writing to leaderboard
+        guard username.count >= 3 else {
+            print("[Leaderboard] ❌ Username too short (\(username.count) chars) - skipping leaderboard update")
+            throw FirebaseError.invalidData
+        }
+
         // Use all periods
         let periods = ["daily", "weekly", "monthly", "alltime"]
 
@@ -1112,6 +1124,12 @@ class FirebaseManager: ObservableObject {
         guard let userId = currentUser?.uid,
               let username = username else { 
             throw FirebaseError.notAuthenticated 
+        }
+        
+        // Validate username length before writing to leaderboard
+        guard username.count >= 3 else {
+            print("[Leaderboard] ❌ Username too short (\(username.count) chars) - skipping achievement leaderboard update")
+            throw FirebaseError.invalidData
         }
         
         try validateUserId(userId)
@@ -1247,18 +1265,18 @@ class FirebaseManager: ObservableObject {
     
     // MARK: - Helper Methods
     
-    private func randomNonceString(length: Int = 32) -> String {
+    private func randomNonceString(length: Int = 32) throws -> String {
         precondition(length > 0)
         let charset: [Character] = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
         var result = ""
         var remainingLength = length
         
         while remainingLength > 0 {
-            let randoms: [UInt8] = (0 ..< 16).map { _ in
+            let randoms: [UInt8] = try (0 ..< 16).map { _ in
                 var random: UInt8 = 0
                 let errorCode = SecRandomCopyBytes(kSecRandomDefault, 1, &random)
                 if errorCode != errSecSuccess {
-                    fatalError("Unable to generate nonce. SecRandomCopyBytes failed with OSStatus \(errorCode)")
+                    throw NSError(domain: "FirebaseManager", code: Int(errorCode), userInfo: [NSLocalizedDescriptionKey: "Unable to generate nonce. SecRandomCopyBytes failed with OSStatus \(errorCode)"])
                 }
                 return random
             }
@@ -2121,6 +2139,29 @@ class FirebaseManager: ObservableObject {
     private func resetRetryCount(for operation: String) {
         retryCounts[operation] = 0
     }
+
+    private func handleNetworkError(_ error: Error) async {
+        Logger.shared.log("Network error occurred: \(error.localizedDescription)", category: .systemNetwork, level: .error)
+        
+        // Check if it's a network connectivity issue
+        if (error as NSError).code == -1009 {
+            // No internet connection
+            await MainActor.run {
+                // Show user-friendly error message
+                NotificationCenter.default.post(name: .networkError, object: "No internet connection. Please check your network settings.")
+            }
+        } else if (error as NSError).code == -1001 {
+            // Request timeout
+            await MainActor.run {
+                NotificationCenter.default.post(name: .networkError, object: "Request timed out. Please try again.")
+            }
+        } else {
+            // Generic network error
+            await MainActor.run {
+                NotificationCenter.default.post(name: .networkError, object: "Network error occurred. Please try again later.")
+            }
+        }
+    }
 }
 
 // MARK: - Models
@@ -2161,7 +2202,9 @@ private class SignInWithAppleDelegate: NSObject, ASAuthorizationControllerDelega
     func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let window = windowScene.windows.first else {
-            fatalError("No window found")
+            // Return a fallback window instead of throwing
+            // This is a workaround since presentationAnchor cannot throw
+            return UIWindow()
         }
         return window
     }

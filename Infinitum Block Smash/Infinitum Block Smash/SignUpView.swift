@@ -69,7 +69,7 @@ struct SignUpView: View {
     
     private var isValidInput: Bool {
         !email.isEmpty && !password.isEmpty && !username.isEmpty &&
-        password == confirmPassword && password.count >= 6 &&
+        username.count >= 3 && password == confirmPassword && password.count >= 6 &&
         ProfanityFilter.isAppropriate(username)
     }
     
@@ -82,6 +82,12 @@ struct SignUpView: View {
         
         guard !username.isEmpty else {
             errorMessage = "Please choose a username."
+            showingError = true
+            return
+        }
+        
+        guard username.count >= 3 else {
+            errorMessage = "Username must be at least 3 characters long."
             showingError = true
             return
         }

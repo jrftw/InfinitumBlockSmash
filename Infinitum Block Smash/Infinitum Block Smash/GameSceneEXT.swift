@@ -50,9 +50,11 @@ extension GameScene: GameStateDelegate {
                         // Position has a block, update if color changed
                         if let cellNode = existingNode.children.first as? SKShapeNode,
                            let gradientNode = cellNode.children.first as? SKShapeNode {
-                            let newColor = SKColor.from(currentColor!.color)
-                            if gradientNode.fillColor != newColor {
-                                updateBlockNodeColor(existingNode, to: currentColor!)
+                            if let currentColor = currentColor {
+                                let newColor = SKColor.from(currentColor.color)
+                                if gradientNode.fillColor != newColor {
+                                    updateBlockNodeColor(existingNode, to: currentColor)
+                                }
                             }
                         }
                     }

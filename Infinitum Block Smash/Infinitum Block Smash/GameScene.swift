@@ -1428,7 +1428,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         gridNode.children.forEach { node in
             if let blockNode = node as? SKShapeNode, blockNode.name?.hasPrefix("block_") == true {
                 // Update block appearance based on the current theme
-                if let block = gameState.grid[Int(blockNode.name!.split(separator: "_")[1])!][Int(blockNode.name!.split(separator: "_")[2])!] {
+                if let nodeName = blockNode.name,
+                   let components = nodeName.split(separator: "_").dropFirst().first,
+                   let row = Int(components),
+                   let col = Int(nodeName.split(separator: "_").dropFirst().dropFirst().first ?? ""),
+                   row < gameState.grid.count && col < gameState.grid[row].count,
+                   let block = gameState.grid[row][col] {
                     // Update gradient fill
                     let colors = [block.gradientColors.start, block.gradientColors.end]
                     let locations: [CGFloat] = [0.0, 1.0]

@@ -313,6 +313,8 @@ struct ChangeInformationView: View {
     private func validateUsername() {
         if username.isEmpty {
             usernameValidationError = "Username cannot be empty."
+        } else if username.count < 3 {
+            usernameValidationError = "Username must be at least 3 characters long."
         } else if username != username.lowercased() {
             usernameValidationError = "Username must be lowercase."
         } else if username.contains(" ") {

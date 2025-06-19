@@ -5,7 +5,7 @@
         ".read": "auth != null",
         ".write": "auth != null && auth.uid === $uid",
         "username": {
-          ".validate": "newData.isString() && newData.val().length >= 2 && newData.val().length <= 30"
+          ".validate": "newData.isString() && newData.val().length >= 3 && newData.val().length <= 30"
         },
         "settings": {
           ".read": "auth.uid === $uid",

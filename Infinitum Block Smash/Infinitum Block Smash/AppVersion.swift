@@ -87,7 +87,7 @@ struct AppVersion {
     static let changelog: [String: [String]] = [
         
         "1.0.7 (Build 1)": [
-            "Performance optimizations",
+            "Major Performance overhaul & optimizations",
             "Bug Fixes and Improvements"
         ],
         

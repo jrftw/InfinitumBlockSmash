@@ -228,31 +228,35 @@ class AdManager: NSObject, ObservableObject {
         guard !isInitializing else { return }
         
         isInitializing = true
-        MobileAds.shared.start(completionHandler: { [weak self] (status: InitializationStatus) in
-            Task { @MainActor [weak self] in
-                guard let self = self else { return }
-                
-                Logger.shared.log("Google Mobile Ads SDK initialization status: \(status)", category: .ads, level: .info)
-                
-                // Check if initialization was successful
-                if status.adapterStatusesByClassName.isEmpty {
-                    Logger.shared.log("Ad SDK initialization failed - no adapters available", category: .ads, level: .error)
-                    self.isSDKInitialized = false
-                } else {
-                    self.isSDKInitialized = true
-                    Logger.shared.log("Ad SDK initialized successfully", category: .ads, level: .info)
+        
+        // Add a small delay to ensure proper initialization order
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            MobileAds.shared.start(completionHandler: { [weak self] (status: InitializationStatus) in
+                Task { @MainActor [weak self] in
+                    guard let self = self else { return }
                     
-                    // Preload all ad types after SDK is initialized with a delay
-                    Task {
-                        // Add a small delay to ensure SDK is fully ready
-                        try? await Task.sleep(nanoseconds: UInt64(1.0 * 1_000_000_000)) // 1 second delay
-                        await self.preloadAllAds()
+                    Logger.shared.log("Google Mobile Ads SDK initialization status: \(status)", category: .ads, level: .info)
+                    
+                    // Check if initialization was successful
+                    if status.adapterStatusesByClassName.isEmpty {
+                        Logger.shared.log("Ad SDK initialization failed - no adapters available", category: .ads, level: .error)
+                        self.isSDKInitialized = false
+                    } else {
+                        self.isSDKInitialized = true
+                        Logger.shared.log("Ad SDK initialized successfully", category: .ads, level: .info)
+                        
+                        // Preload all ad types after SDK is initialized with a delay
+                        Task {
+                            // Add a small delay to ensure SDK is fully ready
+                            try? await Task.sleep(nanoseconds: UInt64(1.0 * 1_000_000_000)) // 1 second delay
+                            await self.preloadAllAds()
+                        }
                     }
+                    
+                    self.isInitializing = false
                 }
-                
-                self.isInitializing = false
-            }
-        })
+            })
+        }
     }
     
     private func setupNetworkMonitoring() {
