@@ -2,7 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Basic App Information -->
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -13,8 +12,6 @@
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
-	
-	<!-- Localization Support -->
 	<key>CFBundleLocalizations</key>
 	<array>
 		<string>en</string>
@@ -30,18 +27,14 @@
 		<string>fr</string>
 		<string>de</string>
 	</array>
-	
-	<!-- App Version Information -->
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.6</string>
+	<string>1.0.7</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
-	
-	<!-- URL Scheme Configuration for Deep Linking -->
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -53,8 +46,6 @@
 			</array>
 		</dict>
 	</array>
-	
-	<!-- Firebase Configuration -->
 	<key>FirebaseAppDelegateProxyEnabled</key>
 	<false/>
 	<key>FirebaseAutomaticScreenReportingEnabled</key>
@@ -63,39 +54,25 @@
 	<true/>
 	<key>FirebaseMessagingSwizzlingEnabled</key>
 	<true/>
-	
-	<!-- AdMob Configuration -->
 	<key>GADApplicationIdentifier</key>
 	<string>ca-app-pub-6815311336585204~8428648149</string>
-	
-	<!-- Game Center Configuration -->
 	<key>GKGameCenterEnabled</key>
 	<true/>
-	
-	<!-- Encryption Compliance -->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
-	
-	<!-- URL Scheme Queries -->
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>https</string>
 		<string>mailto</string>
 	</array>
-	
-	<!-- iOS Requirements -->
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	
-	<!-- External URLs -->
 	<key>MarketingURL</key>
 	<string>https://infinitumlive.com/apps</string>
 	<key>PrivacyPolicyURL</key>
 	<string>https://infinitumlive.com/privacy-policy/</string>
 	<key>SupportURL</key>
 	<string>https://infinitumlive.com/support</string>
-	
-	<!-- App Transport Security Configuration -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
@@ -137,44 +114,33 @@
 			</dict>
 		</dict>
 	</dict>
-	
-	<!-- Privacy Descriptions -->
 	<key>NSUserNotificationUsageDescription</key>
 	<string>We use notifications to send you daily reminders to play and keep you updated about your achievements and game events.</string>
 	<key>NSUserTrackingUsageDescription</key>
 	<string>We use this identifier to provide you with personalized ads and improve your gaming experience. This helps us show you relevant content and track your achievements. Your data is used to enhance gameplay features, analyze app performance, and provide better support. You can change this setting anytime in your device settings.</string>
-	
-	<!-- Ad Network Configuration -->
 	<key>SKAdNetworkItems</key>
 	<array>
-		<!-- Google AdMob -->
 		<dict>
 			<key>SKAdNetworkIdentifier</key>
 			<string>cstr6suwn9.skadnetwork</string>
 		</dict>
-		<!-- Facebook Audience Network (commonly used with AdMob) -->
 		<dict>
 			<key>SKAdNetworkIdentifier</key>
 			<string>4fzdc2evr5.skadnetwork</string>
 		</dict>
-		<!-- Unity Ads (commonly used with AdMob) -->
 		<dict>
 			<key>SKAdNetworkIdentifier</key>
 			<string>4pfyvq9l8r.skadnetwork</string>
 		</dict>
-		<!-- AppLovin (commonly used with AdMob) -->
 		<dict>
 			<key>SKAdNetworkIdentifier</key>
 			<string>ydx93a7ass.skadnetwork</string>
 		</dict>
-		<!-- IronSource (commonly used with AdMob) -->
 		<dict>
 			<key>SKAdNetworkIdentifier</key>
 			<string>5a6flpkh64.skadnetwork</string>
 		</dict>
 	</array>
-	
-	<!-- UI Configuration -->
 	<key>UIAppFonts</key>
 	<array/>
 	<key>UIApplicationSceneManifest</key>
@@ -194,8 +160,6 @@
 			</array>
 		</dict>
 	</dict>
-	
-	<!-- Input and Background Configuration -->
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>
@@ -203,19 +167,13 @@
 		<string>remote-notification</string>
 		<string>fetch</string>
 	</array>
-	
-	<!-- Launch Screen Configuration -->
 	<key>UILaunchScreen</key>
 	<dict/>
-	
-	<!-- Device Requirements -->
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
 		<string>armv7</string>
 		<string>metal</string>
 	</array>
-	
-	<!-- UI Behavior Configuration -->
 	<key>UIRequiresFullScreen</key>
 	<true/>
 	<key>UIRequiresPersistentWiFi</key>
@@ -224,8 +182,6 @@
 	<true/>
 	<key>UIStatusBarStyle</key>
 	<string>UIStatusBarStyleLightContent</string>
-	
-	<!-- Orientation Support -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
@@ -235,14 +191,10 @@
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 	</array>
-	
-	<!-- UI Style Configuration -->
 	<key>UIUserInterfaceStyle</key>
 	<string>Light</string>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
-	
-	<!-- Device Check Configuration -->
 	<key>com.apple.developer.devicecheck.appattest-environment</key>
 	<string>production</string>
 </dict>
