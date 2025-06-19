@@ -141,6 +141,7 @@ struct ContentView: View {
     @State private var isTopThreePlayer = false
     @StateObject private var appOpenManager = AppOpenManager.shared
     @State private var showingDeviceSimulation = false
+    @State private var showingDebugManager = false
     
     var isLoggedIn: Bool {
         !userID.isEmpty && (!username.isEmpty || isGuest)
@@ -210,47 +211,69 @@ struct ContentView: View {
                             MenuButton(title: "Resume Game", icon: "play.fill", onDelete: {
                                 gameState.deleteSavedGame()
                             }) {
+                                handleMainMenuInteraction()
                                 showingGameView = true
                             }
                         }
                         
                         // Play Button (replaces Game Modes)
                         MenuButton(title: "Play", icon: "gamecontroller.fill") {
+                            handleMainMenuInteraction()
                             showingGameModeSelection = true
                         }
                         
                         MenuButton(title: "Leaderboard", icon: "trophy.fill") {
+                            handleMainMenuInteraction()
                             handleLeaderboardAccess()
                         }
                         
                         MenuButton(title: "Statistics", icon: "chart.bar.fill") {
+                            handleMainMenuInteraction()
                             showingStats = true
                         }
                         
                         MenuButton(title: "Change Information", icon: "person.fill") {
+                            handleMainMenuInteraction()
                             showingChangeInfo = true
                         }
                         
                         MenuButton(title: "Store", icon: "cart.fill") {
+                            handleMainMenuInteraction()
                             showingStore = true
                         }
                         
                         MenuButton(title: "Announcements", icon: "bell.fill") {
+                            handleMainMenuInteraction()
                             showingAnnouncements = true
                         }
                         
                         MenuButton(title: "Settings", icon: "gear") {
+                            handleMainMenuInteraction()
                             showingSettings = true
                         }
                         
-                        // Device Simulation Debug (only in simulator)
+                        // Device Simulation Debug (only in simulator and debug mode)
                         #if targetEnvironment(simulator)
-                        MenuButton(title: "Device Simulation", icon: "iphone") {
-                            showingDeviceSimulation = true
+                        if DebugManager.shouldShowDebugFeatures && DebugManager.shouldEnableDeviceSimulation {
+                            MenuButton(title: "Device Simulation", icon: "iphone") {
+                                handleMainMenuInteraction()
+                                showingDeviceSimulation = true
+                            }
+                        }
+                        #endif
+                        
+                        // Debug Manager (only in debug builds)
+                        #if DEBUG
+                        if DebugManager.shouldShowDebugFeatures {
+                            MenuButton(title: "Debug Manager", icon: "wrench.and.screwdriver") {
+                                handleMainMenuInteraction()
+                                showingDebugManager = true
+                            }
                         }
                         #endif
                         
                         MenuButton(title: "Log Out", icon: "rectangle.portrait.and.arrow.right") {
+                            handleMainMenuInteraction()
                             userID = ""
                             username = ""
                             isGuest = false
@@ -317,6 +340,11 @@ struct ContentView: View {
                 sceneDelegate.gameState = gameState
             }
             
+            // Check for inactivity ad
+            Task {
+                await AdManager.shared.showInactivityAd()
+            }
+            
             // Load saved game if it exists
             if gameState.hasSavedGame() {
                 Task {
@@ -371,6 +399,9 @@ struct ContentView: View {
         .sheet(isPresented: $showingDeviceSimulation) {
             DeviceSimulationDebugView()
         }
+        .sheet(isPresented: $showingDebugManager) {
+            DebugManagerView()
+        }
         .sheet(isPresented: $showingNewGameConfirmation) {
             // ... existing code ...
         }
@@ -404,6 +435,15 @@ struct ContentView: View {
                     showingClassicTimedView = true
                 }
             )
+        }
+    }
+    
+    private func handleMainMenuInteraction() {
+        AdManager.shared.recordMainMenuInteraction()
+        
+        // Check for main menu ad after interaction
+        Task {
+            await AdManager.shared.showMainMenuAd()
         }
     }
     

@@ -144,7 +144,7 @@ class ManualLeaderboardUpdate {
                             #else
                             // In release builds, only track significant improvements
                             let scoreImprovement = collection == "classic_timed_leaderboard" ? 
-                                (currentTime - totalTime) : (finalScore - currentScore)
+                                (currentTime - totalTime) : Double(finalScore - currentScore)
                             if scoreImprovement > 50 {
                                 await MainActor.run {
                                     AnalyticsManager.shared.trackEvent(.performanceMetric(
@@ -619,7 +619,7 @@ class ManualLeaderboardUpdate {
                             #else
                             // In release builds, only track significant improvements
                             let scoreImprovement = collection == "classic_timed_leaderboard" ? 
-                                (currentTime - totalTime) : (finalScore - currentScore)
+                                (currentTime - totalTime) : Double(finalScore - currentScore)
                             if scoreImprovement > 50 {
                                 await MainActor.run {
                                     AnalyticsManager.shared.trackEvent(.performanceMetric(

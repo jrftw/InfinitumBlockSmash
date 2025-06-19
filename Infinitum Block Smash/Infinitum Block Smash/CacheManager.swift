@@ -154,7 +154,7 @@ final class CacheManager {
     private let memoryCache = NSCache<NSString, AnyObject>()
     private let fileManager = FileManager.default
     private let cacheDirectory: URL
-    private let maxCacheSize: Int64 = 50 * 1024 * 1024 // 50MB
+    private let maxCacheSize: Int64
     private let cacheExpirationInterval: TimeInterval = 1800 // 30 minutes
     private let compressionQueue = DispatchQueue(label: "com.infinitum.blocksmash.compression", qos: .utility)
     private let cacheQueue = DispatchQueue(label: "com.infinitum.blocksmash.cache", qos: .utility)
@@ -163,17 +163,20 @@ final class CacheManager {
     private var cacheHits = 0
     private var cacheMisses = 0
     private var lastCleanupTime = Date()
-    private let cleanupInterval: TimeInterval = 180 // 3 minutes
+    private let cleanupInterval: TimeInterval = MemoryConfig.getIntervals().cacheCleanup
     private var lastStatsLogTime = Date()
-    private let statsLogInterval: TimeInterval = 30 // 30 seconds
+    private let statsLogInterval: TimeInterval = MemoryConfig.getIntervals().statsLogging
     
     private init() {
-        memoryCache.countLimit = 100
-        memoryCache.totalCostLimit = 25 * 1024 * 1024 // 25MB
+        let cacheLimits = MemoryConfig.getCacheLimits()
+        memoryCache.countLimit = cacheLimits.maxCacheEntries
+        memoryCache.totalCostLimit = cacheLimits.memoryCacheSize
         
         let cachesDirectory = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
         cacheDirectory = cachesDirectory.appendingPathComponent("GameCache")
         try? fileManager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+        
+        maxCacheSize = Int64(cacheLimits.diskCacheSize)
         
         startPeriodicCleanup()
         startStatsLogging()

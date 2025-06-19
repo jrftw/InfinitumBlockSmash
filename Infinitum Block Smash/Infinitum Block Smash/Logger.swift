@@ -31,6 +31,7 @@ class Logger {
         case inAppMessaging = "InAppMessaging"
         case cacheManager = "CacheManager"
         case forceLogout = "ForceLogout"
+        case ads = "Ads"
         
         // Firebase Components
         case firebaseAuth = "FirebaseAuth"
@@ -108,6 +109,7 @@ class Logger {
             case .inAppMessaging: return LoggerConfig.inAppMessagingEnabled
             case .cacheManager: return LoggerConfig.cacheManagerEnabled
             case .forceLogout: return LoggerConfig.forceLogoutEnabled
+            case .ads: return LoggerConfig.adsEnabled
             
             // Firebase Components
             case .firebaseAuth: return LoggerConfig.firebaseAuthEnabled
@@ -302,6 +304,7 @@ extension Logger.Category: CaseIterable {
             .inAppMessaging,
             .cacheManager,
             .forceLogout,
+            .ads,
             
             // Firebase Components
             .firebaseAuth,

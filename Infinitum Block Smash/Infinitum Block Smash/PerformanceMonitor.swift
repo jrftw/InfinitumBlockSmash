@@ -48,8 +48,8 @@ class PerformanceMonitor: ObservableObject {
     }
     
     private func startMemoryMonitoring() {
-        // Start periodic memory monitoring
-        memoryTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+        // Start periodic memory monitoring with device-specific frequency
+        memoryTimer = Timer.scheduledTimer(withTimeInterval: MemoryConfig.getIntervals().memoryCheck, repeats: true) { [weak self] _ in
             self?.updateMemoryUsage()
         }
     }

@@ -153,20 +153,41 @@ class AdManager: NSObject, ObservableObject {
     @Published private(set) var adLoadAttempts: Int = 0
     @Published private(set) var adError: AdError?
     @Published private(set) var adsWatchedThisGame: Int = 0
+    @Published private(set) var isAdCurrentlyShowing: Bool = false
+    
+    // Add SDK initialization tracking
+    @Published private(set) var isSDKInitialized: Bool = false
+    @Published private(set) var isInitializing: Bool = false
     
     // Add ad frequency control
-    private let minimumTimeBetweenAds: TimeInterval = 180 // 3 minutes between ads
-    private let maximumAdsPerGame: Int = 8 // Increased to 8 ads per game
+    private let minimumTimeBetweenAds: TimeInterval = 300 // 5 minutes between ads (increased from 3)
+    private let maximumAdsPerGame: Int = 3 // Maximum 3 ads per game (updated from 4)
     private let maximumAdLoadAttempts: Int = 3
     private let adLoadTimeout: TimeInterval = 5 // 5 seconds timeout for ad loading
     private let preloadDelay: TimeInterval = 2 // Delay before preloading next ad
     private let maxRetryAttempts: Int = 3
     private let adRefreshInterval: TimeInterval = 300 // 5 minutes refresh interval
+    
+    // Add new auto-triggered ad tracking
+    private var lastInactivityAdTime: Date?
+    private var mainMenuInteractionCount: Int = 0
+    private var lastMainMenuAdTime: Date?
+    private var lastSessionEndTime: Date?
+    private let inactivityThreshold: TimeInterval = 6 * 3600 // 6 hours
+    private let mainMenuAdThreshold: Int = 5 // Show ad after 5 main menu interactions
+    private let mainMenuAdCooldown: TimeInterval = 1800 // 30 minutes between main menu ads
+    
+    // Add loading state management to prevent multiple simultaneous loads
+    private var isLoadingInterstitial: Bool = false
+    private var isLoadingRewarded: Bool = false
+    private var isLoadingBanner: Bool = false
+    
+    // Add missing properties for network monitoring and timers
+    private var networkMonitor: NWPathMonitor?
+    private var isNetworkAvailable: Bool = true
     private var retryCount: Int = 0
     private var preloadTimer: Timer?
     private var refreshTimer: Timer?
-    private var networkMonitor: NWPathMonitor?
-    private var isNetworkAvailable: Bool = true
     
     enum AdState {
         case idle
@@ -187,6 +208,7 @@ class AdManager: NSObject, ObservableObject {
         case networkError
         case invalidResponse
         case retryLimitExceeded
+        case sdkNotInitialized
     }
     
     private let subscriptionManager = SubscriptionManager.shared
@@ -197,26 +219,57 @@ class AdManager: NSObject, ObservableObject {
     private override init() {
         super.init()
         setupNetworkMonitoring()
-        // Initialize the Google Mobile Ads SDK
+        
+        // Initialize the Google Mobile Ads SDK with better error handling
+        initializeSDK()
+    }
+    
+    private func initializeSDK() {
+        guard !isInitializing else { return }
+        
+        isInitializing = true
         MobileAds.shared.start(completionHandler: { [weak self] (status: InitializationStatus) in
-            print("Google Mobile Ads SDK initialization status: \(status)")
-            // Preload all ad types after SDK is initialized
             Task { @MainActor [weak self] in
-                await self?.preloadAllAds()
+                guard let self = self else { return }
+                
+                Logger.shared.log("Google Mobile Ads SDK initialization status: \(status)", category: .ads, level: .info)
+                
+                // Check if initialization was successful
+                if status.adapterStatusesByClassName.isEmpty {
+                    Logger.shared.log("Ad SDK initialization failed - no adapters available", category: .ads, level: .error)
+                    self.isSDKInitialized = false
+                } else {
+                    self.isSDKInitialized = true
+                    Logger.shared.log("Ad SDK initialized successfully", category: .ads, level: .info)
+                    
+                    // Preload all ad types after SDK is initialized with a delay
+                    Task {
+                        // Add a small delay to ensure SDK is fully ready
+                        try? await Task.sleep(nanoseconds: UInt64(1.0 * 1_000_000_000)) // 1 second delay
+                        await self.preloadAllAds()
+                    }
+                }
+                
+                self.isInitializing = false
             }
         })
     }
     
     private func setupNetworkMonitoring() {
         networkMonitor = NWPathMonitor()
-        networkMonitor?.pathUpdateHandler = { [weak self] path in
+        networkMonitor?.pathUpdateHandler = { [weak self] (path: NWPath) in
             Task { @MainActor [weak self] in
                 let wasAvailable = self?.isNetworkAvailable ?? false
                 self?.isNetworkAvailable = path.status == .satisfied
                 
-                // If network became available, try to preload ads
+                // If network became available, try to initialize SDK and preload ads
                 if !wasAvailable && self?.isNetworkAvailable == true {
-                    await self?.preloadAllAds()
+                    // Reinitialize SDK if it wasn't initialized before
+                    if self?.isSDKInitialized == false {
+                        self?.reinitializeSDK()
+                    } else {
+                        await self?.preloadAllAds()
+                    }
                 }
             }
         }
@@ -252,6 +305,12 @@ class AdManager: NSObject, ObservableObject {
         // Cancel any existing preload timer
         preloadTimer?.invalidate()
         
+        // Check SDK readiness first
+        guard isSDKInitialized else {
+            Logger.shared.log("Ad SDK not initialized - skipping ad preload", category: .ads, level: .warning)
+            return
+        }
+        
         // Start preloading with a small delay to ensure SDK is ready
         try? await Task.sleep(nanoseconds: UInt64(0.5 * 1_000_000_000))
         
@@ -265,7 +324,7 @@ class AdManager: NSObject, ObservableObject {
         
         // Schedule periodic preloading with exponential backoff
         let nextPreloadInterval = min(300.0 * pow(1.5, Double(retryCount)), 1800.0) // Max 30 minutes
-        preloadTimer = Timer.scheduledTimer(withTimeInterval: nextPreloadInterval, repeats: true) { [weak self] _ in
+        preloadTimer = Timer.scheduledTimer(withTimeInterval: nextPreloadInterval, repeats: false) { [weak self] _ in
             Task { [weak self] in
                 await self?.preloadAllAds()
             }
@@ -274,6 +333,20 @@ class AdManager: NSObject, ObservableObject {
     
     private func preloadInterstitial() async {
         guard await shouldShowAds() else { return }
+        
+        // Check SDK readiness
+        guard isSDKInitialized else {
+            Logger.shared.log("Ad SDK not initialized - skipping interstitial preload", category: .ads, level: .warning)
+            return
+        }
+        
+        // Prevent multiple simultaneous loads
+        guard !isLoadingInterstitial else {
+            Logger.shared.log("Interstitial already loading - skipping preload", category: .ads, level: .debug)
+            return
+        }
+        
+        isLoadingInterstitial = true
         
         do {
             let request = Request()
@@ -313,13 +386,29 @@ class AdManager: NSObject, ObservableObject {
                 self.retryCount = 0
             }
         } catch {
-            print("Failed to preload interstitial ads: \(error.localizedDescription)")
+            Logger.shared.log("Failed to preload interstitial ads: \(error.localizedDescription)", category: .ads, level: .error)
             handleAdError(error)
         }
+        
+        isLoadingInterstitial = false
     }
     
     private func preloadRewardedInterstitial() async {
         guard await shouldShowAds() else { return }
+        
+        // Check SDK readiness
+        guard isSDKInitialized else {
+            Logger.shared.log("Ad SDK not initialized - skipping rewarded interstitial preload", category: .ads, level: .warning)
+            return
+        }
+        
+        // Prevent multiple simultaneous loads
+        guard !isLoadingRewarded else {
+            Logger.shared.log("Rewarded interstitial already loading - skipping preload", category: .ads, level: .debug)
+            return
+        }
+        
+        isLoadingRewarded = true
         
         do {
             let request = Request()
@@ -339,7 +428,7 @@ class AdManager: NSObject, ObservableObject {
                 self.retryCount = 0
             }
         } catch {
-            print("Failed to preload rewarded interstitial ads: \(error.localizedDescription)")
+            Logger.shared.log("Failed to preload rewarded interstitial ads: \(error.localizedDescription)", category: .ads, level: .error)
             handleAdError(error)
             
             // Retry with exponential backoff
@@ -350,6 +439,8 @@ class AdManager: NSObject, ObservableObject {
                 await preloadRewardedInterstitial()
             }
         }
+        
+        isLoadingRewarded = false
     }
     
     // MARK: - Ad Display Logic
@@ -397,6 +488,20 @@ class AdManager: NSObject, ObservableObject {
         // Don't load ads if user has purchased no-ads
         guard await shouldShowAds() else { return }
         
+        // Check SDK readiness
+        guard isSDKInitialized else {
+            Logger.shared.log("Ad SDK not initialized - skipping banner preload", category: .ads, level: .warning)
+            return
+        }
+        
+        // Prevent multiple simultaneous loads
+        guard !isLoadingBanner else {
+            Logger.shared.log("Banner already loading - skipping preload", category: .ads, level: .debug)
+            return
+        }
+        
+        isLoadingBanner = true
+        
         // Clean up existing banner if any
         bannerAd?.removeFromSuperview()
         bannerAd = nil
@@ -408,6 +513,8 @@ class AdManager: NSObject, ObservableObject {
             .first
         banner.load(Request())
         self.bannerAd = banner
+        
+        isLoadingBanner = false
     }
     
     // MARK: - Ad Performance Tracking
@@ -421,19 +528,22 @@ class AdManager: NSObject, ObservableObject {
     // MARK: - Ad Availability Check
     
     func isAdAvailable() async -> Bool {
-        // Check network connectivity first
+        // Check basic conditions first
         guard isNetworkAvailable else {
+            Logger.shared.log("Ad not available - no network connection", category: .ads, level: .debug)
             return false
         }
         
         // Check if user has purchased the no-ads feature
         let hasNoAdsFeature = await subscriptionManager.hasFeature(.noAds)
         if hasNoAdsFeature {
+            Logger.shared.log("Ad not available - user has no-ads feature", category: .ads, level: .debug)
             return false
         }
         
         // Check if user has referral-based ad-free time
         if ReferralManager.shared.hasAdFreeTime() {
+            Logger.shared.log("Ad not available - user has ad-free time from referral", category: .ads, level: .debug)
             return false
         }
         
@@ -441,28 +551,31 @@ class AdManager: NSObject, ObservableObject {
         if let lastAdTime = lastAdShownTime {
             let timeSinceLastAd = Date().timeIntervalSince(lastAdTime)
             if timeSinceLastAd < minimumTimeBetweenAds {
+                Logger.shared.log("Ad not available - too frequent (last ad was \(Int(timeSinceLastAd))s ago)", category: .ads, level: .debug)
                 return false
             }
         }
         
         // Check maximum ads per game
         if adsWatchedThisGame >= maximumAdsPerGame {
+            Logger.shared.log("Ad not available - maximum ads per game reached (\(adsWatchedThisGame)/\(maximumAdsPerGame))", category: .ads, level: .debug)
             return false
         }
         
-        // Check if ads are properly preloaded
-        let isInterstitialReady = interstitialAd != nil || fallbackInterstitialAd != nil
-        let isRewardedReady = rewardedInterstitialAd != nil || fallbackRewardedAd != nil
-        
-        // If ads aren't ready, trigger preload
-        if !isInterstitialReady || !isRewardedReady {
-            Task {
-                await preloadAllAds()
-            }
+        // Check if we have a valid view controller
+        guard getTopViewController() != nil else {
+            Logger.shared.log("Ad not available - no valid view controller", category: .ads, level: .debug)
             return false
         }
         
-        return adState == .ready
+        // Check if we can present an ad
+        guard canPresentAd() else {
+            Logger.shared.log("Ad not available - cannot present ad", category: .ads, level: .debug)
+            return false
+        }
+        
+        Logger.shared.log("Ad is available for presentation", category: .ads, level: .debug)
+        return true
     }
     
     // MARK: - Timeout Handling
@@ -496,6 +609,14 @@ class AdManager: NSObject, ObservableObject {
             return
         }
         
+        // Check SDK readiness
+        guard isSDKInitialized else {
+            adState = .error
+            adError = .sdkNotInitialized
+            Logger.shared.log("Ad SDK not initialized - cannot load interstitial", category: .ads, level: .error)
+            return
+        }
+        
         // Check load attempts
         if adLoadAttempts >= maximumAdLoadAttempts {
             adState = .error
@@ -503,6 +624,14 @@ class AdManager: NSObject, ObservableObject {
             trackAdPerformance(adType: "interstitial", success: false, error: adError)
             return
         }
+        
+        // Prevent multiple simultaneous loads
+        guard !isLoadingInterstitial else {
+            Logger.shared.log("Interstitial already loading - skipping load", category: .ads, level: .debug)
+            return
+        }
+        
+        isLoadingInterstitial = true
         
         // Clean up existing interstitial if any
         interstitialAd = nil
@@ -523,39 +652,23 @@ class AdManager: NSObject, ObservableObject {
             adLoadAttempts += 1
             trackAdPerformance(adType: "interstitial", success: false, error: error)
         }
+        
+        isLoadingInterstitial = false
     }
     
     func showInterstitial() async {
-        guard let root = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first?.windows.first?.rootViewController else {
+        // Use the centralized ad check
+        guard shouldShowAd() else { return }
+        
+        guard await isAdAvailable() else {
+            print("[AdManager] Interstitial ad not available")
             return
         }
         
-        let shouldShow = await shouldShowAds()
-        guard shouldShow else { return }
-        
-        isLoadingIndicatorVisible = true
-        
-        if let ad = interstitialAd {
-            adState = .showing
-            ad.present(from: root)
-            lastAdShownTime = Date()
-            adsWatchedThisGame += 1
-            // Preload next ad
-            await preloadInterstitial()
-        } else if let fallbackAd = fallbackInterstitialAd {
-            adState = .showing
-            fallbackAd.present(from: root)
-            lastAdShownTime = Date()
-            adsWatchedThisGame += 1
-            // Preload next ad
-            await preloadInterstitial()
-        } else {
-            await loadInterstitial()
+        await MainActor.run {
+            guard let topViewController = getTopViewController() else { return }
+            interstitialAd?.present(from: topViewController)
         }
-        
-        isLoadingIndicatorVisible = false
     }
     
     // MARK: - Rewarded Interstitial Ads
@@ -569,6 +682,22 @@ class AdManager: NSObject, ObservableObject {
             adState = .idle
             return
         }
+        
+        // Check SDK readiness
+        guard isSDKInitialized else {
+            adState = .error
+            adError = .sdkNotInitialized
+            Logger.shared.log("Ad SDK not initialized - cannot load rewarded interstitial", category: .ads, level: .error)
+            return
+        }
+        
+        // Prevent multiple simultaneous loads
+        guard !isLoadingRewarded else {
+            Logger.shared.log("Rewarded interstitial already loading - skipping load", category: .ads, level: .debug)
+            return
+        }
+        
+        isLoadingRewarded = true
         
         // Clean up existing rewarded interstitial if any
         rewardedInterstitialAd = nil
@@ -589,37 +718,34 @@ class AdManager: NSObject, ObservableObject {
             adLoadFailed = true
             trackAdPerformance(adType: "rewarded", success: false, error: error)
         }
+        
+        isLoadingRewarded = false
     }
     
     func showRewardedInterstitial(onReward: @escaping () -> Void) async {
-        guard let root = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first?.windows.first?.rootViewController else {
+        // Use the centralized ad check
+        guard shouldShowAd() else { 
+            // If we can't show ad, still give the reward
+            onReward()
+            return 
+        }
+        
+        guard await isAdAvailable() else {
+            print("[AdManager] Rewarded interstitial ad not available")
+            // Still give reward if ad is not available
+            onReward()
             return
         }
         
-        let shouldShow = await shouldShowAds()
-        guard shouldShow else { return }
-        
-        isLoadingIndicatorVisible = true
-        
-        if let ad = rewardedInterstitialAd {
-            ad.present(from: root) {
+        await MainActor.run {
+            guard let topViewController = getTopViewController() else { 
                 onReward()
+                return 
             }
-            // Preload next ad
-            await preloadRewardedInterstitial()
-        } else if let fallbackAd = fallbackRewardedAd {
-            fallbackAd.present(from: root) {
+            rewardedInterstitialAd?.present(from: topViewController, userDidEarnRewardHandler: {
                 onReward()
-            }
-            // Preload next ad
-            await preloadRewardedInterstitial()
-        } else {
-            await loadRewardedInterstitial()
+            })
         }
-        
-        isLoadingIndicatorVisible = false
     }
     
     // MARK: - Improved Cleanup
@@ -642,6 +768,12 @@ class AdManager: NSObject, ObservableObject {
         refreshTimer = nil
         networkMonitor?.cancel()
         networkMonitor = nil
+        
+        // Reset loading states
+        isLoadingInterstitial = false
+        isLoadingRewarded = false
+        isLoadingBanner = false
+        isAdCurrentlyShowing = false
     }
     
     func resetGameState() async {
@@ -650,6 +782,14 @@ class AdManager: NSObject, ObservableObject {
             adLoadAttempts = 0
             adState = .idle
             adError = nil
+        }
+    }
+    
+    // Add method to reinitialize SDK if needed
+    func reinitializeSDK() {
+        if !isSDKInitialized && !isInitializing {
+            Logger.shared.log("Reinitializing Ad SDK", category: .ads, level: .info)
+            initializeSDK()
         }
     }
     
@@ -679,6 +819,202 @@ class AdManager: NSObject, ObservableObject {
             }
         }
     }
+    
+    // MARK: - Helper Methods
+    
+    private func getTopViewController() -> UIViewController? {
+        guard let windowScene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first,
+              let window = windowScene.windows.first else {
+            return nil
+        }
+        
+        var topController = window.rootViewController
+        
+        // Navigate through presented view controllers to find the topmost one
+        while let presentedController = topController?.presentedViewController {
+            topController = presentedController
+        }
+        
+        // If the top controller is a navigation controller, get its top view controller
+        if let navigationController = topController as? UINavigationController {
+            topController = navigationController.topViewController
+        }
+        
+        // If the top controller is a tab bar controller, get its selected view controller
+        if let tabBarController = topController as? UITabBarController {
+            topController = tabBarController.selectedViewController
+        }
+        
+        return topController
+    }
+    
+    private func canPresentAd() -> Bool {
+        // First check if SDK is ready
+        guard isSDKInitialized else {
+            Logger.shared.log("Ad SDK not initialized", category: .ads, level: .warning)
+            return false
+        }
+        
+        guard let topController = getTopViewController() else {
+            Logger.shared.log("No top view controller found for ad presentation", category: .ads, level: .warning)
+            return false
+        }
+        
+        // Check if an ad is already being shown
+        if isAdCurrentlyShowing {
+            Logger.shared.log("Ad is already being shown", category: .ads, level: .debug)
+            return false
+        }
+        
+        // Check if the top controller is already presenting something
+        if let presentedVC = topController.presentedViewController {
+            Logger.shared.log("Top controller is already presenting: \(type(of: presentedVC))", category: .ads, level: .debug)
+            return false
+        }
+        
+        // Check if the top controller is in the process of being dismissed
+        if topController.isBeingDismissed {
+            Logger.shared.log("Top controller is being dismissed", category: .ads, level: .debug)
+            return false
+        }
+        
+        // Check if the top controller is in the process of being presented
+        if topController.isBeingPresented {
+            Logger.shared.log("Top controller is being presented", category: .ads, level: .debug)
+            return false
+        }
+        
+        // Additional safety checks
+        if topController.view.window == nil {
+            Logger.shared.log("Top controller view is not in window hierarchy", category: .ads, level: .debug)
+            return false
+        }
+        
+        // Check if the view controller is ready for presentation
+        if !topController.view.window!.isKeyWindow {
+            Logger.shared.log("Top controller window is not key window", category: .ads, level: .debug)
+            return false
+        }
+        
+        // Check if view controller view is loaded and visible
+        if !topController.isViewLoaded || topController.view.window == nil {
+            Logger.shared.log("Top controller view is not loaded or not visible", category: .ads, level: .debug)
+            return false
+        }
+        
+        // Check if view controller is in a valid state
+        if topController.view.window?.isHidden == true {
+            Logger.shared.log("Top controller window is hidden", category: .ads, level: .debug)
+            return false
+        }
+        
+        Logger.shared.log("Ad presentation conditions met", category: .ads, level: .debug)
+        return true
+    }
+    
+    // MARK: - Premium Plan Checks
+    
+    private func isUserOnPremiumPlan() -> Bool {
+        // Check if user has any active subscription or has removed ads
+        return SubscriptionManager.shared.hasActiveSubscription || 
+               UserDefaults.standard.bool(forKey: "hasRemovedAds")
+    }
+    
+    private func isInTutorialOrFirstTimeFlow() -> Bool {
+        // Check if tutorial is being shown or if this is a first-time user
+        let showTutorial = UserDefaults.standard.bool(forKey: "showTutorial")
+        let hasPlayedBefore = UserDefaults.standard.bool(forKey: "hasPlayedBefore")
+        
+        return showTutorial || !hasPlayedBefore
+    }
+    
+    private func shouldShowAd() -> Bool {
+        // Don't show ads if user is on premium plan
+        guard !isUserOnPremiumPlan() else { 
+            print("[AdManager] Skipping ad - user is on premium plan")
+            return false 
+        }
+        
+        // Don't show ads during tutorial or first-time user flow
+        guard !isInTutorialOrFirstTimeFlow() else {
+            print("[AdManager] Skipping ad - user is in tutorial or first-time flow")
+            return false
+        }
+        
+        return true
+    }
+    
+    // MARK: - Auto-Triggered Ad Methods
+    
+    func shouldShowInactivityAd() async -> Bool {
+        // Use the centralized ad check
+        guard shouldShowAd() else { return false }
+        
+        // Check if enough time has passed since last inactivity ad
+        if let lastAdTime = lastInactivityAdTime {
+            let timeSinceLastAd = Date().timeIntervalSince(lastAdTime)
+            if timeSinceLastAd < minimumTimeBetweenAds {
+                return false
+            }
+        }
+        
+        // Check if user was inactive for 6+ hours
+        if let lastSession = lastSessionEndTime {
+            let timeSinceLastSession = Date().timeIntervalSince(lastSession)
+            return timeSinceLastSession >= inactivityThreshold
+        }
+        
+        return false
+    }
+    
+    func shouldShowMainMenuAd() async -> Bool {
+        // Use the centralized ad check
+        guard shouldShowAd() else { return false }
+        
+        // Check cooldown
+        if let lastAdTime = lastMainMenuAdTime {
+            let timeSinceLastAd = Date().timeIntervalSince(lastAdTime)
+            if timeSinceLastAd < mainMenuAdCooldown {
+                return false
+            }
+        }
+        
+        // Check if we've reached the interaction threshold
+        return mainMenuInteractionCount >= mainMenuAdThreshold
+    }
+    
+    func recordMainMenuInteraction() {
+        mainMenuInteractionCount += 1
+        print("[AdManager] Main menu interaction count: \(mainMenuInteractionCount)")
+    }
+    
+    func recordSessionEnd() {
+        lastSessionEndTime = Date()
+        print("[AdManager] Session ended at: \(lastSessionEndTime!)")
+    }
+    
+    func showInactivityAd() async {
+        guard await shouldShowInactivityAd() else { return }
+        
+        if await isAdAvailable() {
+            print("[AdManager] Showing inactivity ad")
+            lastInactivityAdTime = Date()
+            await showInterstitial()
+        }
+    }
+    
+    func showMainMenuAd() async {
+        guard await shouldShowMainMenuAd() else { return }
+        
+        if await isAdAvailable() {
+            print("[AdManager] Showing main menu ad")
+            lastMainMenuAdTime = Date()
+            mainMenuInteractionCount = 0 // Reset counter
+            await showInterstitial()
+        }
+    }
 }
 
 // MARK: - FullScreenContentDelegate
@@ -688,6 +1024,7 @@ extension AdManager: FullScreenContentDelegate {
         Task { @MainActor in
             adDidDismiss = true
             adState = .idle
+            isAdCurrentlyShowing = false
             // Reload the ad for next time
             if ad is InterstitialAd {
                 await loadInterstitial()
@@ -703,6 +1040,7 @@ extension AdManager: FullScreenContentDelegate {
             adState = .error
             adError = .loadFailed
             adLoadFailed = true
+            isAdCurrentlyShowing = false
             // Reload the ad for next time
             if ad is InterstitialAd {
                 await loadInterstitial()

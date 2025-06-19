@@ -183,45 +183,9 @@ final class MemorySystem {
     static let shared = MemorySystem()
     
     // MARK: — Dynamic Thresholds based on Device Simulation
-    private var warningThreshold: Double {
-        let deviceSimulator = DeviceSimulator.shared
-        if deviceSimulator.isRunningInSimulator() {
-            // Use device-specific thresholds
-            if deviceSimulator.isLowEndDevice() {
-                return 0.25 // 25% for low-end devices
-            } else {
-                return 0.30 // 30% for mid/high-end devices
-            }
-        } else {
-            return 0.30 // Default for real devices
-        }
-    }
-    
-    private var criticalThreshold: Double {
-        let deviceSimulator = DeviceSimulator.shared
-        if deviceSimulator.isRunningInSimulator() {
-            if deviceSimulator.isLowEndDevice() {
-                return 0.35 // 35% for low-end devices
-            } else {
-                return 0.45 // 45% for mid/high-end devices
-            }
-        } else {
-            return 0.45 // Default for real devices
-        }
-    }
-    
-    private var extremeThreshold: Double {
-        let deviceSimulator = DeviceSimulator.shared
-        if deviceSimulator.isRunningInSimulator() {
-            if deviceSimulator.isLowEndDevice() {
-                return 0.45 // 45% for low-end devices
-            } else {
-                return 0.60 // 60% for mid/high-end devices
-            }
-        } else {
-            return 0.60 // Default for real devices
-        }
-    }
+    private let warningThreshold: Double = MemoryConfig.Thresholds.warningLevel
+    private let criticalThreshold: Double = MemoryConfig.Thresholds.criticalLevel
+    private let extremeThreshold: Double = MemoryConfig.Thresholds.extremeLevel
     
     // Dynamic memory targets based on device simulation
     private var targetMemoryUsage: Double {
@@ -246,8 +210,8 @@ final class MemorySystem {
     
     // MARK: — Timing
     private var lastCleanupDate = Date.distantPast
-    private let minimumInterval: TimeInterval = 2.0 // seconds
-    private let monitoringInterval: TimeInterval = 1.0 // seconds
+    private let minimumInterval: TimeInterval = 10.0 // Increased from 2.0 to 10.0 seconds
+    private let monitoringInterval: TimeInterval = MemoryConfig.getIntervals().memoryCheck
     
     // MARK: — Memory Pressure Source
     private let pressureSource: DispatchSourceMemoryPressure
@@ -435,32 +399,76 @@ final class MemorySystem {
             log("[MemorySystem] Clearing URL cache")
             URLCache.shared.removeAllCachedResponses()
             
-            log("[MemorySystem] Removing temporary files")
-            removeTemporaryFiles()
+            log("[MemorySystem] Clearing texture caches")
+            clearTextureCaches()
             
-            log("[MemorySystem] Purging SpriteKit textures")
-            SKTextureAtlas.preloadTextureAtlases([], withCompletionHandler: {})
+            log("[MemorySystem] Clearing node pools")
+            NodePool.shared.clearAllPools()
             
-            // Additional cleanup for low-end devices in simulator
-            if deviceSimulator.isRunningInSimulator() && isLowEnd {
-                log("[MemorySystem] Performing low-end device specific cleanup")
-                // Clear more aggressively for low-end devices
-                UIImageView.clearOldImageCache()
-                BlockShapeView.clearCache()
+            log("[MemorySystem] Clearing SpriteKit textures")
+            Task {
+                await SKTexture.preload([])
+                await SKTextureAtlas.preloadTextureAtlases([])
+            }
+            
+            log("[MemorySystem] Clearing memory cache")
+            memoryCache.removeAllObjects()
+            
+            log("[MemorySystem] Clearing temporary data")
+            clearTemporaryData()
+        }
+        
+        // Additional cleanup for low-end devices
+        if isLowEnd {
+            log("[MemorySystem] Performing additional cleanup for low-end device")
+            autoreleasepool {
+                // Force garbage collection
+                clearAllCaches()
+                memoryCache.removeAllObjects()
+                
+                // Clear any remaining references
+                clearTemporaryData()
             }
         }
         
-        // Reset cache statistics
-        cacheHits = 0
-        cacheMisses = 0
-        
         let endTime = Date()
         let finalMemory = getMemoryUsage()
-        let memoryReduction = initialMemory.used - finalMemory.used
+        let duration = endTime.timeIntervalSince(startTime)
+        let memoryFreed = initialMemory.used - finalMemory.used
         
-        log("[MemorySystem] Aggressive cleanup completed in \(String(format: "%.2f", endTime.timeIntervalSince(startTime)))s")
-        log("[MemorySystem] Memory reduced by \(String(format: "%.1f", memoryReduction))MB")
-        logMemoryUsage()
+        log("[MemorySystem] Aggressive cleanup completed in \(String(format: "%.2f", duration))s")
+        log("[MemorySystem] Memory freed: \(String(format: "%.1f", memoryFreed))MB")
+        log("[MemorySystem] Final memory usage: \(String(format: "%.1f", finalMemory.used))MB / \(String(format: "%.1f", finalMemory.total))MB")
+        
+        // If still critical after cleanup, try one more time
+        if checkMemoryStatus() == .critical {
+            log("[MemorySystem] Memory still critical after cleanup, performing emergency cleanup")
+            await performEmergencyCleanup()
+        }
+    }
+    
+    private func performEmergencyCleanup() async {
+        log("[MemorySystem] Starting emergency cleanup")
+        
+        autoreleasepool {
+            // Clear everything possible
+            clearAllCaches()
+            URLCache.shared.removeAllCachedResponses()
+            clearTextureCaches()
+            NodePool.shared.clearAllPools()
+            memoryCache.removeAllObjects()
+            clearTemporaryData()
+            
+            // Force garbage collection multiple times
+            for _ in 0..<3 {
+                autoreleasepool {
+                    clearAllCaches()
+                    memoryCache.removeAllObjects()
+                }
+            }
+        }
+        
+        log("[MemorySystem] Emergency cleanup completed")
     }
     
     private func performCleanup() async {
@@ -477,52 +485,43 @@ final class MemorySystem {
         let startTime = Date()
         let initialMemory = getMemoryUsage()
         
-        autoreleasepool {
-            #if DEBUG
-            log("[MemorySystem] Clearing URL cache")
-            #endif
-            URLCache.shared.removeAllCachedResponses()
-            
-            #if DEBUG
-            log("[MemorySystem] Removing old temporary files")
-            #endif
-            let tmp = FileManager.default.temporaryDirectory
-            let thirtyMinutesAgo = Date().addingTimeInterval(-1800)
-            if let files = try? FileManager.default.contentsOfDirectory(
-                at: tmp,
-                includingPropertiesForKeys: [.creationDateKey]
-            ) {
-                var removedCount = 0
-                for file in files {
-                    if let attributes = try? FileManager.default.attributesOfItem(atPath: file.path),
-                       let creationDate = attributes[.creationDate] as? Date,
-                       creationDate < thirtyMinutesAgo {
-                        try? FileManager.default.removeItem(at: file)
-                        removedCount += 1
-                    }
+        // Move heavy operations to background queue
+        await withTaskGroup(of: Void.self) { group in
+            // Background task for URL cache cleanup (heavy I/O)
+            group.addTask {
+                Task.detached(priority: .background) {
+                    URLCache.shared.removeAllCachedResponses()
                 }
-                #if DEBUG
-                log("[MemorySystem] Removed \(removedCount) old temporary files")
-                #endif
             }
             
-            #if DEBUG
-            log("[MemorySystem] Purging unused SpriteKit textures")
-            #endif
-            SKTextureAtlas.preloadTextureAtlases([], withCompletionHandler: {})
+            // Background task for temporary file cleanup (disk I/O)
+            group.addTask {
+                Task.detached(priority: .background) {
+                    await self.cleanupTemporaryFiles()
+                }
+            }
             
-            #if DEBUG
-            log("[MemorySystem] Clearing old cached images")
-            #endif
-            UIImageView.clearOldImageCache()
+            // Background task for texture cleanup (GPU operations)
+            group.addTask {
+                Task.detached(priority: .background) {
+                    await SKTextureAtlas.preloadTextureAtlases([])
+                }
+            }
+            
+            // Background task for image cache cleanup
+            group.addTask {
+                Task.detached(priority: .background) {
+                    await UIImageView.clearOldImageCache()
+                }
+            }
             
             // Additional cleanup for low-end devices in simulator
             if deviceSimulator.isRunningInSimulator() && isLowEnd {
-                #if DEBUG
-                log("[MemorySystem] Performing low-end device specific cleanup")
-                #endif
-                // More aggressive cleanup for low-end devices
-                BlockShapeView.clearCache()
+                group.addTask {
+                    Task.detached(priority: .background) {
+                        await BlockShapeView.clearCache()
+                    }
+                }
             }
         }
         
@@ -535,6 +534,39 @@ final class MemorySystem {
         log("[MemorySystem] Memory reduced by \(String(format: "%.1f", memoryReduction))MB")
         logMemoryUsage()
         #endif
+    }
+    
+    // New method for background temporary file cleanup
+    private func cleanupTemporaryFiles() async {
+        let tmp = FileManager.default.temporaryDirectory
+        let thirtyMinutesAgo = Date().addingTimeInterval(-1800)
+        
+        do {
+            let files = try FileManager.default.contentsOfDirectory(
+                at: tmp,
+                includingPropertiesForKeys: [.creationDateKey]
+            )
+            
+            var removedCount = 0
+            for file in files {
+                if let attributes = try? FileManager.default.attributesOfItem(atPath: file.path),
+                   let creationDate = attributes[.creationDate] as? Date,
+                   creationDate < thirtyMinutesAgo {
+                    try? FileManager.default.removeItem(at: file)
+                    removedCount += 1
+                }
+            }
+            
+            #if DEBUG
+            if removedCount > 0 {
+                log("[MemorySystem] Removed \(removedCount) old temporary files")
+            }
+            #endif
+        } catch {
+            #if DEBUG
+            log("[MemorySystem] Error cleaning temporary files: \(error)")
+            #endif
+        }
     }
     
     // MARK: — Cache Management
@@ -566,9 +598,47 @@ final class MemorySystem {
     
     func clearAllCaches() {
         memoryCache.removeAllObjects()
-        BlockShapeView.clearCache()
+        Task {
+            BlockShapeView.clearCache()
+        }
         cacheHits = 0
         cacheMisses = 0
+    }
+    
+    // MARK: - Texture Cache Management
+    private func clearTextureCaches() {
+        log("[MemorySystem] Clearing texture caches")
+        
+        // Clear SpriteKit texture caches
+        Task {
+            await SKTexture.preload([])
+            await SKTextureAtlas.preloadTextureAtlases([])
+        }
+        
+        // Clear any custom texture caches
+        Task {
+            BlockShapeView.clearCache()
+        }
+        
+        log("[MemorySystem] Texture caches cleared")
+    }
+    
+    // MARK: - Temporary Data Management
+    private func clearTemporaryData() {
+        log("[MemorySystem] Clearing temporary data")
+        
+        // Clear temporary files
+        removeTemporaryFiles()
+        
+        // Clear URL cache
+        URLCache.shared.removeAllCachedResponses()
+        
+        // Clear any other temporary data
+        Task {
+            UIImageView.clearOldImageCache()
+        }
+        
+        log("[MemorySystem] Temporary data cleared")
     }
     
     func getCacheStats() -> (hits: Int, misses: Int) {

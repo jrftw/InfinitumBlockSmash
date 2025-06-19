@@ -338,11 +338,8 @@ struct GameView: View {
         }
         .onChange(of: gameState.levelComplete) { isComplete in
             if isComplete {
-                Task {
-                    await adManager.showRewardedInterstitial(onReward: {
-                        // Don't automatically reset levelComplete - wait for user interaction
-                    })
-                }
+                // Level complete - no ad here, ads only show every 15th level
+                // The ad logic is handled in GameState.swift during level progression
             }
         }
         .onChange(of: gameState.score) { _ in

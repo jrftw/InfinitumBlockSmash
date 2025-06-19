@@ -131,49 +131,91 @@ final class NodePool {
                 }
             }
         }
+        
+        // Pre-create some common node types for better performance
+        await MainActor.run {
+            // Pre-create some preview nodes with common shapes
+            for _ in 0..<5 {
+                let previewNode = SKNode()
+                previewNode.name = "preview_block"
+                previewNode.zPosition = 5
+                previewNodePool.append(previewNode)
+            }
+            
+            // Pre-create some highlight containers
+            for _ in 0..<3 {
+                let highlightNode = SKNode()
+                highlightNode.name = "highlight_container"
+                highlightNode.zPosition = 10
+                highlightNodePool.append(highlightNode)
+            }
+        }
     }
     
     func cleanupPools() {
+        Logger.shared.log("Cleaning up node pools", category: .systemMemory, level: .info)
+        
         // Trim pools to minimum size
         while blockNodePool.count > minPoolSize {
-            blockNodePool.removeLast().removeFromParent()
-        }
-        while particleEmitterPool.count > minPoolSize {
-            particleEmitterPool.removeLast().removeFromParent()
-        }
-        while highlightNodePool.count > minPoolSize {
-            highlightNodePool.removeLast().removeFromParent()
-        }
-        while previewNodePool.count > minPoolSize {
-            previewNodePool.removeLast().removeFromParent()
-        }
-    }
-    
-    func clearAllPools() {
-        blockNodePool.forEach { node in
+            let node = blockNodePool.removeLast()
             node.removeAllActions()
             node.removeAllChildren()
             node.removeFromParent()
         }
-        particleEmitterPool.forEach { emitter in
+        while particleEmitterPool.count > minPoolSize {
+            let emitter = particleEmitterPool.removeLast()
             emitter.removeAllActions()
             emitter.particleBirthRate = 0
             emitter.removeFromParent()
         }
-        highlightNodePool.forEach { node in
+        while highlightNodePool.count > minPoolSize {
+            let node = highlightNodePool.removeLast()
             node.removeAllActions()
             node.removeAllChildren()
             node.removeFromParent()
         }
-        previewNodePool.forEach { node in
+        while previewNodePool.count > minPoolSize {
+            let node = previewNodePool.removeLast()
             node.removeAllActions()
             node.removeAllChildren()
             node.removeFromParent()
         }
         
+        Logger.shared.log("Node pools cleaned up", category: .systemMemory, level: .info)
+    }
+    
+    func clearAllPools() {
+        Logger.shared.log("Clearing all node pools", category: .systemMemory, level: .warning)
+        
+        // Clear all pools completely
+        blockNodePool.forEach { node in
+            node.removeAllActions()
+            node.removeAllChildren()
+            node.removeFromParent()
+        }
         blockNodePool.removeAll()
+        
+        particleEmitterPool.forEach { emitter in
+            emitter.removeAllActions()
+            emitter.particleBirthRate = 0
+            emitter.removeFromParent()
+        }
         particleEmitterPool.removeAll()
+        
+        highlightNodePool.forEach { node in
+            node.removeAllActions()
+            node.removeAllChildren()
+            node.removeFromParent()
+        }
         highlightNodePool.removeAll()
+        
+        previewNodePool.forEach { node in
+            node.removeAllActions()
+            node.removeAllChildren()
+            node.removeFromParent()
+        }
         previewNodePool.removeAll()
+        
+        Logger.shared.log("All node pools cleared", category: .systemMemory, level: .info)
     }
 } 

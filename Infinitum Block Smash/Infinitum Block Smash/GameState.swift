@@ -204,7 +204,7 @@ final class GameState: ObservableObject {
     
     // Add memory management properties
     private var lastMemoryCleanup: Date = Date()
-    private let memoryCleanupInterval: TimeInterval = 60.0 // Cleanup every minute
+    private let memoryCleanupInterval: TimeInterval = MemoryConfig.getIntervals().memoryCleanup
     private var cachedData: [String: Any] = [:]
     
     // Add leaderboard high score property
@@ -269,6 +269,15 @@ final class GameState: ObservableObject {
     // Add debounce properties
     private var lastGameOverCheck: TimeInterval = 0
     private let gameOverCheckDebounce: TimeInterval = 0.5 // Half second debounce
+    
+    // Add cooldown tracking for game over ads
+    private var lastGameOverAdTime: Date?
+    private let gameOverAdCooldown: TimeInterval = 600 // 10 minutes between game over ads (changed from 2 minutes)
+    
+    // Add debounced update properties
+    private var pendingUpdate: Bool = false
+    private var updateTimer: Timer?
+    private let updateDebounceInterval: TimeInterval = 0.016 // ~60fps max update rate
     
     // MARK: - Initialization
     init() {
@@ -581,7 +590,8 @@ final class GameState: ObservableObject {
         // Check for game over after refilling
         checkGameState()
         
-        delegate?.gameStateDidUpdate()
+        // Schedule debounced update instead of immediate update
+        scheduleUpdate()
     }
     
     private func checkCanPlaceBlock(_ block: Block) -> Bool {
@@ -791,6 +801,7 @@ final class GameState: ObservableObject {
         }
         
         // Check for matches and patterns
+        Logger.shared.log("Checking for matches and line clears after block placement", category: .lineClear, level: .debug)
         checkMatches()
         
         // Refill tray if needed
@@ -801,8 +812,8 @@ final class GameState: ObservableObject {
             checkGameState()
         }
         
-        // Notify delegate
-        delegate?.gameStateDidUpdate()
+        // Schedule debounced update instead of immediate update
+        scheduleUpdate()
         
         return true
     }
@@ -944,6 +955,8 @@ final class GameState: ObservableObject {
         var diagonalPatternsFound = Set<String>() // Track which diagonal patterns we've found
         var achievementsToUpdate: [String: Int] = [:] // Track achievements to update
         
+        Logger.shared.log("Starting line clear check", category: .lineClear, level: .debug)
+        
         // Track rows and columns to clear in a single pass
         var rowsToClear = Set<Int>()
         var columnsToClear = Set<Int>()
@@ -964,41 +977,66 @@ final class GameState: ObservableObject {
             }
         }
         
+        // Log the counts for debugging
+        for i in 0..<GameConstants.gridSize {
+            Logger.shared.log("Row \(i): \(rowCounts[i])/\(GameConstants.gridSize) blocks", category: .lineClear, level: .debug)
+            Logger.shared.log("Column \(i): \(columnCounts[i])/\(GameConstants.gridSize) blocks", category: .lineClear, level: .debug)
+        }
+        
         // Check which rows and columns are full
         for i in 0..<GameConstants.gridSize {
             if rowCounts[i] == GameConstants.gridSize {
                 rowsToClear.insert(i)
                 clearedPositions.append((i, -1))  // -1 indicates entire row
                 linesClearedThisTurn += 1
+                Logger.shared.log("Row \(i) is full and will be cleared", category: .lineClear, level: .info)
                 addScore(100, at: CGPoint(x: frameSize.width/2, y: CGFloat(i) * GameConstants.blockSize))
                 
                 // Check for same color bonus (200 points if all blocks are the same color)
                 if rowColors[i].count == 1 {
                     addScore(200, at: CGPoint(x: frameSize.width/2, y: CGFloat(i) * GameConstants.blockSize))
-                    print("[Bonus] Same color row cleared! +200 bonus points!")
+                    Logger.shared.log("Same color row bonus! +200 points", category: .lineClear, level: .info)
                 }
             }
             if columnCounts[i] == GameConstants.gridSize {
                 columnsToClear.insert(i)
                 clearedPositions.append((-1, i))  // -1 indicates entire column
                 linesClearedThisTurn += 1
+                Logger.shared.log("Column \(i) is full and will be cleared", category: .lineClear, level: .info)
                 addScore(100, at: CGPoint(x: CGFloat(i) * GameConstants.blockSize, y: frameSize.height/2))
                 
                 // Check for same color bonus (200 points if all blocks are the same color)
                 if columnColors[i].count == 1 {
                     addScore(200, at: CGPoint(x: CGFloat(i) * GameConstants.blockSize, y: frameSize.height/2))
-                    print("[Bonus] Same color column cleared! +200 bonus points!")
+                    Logger.shared.log("Same color column bonus! +200 points", category: .lineClear, level: .info)
                 }
             }
+        }
+        
+        Logger.shared.log("Found \(rowsToClear.count) rows and \(columnsToClear.count) columns to clear", category: .lineClear, level: .info)
+        
+        // Debug: Log grid state if lines are being cleared
+        if !rowsToClear.isEmpty || !columnsToClear.isEmpty {
+            debugGridState()
         }
         
         // Clear all rows and columns at once
         for row in rowsToClear {
             clearRow(row)
+            Logger.shared.log("Cleared row \(row)", category: .lineClear, level: .info)
         }
         
         for col in columnsToClear {
             clearColumn(col)
+            Logger.shared.log("Cleared column \(col)", category: .lineClear, level: .info)
+        }
+        
+        // Validate that line clearing worked correctly
+        if !rowsToClear.isEmpty || !columnsToClear.isEmpty {
+            let validationPassed = validateLineClearing()
+            if !validationPassed {
+                Logger.shared.log("Line clearing validation failed!", category: .lineClear, level: .error)
+            }
         }
         
         // Check for X pattern (10+ blocks in X formation)
@@ -1148,15 +1186,37 @@ final class GameState: ObservableObject {
     }
     
     private func clearRow(_ row: Int) {
-        for col in 0..<GameConstants.gridSize {
-            grid[row][col] = nil
+        guard row >= 0 && row < GameConstants.gridSize else {
+            Logger.shared.log("Invalid row index for clearing: \(row)", category: .lineClear, level: .error)
+            return
         }
+        
+        var clearedCount = 0
+        for col in 0..<GameConstants.gridSize {
+            if grid[row][col] != nil {
+                grid[row][col] = nil
+                clearedCount += 1
+            }
+        }
+        
+        Logger.shared.log("Cleared row \(row): removed \(clearedCount) blocks", category: .lineClear, level: .debug)
     }
     
     private func clearColumn(_ col: Int) {
-        for row in 0..<GameConstants.gridSize {
-            grid[row][col] = nil
+        guard col >= 0 && col < GameConstants.gridSize else {
+            Logger.shared.log("Invalid column index for clearing: \(col)", category: .lineClear, level: .error)
+            return
         }
+        
+        var clearedCount = 0
+        for row in 0..<GameConstants.gridSize {
+            if grid[row][col] != nil {
+                grid[row][col] = nil
+                clearedCount += 1
+            }
+        }
+        
+        Logger.shared.log("Cleared column \(col): removed \(clearedCount) blocks", category: .lineClear, level: .debug)
     }
     
     private func isTopRowOccupied() -> Bool {
@@ -1284,22 +1344,30 @@ final class GameState: ObservableObject {
         
         levelsCompletedSinceLastAd += 1
         
-        // Check if we need to show an ad
-        if levelsCompletedSinceLastAd >= 7 {
-            if adsWatchedThisGame < 3 {
-                // Check if ad is available before showing
-                Task {
-                    if await AdManager.shared.isAdAvailable() {
-                        await AdManager.shared.showRewardedInterstitial(onReward: {
-                            self.adsWatchedThisGame += 1
+        // Check if we need to show an ad (every 15th level)
+        if levelsCompletedSinceLastAd >= 15 {
+            if adsWatchedThisGame < 3 { // Maximum 3 ads per game
+                // Check if user is on premium plan - skip ad if they are
+                if !SubscriptionManager.shared.hasActiveSubscription && !UserDefaults.standard.bool(forKey: "hasRemovedAds") {
+                    // Check if ad is available before showing
+                    Task {
+                        if await AdManager.shared.isAdAvailable() {
+                            await AdManager.shared.showRewardedInterstitial(onReward: {
+                                self.adsWatchedThisGame += 1
+                                self.levelsCompletedSinceLastAd = 0
+                                self.continueLevelUp()
+                            })
+                        } else {
+                            // If ad is not available, proceed without showing ad
                             self.levelsCompletedSinceLastAd = 0
                             self.continueLevelUp()
-                        })
-                    } else {
-                        // If ad is not available, proceed without showing ad
-                        self.levelsCompletedSinceLastAd = 0
-                        self.continueLevelUp()
+                        }
                     }
+                } else {
+                    // Premium user - skip ad and continue
+                    print("[GameState] Premium user - skipping level completion ad")
+                    levelsCompletedSinceLastAd = 0
+                    continueLevelUp()
                 }
             } else {
                 // Skip ad after 3 ads watched
@@ -1477,13 +1545,33 @@ final class GameState: ObservableObject {
 
         // Show interstitial ad when game is over, but don't wait for it
         Task {
+            // Check if user is on premium plan - skip ad if they are
+            guard !SubscriptionManager.shared.hasActiveSubscription && !UserDefaults.standard.bool(forKey: "hasRemovedAds") else {
+                print("[GameState] Premium user - skipping game over ad")
+                return
+            }
+            
+            // Check cooldown before showing game over ad
+            if let lastAdTime = lastGameOverAdTime {
+                let timeSinceLastAd = Date().timeIntervalSince(lastAdTime)
+                if timeSinceLastAd < gameOverAdCooldown {
+                    print("[GameState] Skipping game over ad - cooldown active (\(Int(gameOverAdCooldown - timeSinceLastAd))s remaining)")
+                    return
+                }
+            }
+            
             if await AdManager.shared.isAdAvailable() {
                 print("[GameState] Showing interstitial ad")
+                lastGameOverAdTime = Date()
                 await AdManager.shared.showInterstitial()
-            } else {
-                print("[GameState] No interstitial ad available")
             }
         }
+        
+        // Clean up game state to free memory
+        cleanupGameState()
+        
+        // Record session end for inactivity ad tracking
+        AdManager.shared.recordSessionEnd()
     }
     
     
@@ -1580,6 +1668,9 @@ final class GameState: ObservableObject {
         lastPlayDate = Date()
         userDefaults.set(lastPlayDate, forKey: "lastPlayDate")
         
+        // Mark that user has played before to prevent first-time flow ads
+        userDefaults.set(true, forKey: "hasPlayedBefore")
+        
         // Update login achievements
         if consecutiveDays > 0 {
             achievementsManager.updateAchievement(id: "login_\(consecutiveDays)", value: consecutiveDays)
@@ -1630,37 +1721,8 @@ final class GameState: ObservableObject {
     }
     
     func gameOver() {
-        isGameOver = true
-        delegate?.gameStateDidUpdate()
-        
-        // Show interstitial ad when game is over, but don't wait for it
-        Task {
-            if await AdManager.shared.isAdAvailable() {
-                await AdManager.shared.showInterstitial()
-            }
-        }
-        
-        // Save high score if needed
-        if score > highScore {
-            highScore = score
-            UserDefaults.standard.set(highScore, forKey: "highScore")
-        }
-        
-        // Update achievements
-        achievementsManager.updateAchievement(id: "score_1000", value: score)
-        achievementsManager.updateAchievement(id: "score_5000", value: score)
-        achievementsManager.updateAchievement(id: "score_10000", value: score)
-        
-        // Only increment gamesCompleted if the game was lost (not manually ended)
-        if !isPaused {
-            gamesCompleted += 1
-            saveStatistics() // Save statistics when game is over
-        }
-        playTimeTimer?.invalidate()
-        Task { @MainActor in
-            updatePlayTime() // Final update of play time
-            try? await saveProgress()
-        }
+        // Use the consolidated game over handler with proper cooldown logic
+        handleGameOver()
     }
     
     // Add a new method to handle user confirmation of level completion
@@ -1679,6 +1741,8 @@ final class GameState: ObservableObject {
     func endGameFromSettings() {
         print("[GameState] Ending game from settings")
         handleGameOver() // Use the consolidated game over handler
+        // Note: No additional ad needed here since handleGameOver already shows an ad
+        
         // Ensure leaderboard is submitted once if game is ended manually
         if !UserDefaults.standard.bool(forKey: "isGuest") && score > 0 {
             Task {
@@ -2342,25 +2406,24 @@ final class GameState: ObservableObject {
     }
     
     internal func handleCriticalMemory() async {
-        // Clear all temporary data
-        previousGrid = nil
-        previousTray = nil
-        lastMove = nil
-        previousScore = 0
-        previousLevel = 1
+        Logger.shared.log("Handling critical memory situation", category: .systemMemory, level: .warning)
         
-        // Clear offline queue
-        offlineChangesQueue.removeAll()
+        // Clear any pending updates
+        updateTimer?.invalidate()
+        updateTimer = nil
+        pendingUpdate = false
         
-        // Clear any temporary arrays
-        usedColors.removeAll()
-        usedShapes.removeAll()
+        // Force an immediate update to clear any pending changes
+        forceUpdate()
         
-        // Clear cached data
-        cachedData.removeAll()
+        // Clear undo stack to free memory
+        undoStack.clear()
+        canUndo = false
         
-        // Notify delegate to clear any cached resources
-        delegate?.gameStateDidUpdate()
+        // Clear any cached data
+        resetTrackingProperties()
+        
+        Logger.shared.log("Critical memory handling completed", category: .systemMemory, level: .info)
     }
     
     private func handleMemoryWarning() async {
@@ -2495,6 +2558,8 @@ final class GameState: ObservableObject {
             if x >= 0 && x < GameConstants.gridSize && y >= 0 && y < GameConstants.gridSize {
                 tempGrid[y][x] = block.color
                 Logger.shared.log("Placed block cell at: (\(x), \(y))", category: .lineClear, level: .debug)
+            } else {
+                Logger.shared.log("Block cell would be out of bounds at: (\(x), \(y))", category: .lineClear, level: .warning)
             }
         }
         
@@ -2505,30 +2570,38 @@ final class GameState: ObservableObject {
         // Check rows
         for y in 0..<GameConstants.gridSize {
             var isRowFull = true
+            var rowBlockCount = 0
             for x in 0..<GameConstants.gridSize {
-                if tempGrid[y][x] == nil {
+                if tempGrid[y][x] != nil {
+                    rowBlockCount += 1
+                } else {
                     isRowFull = false
-                    break
                 }
             }
             if isRowFull {
                 rowsToClear.insert(y)
-                Logger.shared.log("Row \(y) would be cleared", category: .lineClear, level: .debug)
+                Logger.shared.log("Row \(y) would be cleared (has \(rowBlockCount) blocks)", category: .lineClear, level: .debug)
+            } else {
+                Logger.shared.log("Row \(y) is not full (has \(rowBlockCount)/\(GameConstants.gridSize) blocks)", category: .lineClear, level: .debug)
             }
         }
         
         // Check columns
         for x in 0..<GameConstants.gridSize {
             var isColumnFull = true
+            var columnBlockCount = 0
             for y in 0..<GameConstants.gridSize {
-                if tempGrid[y][x] == nil {
+                if tempGrid[y][x] != nil {
+                    columnBlockCount += 1
+                } else {
                     isColumnFull = false
-                    break
                 }
             }
             if isColumnFull {
                 columnsToClear.insert(x)
-                Logger.shared.log("Column \(x) would be cleared", category: .lineClear, level: .debug)
+                Logger.shared.log("Column \(x) would be cleared (has \(columnBlockCount) blocks)", category: .lineClear, level: .debug)
+            } else {
+                Logger.shared.log("Column \(x) is not full (has \(columnBlockCount)/\(GameConstants.gridSize) blocks)", category: .lineClear, level: .debug)
             }
         }
         
@@ -2997,58 +3070,155 @@ final class GameState: ObservableObject {
         #endif
         return validPositions > 0
     }
-}
 
-// MARK: - Extensions and Supporting Types
-
-// Deterministic seeded random generator
-struct SeededGenerator: RandomNumberGenerator {
-    private var state: UInt64
-    init(seed: UInt64) { self.state = seed }
-    mutating func next() -> UInt64 {
-        state = state &* 6364136223846793005 &+ 1
-        return state
-    }
-}
-
-// MARK: - BlockColor Extension
-extension BlockColor {
-    static func availableColors(for level: Int) -> [BlockColor] {
-        return [.red, .blue, .green, .yellow, .purple, .orange, .pink, .cyan]
-    }
-}
-
-// MARK: - Error Handling
-enum GameError: LocalizedError {
-    case saveFailed(Error)
-    case leaderboardUpdateFailed(Error)
-    case invalidMove
-    case networkError
-    case loadFailed(Error)
+    // MARK: - Debug Methods
     
-    var errorDescription: String? {
-        switch self {
-        case .saveFailed(let error):
-            return "Failed to save game progress: \(error.localizedDescription)"
-        case .leaderboardUpdateFailed(let error):
-            return "Failed to update leaderboard: \(error.localizedDescription)"
-        case .invalidMove:
-            return "Invalid move"
-        case .networkError:
-            return "Network connection error. Please check your internet connection."
-        case .loadFailed(let error):
-            return "Failed to load saved game: \(error.localizedDescription)"
+    func debugGridState() {
+        Logger.shared.log("=== GRID STATE DEBUG ===", category: .lineClear, level: .info)
+        
+        // Print grid state
+        for row in (0..<GameConstants.gridSize).reversed() {
+            var rowString = "Row \(row): "
+            for col in 0..<GameConstants.gridSize {
+                if let color = grid[row][col] {
+                    rowString += "[\(color.rawValue)]"
+                } else {
+                    rowString += "[ ]"
+                }
+            }
+            Logger.shared.log(rowString, category: .lineClear, level: .info)
+        }
+        
+        // Count blocks in each row and column
+        var rowCounts = Array(repeating: 0, count: GameConstants.gridSize)
+        var columnCounts = Array(repeating: 0, count: GameConstants.gridSize)
+        
+        for row in 0..<GameConstants.gridSize {
+            for col in 0..<GameConstants.gridSize {
+                if grid[row][col] != nil {
+                    rowCounts[row] += 1
+                    columnCounts[col] += 1
+                }
+            }
+        }
+        
+        Logger.shared.log("Row counts: \(rowCounts)", category: .lineClear, level: .info)
+        Logger.shared.log("Column counts: \(columnCounts)", category: .lineClear, level: .info)
+        
+        // Check for full rows and columns
+        var fullRows: [Int] = []
+        var fullColumns: [Int] = []
+        
+        for i in 0..<GameConstants.gridSize {
+            if rowCounts[i] == GameConstants.gridSize {
+                fullRows.append(i)
+            }
+            if columnCounts[i] == GameConstants.gridSize {
+                fullColumns.append(i)
+            }
+        }
+        
+        if !fullRows.isEmpty {
+            Logger.shared.log("Full rows detected: \(fullRows)", category: .lineClear, level: .warning)
+        }
+        if !fullColumns.isEmpty {
+            Logger.shared.log("Full columns detected: \(fullColumns)", category: .lineClear, level: .warning)
+        }
+        
+        Logger.shared.log("=== END GRID STATE DEBUG ===", category: .lineClear, level: .info)
+    }
+
+    func validateLineClearing() -> Bool {
+        Logger.shared.log("Validating line clearing logic...", category: .lineClear, level: .debug)
+        
+        var rowCounts = Array(repeating: 0, count: GameConstants.gridSize)
+        var columnCounts = Array(repeating: 0, count: GameConstants.gridSize)
+        
+        // Count blocks in each row and column
+        for row in 0..<GameConstants.gridSize {
+            for col in 0..<GameConstants.gridSize {
+                if grid[row][col] != nil {
+                    rowCounts[row] += 1
+                    columnCounts[col] += 1
+                }
+            }
+        }
+        
+        // Check for any full rows or columns that shouldn't exist
+        var issuesFound = false
+        
+        for i in 0..<GameConstants.gridSize {
+            if rowCounts[i] == GameConstants.gridSize {
+                Logger.shared.log("ERROR: Row \(i) is full but should have been cleared!", category: .lineClear, level: .error)
+                issuesFound = true
+            }
+            if columnCounts[i] == GameConstants.gridSize {
+                Logger.shared.log("ERROR: Column \(i) is full but should have been cleared!", category: .lineClear, level: .error)
+                issuesFound = true
+            }
+        }
+        
+        if !issuesFound {
+            Logger.shared.log("Line clearing validation passed - no full rows or columns found", category: .lineClear, level: .debug)
+        }
+        
+        return !issuesFound
+    }
+    
+    // MARK: - Debounced Updates
+    
+    private func scheduleUpdate() {
+        guard !pendingUpdate else { return }
+        
+        pendingUpdate = true
+        updateTimer?.invalidate()
+        updateTimer = Timer.scheduledTimer(withTimeInterval: updateDebounceInterval, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.performUpdate()
+            }
         }
     }
-}
+    
+    private func performUpdate() {
+        pendingUpdate = false
+        updateTimer?.invalidate()
+        updateTimer = nil
+        delegate?.gameStateDidUpdate()
+    }
+    
+    private func forceUpdate() {
+        updateTimer?.invalidate()
+        updateTimer = nil
+        pendingUpdate = false
+        delegate?.gameStateDidUpdate()
+    }
 
-// MARK: - Notification Names
-extension Notification.Name {
-    static let gameStateSaved = Notification.Name("gameStateSaved")
-    static let gameStateSaveFailed = Notification.Name("gameStateSaveFailed")
-    static let gameStateLoaded = Notification.Name("gameStateLoaded")
-    static let gameStateLoadFailed = Notification.Name("gameStateLoadFailed")
-    static let showSaveGameWarning = Notification.Name("showSaveGameWarning")
-    static let levelCompleted = Notification.Name("levelCompleted")
-    static let gameOver = Notification.Name("gameOver")
+    // MARK: - Game Cleanup
+    
+    func cleanupGameState() {
+        Logger.shared.log("Cleaning up game state", category: .systemMemory, level: .info)
+        
+        // Clear any pending updates
+        updateTimer?.invalidate()
+        updateTimer = nil
+        pendingUpdate = false
+        
+        // Clear undo stack
+        undoStack.clear()
+        canUndo = false
+        
+        // Clear tracking properties
+        resetTrackingProperties()
+        
+        // Clear temporary data
+        usedColors.removeAll()
+        usedShapes.removeAll()
+        
+        // Reset game state flags
+        isGameOver = false
+        isPaused = false
+        levelComplete = false
+        
+        Logger.shared.log("Game state cleanup completed", category: .systemMemory, level: .info)
+    }
 }

@@ -112,7 +112,7 @@ struct DeviceSimulationDebugView: View {
             }
             
             // Memory usage progress bar
-            ProgressView(value: memoryUsage.used, total: memoryUsage.total)
+            ProgressView(value: min(memoryUsage.used, memoryUsage.total), total: memoryUsage.total)
                 .progressViewStyle(LinearProgressViewStyle(tint: memoryStatusColor))
                 .scaleEffect(x: 1, y: 2, anchor: .center)
         }
