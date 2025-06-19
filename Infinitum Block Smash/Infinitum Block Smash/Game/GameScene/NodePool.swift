@@ -25,6 +25,7 @@ final class NodePool {
         if let node = blockNodePool.popLast() {
             node.removeAllActions()
             node.removeAllChildren()
+            node.removeFromParent()
             node.alpha = 1.0
             return node
         }
@@ -50,6 +51,7 @@ final class NodePool {
         if let emitter = particleEmitterPool.popLast() {
             emitter.removeAllActions()
             emitter.particleBirthRate = 0
+            emitter.removeFromParent()
             return emitter
         }
         return SKEmitterNode()
@@ -73,6 +75,7 @@ final class NodePool {
         if let node = highlightNodePool.popLast() {
             node.removeAllActions()
             node.removeAllChildren()
+            node.removeFromParent()
             node.alpha = 1.0
             return node
         }
@@ -98,6 +101,7 @@ final class NodePool {
         if let node = previewNodePool.popLast() {
             node.removeAllActions()
             node.removeAllChildren()
+            node.removeFromParent()
             node.alpha = 1.0
             return node
         }

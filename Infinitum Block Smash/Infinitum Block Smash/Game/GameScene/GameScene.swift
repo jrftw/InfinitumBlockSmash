@@ -641,10 +641,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             dragNode?.alpha = 0.7
             dragNode?.zPosition = 50
             addChild(dragNode!)
-            // Remove the shape from the tray immediately
-            gameState.removeBlockFromTray(block)
+            // FIXED: Don't remove the block from tray until placement is successful
+            // gameState.removeBlockFromTray(block) - REMOVED
             // Update the tray display
-            trayNode.updateBlocks(gameState.tray, blockSize: GameConstants.blockSize)
+            setupTray()
+            // Visually indicate the block is being dragged by reducing opacity
+            if let trayBlockNode = trayNode.childNode(withName: "trayShape_\(block.id.uuidString)") {
+                trayBlockNode.alpha = 0.3
+            }
         }
     }
     private func createLineHighlight(for row: Int, isRow: Bool, color: SKColor, blockSize: CGFloat) -> SKShapeNode {
@@ -673,10 +677,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         } else {
             highlight.fillColor = color.withAlphaComponent(0.6)
         }
-        // Add glow effect
+        // Add border (removed glow effect to prevent unintended edge glow)
         highlight.strokeColor = .white
         highlight.lineWidth = 2
-        highlight.glowWidth = 2
         // Add shine effect
         let shineNode = SKShapeNode(rectOf: CGSize(width: blockSize * 0.3, height: blockSize * 0.3))
         shineNode.fillColor = .white
@@ -738,9 +741,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 let preview = NodePool.shared.getPreviewNode()
                 preview.name = "preview_block"
                 preview.zPosition = 5
+                
+                // Safety check: ensure the preview node doesn't already have a parent
+                if preview.parent != nil {
+                    print("[DEBUG] Preview node already has parent, removing before reuse")
+                    preview.removeFromParent()
+                }
+                
                 setupPreviewNode(preview, for: draggingBlock, at: gridPoint)
                 gridNode.addChild(preview)
                 previewNode = preview
+                print("[DEBUG] Created new preview node for block: \(draggingBlock.id)")
             }
             
             // Reuse existing highlight container instead of creating new one
@@ -753,6 +764,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 let highlightContainer = NodePool.shared.getHighlightNode()
                 highlightContainer.name = "highlight_container"
                 highlightContainer.zPosition = 10
+                
+                // Safety check: ensure the highlight container doesn't already have a parent
+                if highlightContainer.parent != nil {
+                    highlightContainer.removeFromParent()
+                }
+                
                 setupHighlightContainer(highlightContainer, for: draggingBlock, at: gridPoint)
                 gridNode.addChild(highlightContainer)
             }
@@ -815,7 +832,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         container.removeAllChildren()
         
         // Only show highlights if placement is valid
-        guard gameState.canPlaceBlock(block, at: gridPoint) else { return }
+        guard gameState.canPlaceBlock(block, at: gridPoint) else { 
+            container.alpha = 0.0
+            return 
+        }
         
         // Check which lines would be cleared
         let (rowsToClear, columnsToClear) = gameState.wouldClearLines(block: block, at: gridPoint)
@@ -832,6 +852,20 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             let highlight = createLineHighlight(for: col, isRow: false, color: highlightColor, blockSize: GameConstants.blockSize)
             highlight.name = "highlight_column_\(col)"
             container.addChild(highlight)
+        }
+        
+        container.alpha = 1.0
+    }
+    
+    private func clearAllHighlightContainers() {
+        // Clear any existing highlight containers to prevent edge glow artifacts
+        gridNode.children.forEach { node in
+            if node.name?.hasPrefix("highlight_") == true {
+                node.removeAllActions()
+                node.removeAllChildren()
+                node.removeFromParent()
+                NodePool.shared.returnHighlightNode(node)
+            }
         }
     }
     
@@ -898,11 +932,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         guard let touch = touches.first,
               let dragNode = dragNode,
               let draggingBlock = draggingBlock else { return }
+        
+        print("[DEBUG] Touch ended - handling placement for block: \(draggingBlock.shape)-\(draggingBlock.color)")
+        
         // Record input event for latency tracking
         PerformanceMonitor.shared.recordInputEvent()
+        
         // Check if enough time has passed since last placement
         let currentTime = CACurrentMediaTime()
         guard currentTime - lastPlacementTime >= placementDebounceInterval else {
+            print("[DEBUG] Placement debounced - too soon since last placement")
             // Too soon since last placement, ignore this touch
             dragNode.removeFromParent()
             previewNode?.removeFromParent()
@@ -911,26 +950,45 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             self.previewNode = nil
             return
         }
+        
         let touchPoint = touch.location(in: self)
         let gridPoint = convertToGridCoordinates(touchPoint)
-        // Try to place the block
-        if gameState.tryPlaceBlockFromTray(draggingBlock, at: gridPoint) {
-            // Update last placement time
-            lastPlacementTime = currentTime
-            // Force a complete grid redraw to ensure all blocks are properly rendered
-            renderGrid(gridNode: gridNode, gameState: gameState, blockSize: GameConstants.blockSize)
-            // Play placement sound
-            AudioManager.shared.playPlacementSound()
-            // Refill tray after successful placement
-            if gameState.tray.count < 3 {
-                gameState.refillTray()
+        
+        print("[DEBUG] Touch point: \(touchPoint), Grid point: \(gridPoint)")
+        
+        // ATOMIC VALIDATION: Check placement validity before attempting placement
+        let canPlace = gameState.canPlaceBlock(draggingBlock, at: gridPoint)
+        print("[DEBUG] Can place block: \(canPlace)")
+        
+        if canPlace {
+            // ATOMIC PLACEMENT: Try to place the block
+            if gameState.tryPlaceBlockFromTray(draggingBlock, at: gridPoint) {
+                print("[DEBUG] Block placement successful")
+                // Update last placement time
+                lastPlacementTime = currentTime
+                // Force a complete grid redraw to ensure all blocks are properly rendered
+                renderGrid(gridNode: gridNode, gameState: gameState, blockSize: GameConstants.blockSize)
+                // Play placement sound
+                AudioManager.shared.playPlacementSound()
+                // Refill tray after successful placement
+                if gameState.tray.count < 3 {
+                    gameState.refillTray()
+                }
+            } else {
+                print("[ERROR] Block placement failed despite validation!")
+                // Play error sound
+                AudioManager.shared.playFailSound()
+                // FIXED: Don't add block back to tray since it was never removed
+                // gameState.addBlockToTray(draggingBlock) - REMOVED
             }
         } else {
+            print("[DEBUG] Invalid placement - returning block to tray")
             // Play error sound
             AudioManager.shared.playFailSound()
-            // Return the block to the tray
-            gameState.addBlockToTray(draggingBlock)
+            // FIXED: Don't add block back to tray since it was never removed
+            // gameState.addBlockToTray(draggingBlock) - REMOVED
         }
+        
         // Clean up all temporary nodes and return them to pool
         if let existing = self.dragNode {
             existing.removeAllActions()
@@ -947,19 +1005,63 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             self.previewNode = nil
         }
         
-        // Return highlight containers to pool instead of destroying them
-        gridNode.children.forEach { node in
-            if node.name?.hasPrefix("highlight_") == true {
-                node.removeAllActions()
-                node.removeAllChildren()
-                node.removeFromParent()
-                NodePool.shared.returnHighlightNode(node)
+        // FIXED: Restore tray block opacity after drag ends
+        if let draggingBlock = self.draggingBlock {
+            if let trayBlockNode = trayNode.childNode(withName: "trayShape_\(draggingBlock.id.uuidString)") {
+                trayBlockNode.alpha = 1.0
             }
         }
         
+        // Return highlight containers to pool instead of destroying them
+        clearAllHighlightContainers()
+        
         self.draggingBlock = nil
         lastGridPosition = CGPoint.zero // Reset position tracking
+        
+        print("[DEBUG] Touch handling completed")
     }
+    
+    // MARK: - Robust Drag Management
+    
+    private func cancelDragAndReturnToTray() {
+        guard let draggingBlock = draggingBlock else { return }
+        
+        print("[DEBUG] Cancelling drag and returning block to tray: \(draggingBlock.shape)-\(draggingBlock.color)")
+        
+        // FIXED: Don't add block back to tray since it was never removed
+        // gameState.addBlockToTray(draggingBlock) - REMOVED
+        
+        // Clean up visual nodes
+        if let existing = self.dragNode {
+            existing.removeAllActions()
+            existing.removeAllChildren()
+            existing.removeFromParent()
+            self.dragNode = nil
+        }
+        
+        if let existing = self.previewNode {
+            existing.removeAllActions()
+            existing.removeAllChildren()
+            existing.removeFromParent()
+            NodePool.shared.returnPreviewNode(existing)
+            self.previewNode = nil
+        }
+        
+        // Clear highlights
+        clearAllHighlightContainers()
+        
+        // Reset state
+        self.draggingBlock = nil
+        lastGridPosition = CGPoint.zero
+        
+        print("[DEBUG] Drag cancellation completed")
+    }
+    
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        print("[DEBUG] Touch cancelled - returning block to tray")
+        cancelDragAndReturnToTray()
+    }
+    
     private func convertToGridCoordinates(_ point: CGPoint) -> CGPoint {
         // Get the grid's scale
         let gridScale = gridNode.xScale
@@ -1811,5 +1913,23 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func clearAllPlacedBlockNodes() {
         placedBlockNodes.values.forEach { cleanupNode($0) }
         placedBlockNodes.removeAll()
+    }
+    
+    func cleanupTexturesAndPreventArtifacts() {
+        // Clear gradient texture cache if it's getting too large
+        if gradientTextureCache.count > maxGradientCacheSize / 2 {
+            print("[DEBUG] Clearing gradient texture cache to prevent artifacts")
+            gradientTextureCache.removeAll()
+        }
+        
+        // Clear any corrupted or unused textures
+        activeTextures = activeTextures.filter { texture in
+            // Remove textures that might be corrupted
+            if texture.description.contains("nil") || texture.description.contains("invalid") {
+                print("[DEBUG] Removing potentially corrupted texture")
+                return false
+            }
+            return true
+        }
     }
 }

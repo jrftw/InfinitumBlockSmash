@@ -117,7 +117,7 @@ import FirebaseAuth
 typealias AdError = AdManager.AdError
 
 struct GameView: View {
-    @StateObject private var gameState = GameState()
+    @ObservedObject var gameState: GameState
     @StateObject private var adManager = AdManager.shared
     @State private var showingSettings = false
     @State private var showingAchievements = false
@@ -314,6 +314,14 @@ struct GameView: View {
             TutorialModal(showingTutorial: $showingTutorial, showTutorial: $showTutorial)
         }
         .onAppear {
+            print("[DEBUG] GameView appeared - Current level: \(gameState.level)")
+            
+            // FIXED: Ensure game is properly initialized for new Classic games
+            if !UserDefaults.standard.bool(forKey: "isTimedMode") {
+                print("[DEBUG] Classic mode detected, ensuring proper initialization")
+                gameState.ensureProperInitialization()
+            }
+            
             if showTutorial {
                 showingTutorial = true
             }

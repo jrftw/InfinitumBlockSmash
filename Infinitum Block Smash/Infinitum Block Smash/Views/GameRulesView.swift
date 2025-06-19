@@ -65,12 +65,16 @@ struct GameRulesView: View {
                 // Level Progression
                 Group {
                     RuleSection(title: "Level Progression", icon: "chart.line.uptrend.xyaxis") {
-                        RuleItem(icon: "1.square.fill", text: "Level 1-5: 1000 points per level")
-                        RuleItem(icon: "2.square.fill", text: "Level 6-10: 2000 points per level")
-                        RuleItem(icon: "3.square.fill", text: "Level 11-50: 3000 points per level")
-                        RuleItem(icon: "4.square.fill", text: "Level 51-99: 5000 points per level")
-                        RuleItem(icon: "5.square.fill", text: "Level 100+: 10,000 points required")
-                        RuleItem(icon: "plus.circle.fill", text: "New shapes unlock as you progress")
+                        RuleItem(icon: "1.square.fill", text: "Level 1: 1,000 total points")
+                        RuleItem(icon: "2.square.fill", text: "Level 2: 2,100 total points")
+                        RuleItem(icon: "3.square.fill", text: "Level 3: 3,300 total points")
+                        RuleItem(icon: "4.square.fill", text: "Level 4: 4,600 total points")
+                        RuleItem(icon: "5.square.fill", text: "Level 5: 6,000 total points")
+                        RuleItem(icon: "10.square.fill", text: "Level 10: 15,250 total points")
+                        RuleItem(icon: "25.square.fill", text: "Level 25: 51,500 total points")
+                        RuleItem(icon: "50.square.fill", text: "Level 50: 113,500 total points")
+                        RuleItem(icon: "100.square.fill", text: "Level 100: 263,500 total points")
+                        RuleItem(icon: "plus.circle.fill", text: "Score accumulates throughout the entire game")
                         RuleItem(icon: "calendar", text: "Track consecutive days played")
                     }
                 }

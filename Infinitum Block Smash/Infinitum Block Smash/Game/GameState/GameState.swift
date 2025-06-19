@@ -212,7 +212,7 @@ final class GameState: ObservableObject {
     @Published private(set) var leaderboardHighestLevel: Int = 1
     
     // Add method to fetch leaderboard high score
-    private func fetchLeaderboardHighScore() async {
+    func fetchLeaderboardHighScore() async {
         do {
             let result = try await LeaderboardService.shared.getLeaderboard(type: .score, period: "alltime")
             if let userEntry = result.entries.first(where: { $0.username == username }) {
@@ -317,11 +317,6 @@ final class GameState: ObservableObject {
         // Start play time timer
         startPlayTimeTimer()
         
-        // Fetch leaderboard high score and highest level
-        Task {
-            await fetchLeaderboardHighScore()
-        }
-        
         // Perform initial device sync if user is logged in and auto-sync is enabled
         Task {
             if !UserDefaults.standard.bool(forKey: "isGuest") && UserDefaults.standard.bool(forKey: "autoSyncEnabled") {
@@ -381,10 +376,12 @@ final class GameState: ObservableObject {
     
     // MARK: - Private Methods
     private func setupInitialGame() {
+        print("[DEBUG] Setting up initial game - Level will be set to 1")
         grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
         tray.removeAll(keepingCapacity: true)
         refillTray()
         level = 1
+        print("[DEBUG] Initial game setup complete - Level: \(level), Tray count: \(tray.count)")
         score = 0
         temporaryScore = 0
         isGameOver = false
@@ -405,6 +402,13 @@ final class GameState: ObservableObject {
         // Check subscription status for unlimited undos
         Task {
             await checkUndoAvailability()
+        }
+        
+        // SAFETY CHECK: Ensure tray is properly filled
+        if tray.count != 3 {
+            print("[ERROR] Tray not properly filled after setup (\(tray.count)/3), refilling...")
+            tray = []
+            refillTray()
         }
     }
     
@@ -460,6 +464,7 @@ final class GameState: ObservableObject {
     
     // MARK: - Public Methods
     func resetGame() {
+        print("[DEBUG] Resetting game - Level will be set to 1")
         // Delete any saved game first
         deleteSavedGame()
         #if DEBUG
@@ -484,6 +489,7 @@ final class GameState: ObservableObject {
         score = 0
         temporaryScore = 0
         level = 1
+        print("[DEBUG] Game reset complete - Level: \(level)")
         isGameOver = false
         grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
         tray = []
@@ -516,6 +522,15 @@ final class GameState: ObservableObject {
         
         // Refill the tray with new blocks
         refillTray()
+        
+        // SAFETY CHECK: Ensure tray is properly filled
+        if tray.count != 3 {
+            print("[ERROR] Tray not properly filled after reset (\(tray.count)/3), refilling...")
+            tray = []
+            refillTray()
+        }
+        
+        print("[DEBUG] Reset complete - Level: \(level), Tray count: \(tray.count)")
         
         // Clear any saved game state from UserDefaults
         userDefaults.removeObject(forKey: progressKey)
@@ -585,10 +600,29 @@ final class GameState: ObservableObject {
     }
     
     func refillTray() {
+        print("[DEBUG] Refilling tray - current count: \(tray.count), target: \(requiredShapesToFit)")
+        
         // Only add new blocks if we have less than requiredShapesToFit
         while tray.count < requiredShapesToFit {
             let newBlock = nextBlockRandom()
             tray.append(newBlock)
+            print("[DEBUG] Added block to tray: \(newBlock.shape)-\(newBlock.color)")
+        }
+        
+        print("[DEBUG] Tray refilled - final count: \(tray.count)")
+        
+        // SAFETY CHECK: Ensure we have exactly the required number of blocks
+        if tray.count != requiredShapesToFit {
+            print("[ERROR] Tray has incorrect number of blocks after refill (\(tray.count)/\(requiredShapesToFit))")
+            // Force correct number by removing excess or adding missing blocks
+            while tray.count > requiredShapesToFit {
+                tray.removeLast()
+            }
+            while tray.count < requiredShapesToFit {
+                let newBlock = nextBlockRandom()
+                tray.append(newBlock)
+            }
+            print("[DEBUG] Tray corrected - final count: \(tray.count)")
         }
         
         // Check for game over after refilling
@@ -664,6 +698,7 @@ final class GameState: ObservableObject {
         print("[Undo] Blocks Placed: \(blocksPlaced) -> \(lastMove.previousBlocksPlaced)")
         print("[Undo] Lines Cleared: \(linesCleared) -> \(lastMove.previousLinesCleared)")
         print("[Undo] Current Chain: \(currentChain) -> \(lastMove.previousCurrentChain)")
+        print("[Undo] Tray count before: \(tray.count), after: \(lastMove.previousTray.count)")
         
         // Restore the previous state
         grid = lastMove.previousGrid
@@ -740,12 +775,15 @@ final class GameState: ObservableObject {
         let row = Int(position.y)
         let col = Int(position.x)
         
+        print("[DEBUG] Tray before placement: \(tray.map { "\($0.shape)-\($0.color)" })")
+        print("[DEBUG] Trying to place block: \(block.shape)-\(block.color) at (\(col), \(row))")
+        
         guard row >= 0 && row < GameConstants.gridSize && col >= 0 && col < GameConstants.gridSize else {
             print("[Place] Invalid position: (\(row), \(col))")
             return false
         }
         
-        // Check if we can place the entire shape
+        // ATOMIC VALIDATION: Check if we can place the entire shape BEFORE making any changes
         for (dx, dy) in block.shape.cells {
             let x = col + dx
             let y = row + dy
@@ -754,18 +792,18 @@ final class GameState: ObservableObject {
                 return false
             }
             if grid[y][x] != nil {
-                print("[Place] Position (\(x), \(y)) already occupied")
+                print("[Place] Position (\(x), \(y)) already occupied by \(grid[y][x]?.rawValue ?? "unknown")")
                 return false
             }
         }
         
-        // Save state for undo before making any changes
+        print("[DEBUG] Placement validation successful - proceeding with atomic placement")
+        
+        // Save state for undo BEFORE making any changes to ensure tray state is preserved
         saveStateForUndo(block: block, position: (row: row, col: col))
         
-        // Track the positions of the current shape
+        // ATOMIC PLACEMENT: Place the block in grid first
         var currentShapePositions = Set<String>()
-        
-        // Place the block
         for (dx, dy) in block.shape.cells {
             let x = col + dx
             let y = row + dy
@@ -773,9 +811,21 @@ final class GameState: ObservableObject {
             currentShapePositions.insert("\(x),\(y)")
         }
         
-        // Remove the block from the tray
+        print("[DEBUG] Block successfully placed in grid at (\(col), \(row))")
+        
+        // ATOMIC REMOVAL: Remove the block from the tray AFTER successful grid placement
         if let index = tray.firstIndex(where: { $0.id == block.id }) {
             tray.remove(at: index)
+            print("[DEBUG] Block removed from tray. Tray after: \(tray.map { "\($0.shape)-\($0.color)" })")
+        } else {
+            print("[ERROR] Block not found in tray after successful placement!")
+            // This should never happen, but if it does, we need to clean up the grid
+            for (dx, dy) in block.shape.cells {
+                let x = col + dx
+                let y = row + dy
+                grid[y][x] = nil
+            }
+            return false
         }
         
         // Update game state
@@ -823,6 +873,10 @@ final class GameState: ObservableObject {
         // Schedule debounced update instead of immediate update
         scheduleUpdate()
         
+        // VALIDATION: Ensure grid state consistency after placement
+        validateGridStateAfterPlacement()
+        
+        print("[DEBUG] Placement completed successfully")
         return true
     }
     
@@ -854,16 +908,26 @@ final class GameState: ObservableObject {
     }
     
     func canPlaceBlock(_ block: Block, at anchor: CGPoint) -> Bool {
+        let row = Int(anchor.y)
+        let col = Int(anchor.x)
+        
+        // Debug logging for placement validation
+        print("[DEBUG] Checking placement for block \(block.shape) at (\(col), \(row))")
+        
         for (dx, dy) in block.shape.cells {
-            let x = Int(anchor.x) + dx
-            let y = Int(anchor.y) + dy
+            let x = col + dx
+            let y = row + dy
             if x < 0 || x >= GameConstants.gridSize || y < 0 || y >= GameConstants.gridSize {
+                print("[DEBUG] Position (\(x), \(y)) out of bounds")
                 return false
             }
             if grid[y][x] != nil {
+                print("[DEBUG] Position (\(x), \(y)) already occupied by \(grid[y][x]?.rawValue ?? "unknown")")
                 return false
             }
         }
+        
+        print("[DEBUG] Placement valid for block \(block.shape) at (\(col), \(row))")
         return true
     }
     
@@ -916,51 +980,39 @@ final class GameState: ObservableObject {
         return nil
     }
     
-    private func checkXPattern() -> [(Int, Int)]? {
-        var xPattern: [(Int, Int)] = []
-        var xColor: BlockColor? = nil
-        var isValid = true
-        
-        // Check if we have a valid X pattern
-        for i in 0..<GameConstants.gridSize {
-            // Check both diagonals
-            let forwardRow = GameConstants.gridSize - 1 - i
-            let forwardCol = i
-            let backwardRow = i
-            let backwardCol = i
-            
-            // Check forward diagonal (/)
-            if let color = grid[forwardRow][forwardCol] {
-                if xColor == nil {
-                    xColor = color
-                } else if color != xColor {
-                    isValid = false
-                }
-                xPattern.append((forwardRow, forwardCol))
-            } else {
-                isValid = false
-            }
-            
-            // Check backward diagonal (\) if it's not the center point
-            if !(forwardRow == backwardRow && forwardCol == backwardCol) {
-                if let color = grid[backwardRow][backwardCol] {
-                    if color != xColor {
-                        isValid = false
+    private func checkXPattern() -> Int {
+        // Check for X pattern (10+ blocks in X formation)
+        for row in 1..<GameConstants.gridSize-1 {
+            for col in 1..<GameConstants.gridSize-1 {
+                if let centerColor = grid[row][col] {
+                    var xPatternCount = 1 // Count the center block
+                    
+                    // Check in all four diagonal directions
+                    let directions = [(1,1), (1,-1), (-1,1), (-1,-1)]
+                    for (dx, dy) in directions {
+                        var currentRow = row + dx
+                        var currentCol = col + dy
+                        while currentRow >= 0 && currentRow < GameConstants.gridSize &&
+                              currentCol >= 0 && currentCol < GameConstants.gridSize &&
+                              grid[currentRow][currentCol] == centerColor {
+                            xPatternCount += 1
+                            currentRow += dx
+                            currentCol += dy
+                        }
                     }
-                    xPattern.append((backwardRow, backwardCol))
-                } else {
-                    isValid = false
+                    
+                    if xPatternCount >= 10 {
+                        return 250
+                    }
                 }
             }
         }
-        
-        return isValid && xPattern.count == (GameConstants.gridSize * 2 - 1) ? xPattern : nil
+        return 0
     }
 
     private func checkMatches() {
         var clearedPositions: [(Int, Int)] = []
         var linesClearedThisTurn = 0
-        var diagonalPatternsFound = Set<String>() // Track which diagonal patterns we've found
         var achievementsToUpdate: [String: Int] = [:] // Track achievements to update
         
         Logger.shared.log("Starting line clear check", category: .lineClear, level: .debug)
@@ -1048,113 +1100,28 @@ final class GameState: ObservableObject {
         }
         
         // Check for X pattern (10+ blocks in X formation)
-        for row in 1..<GameConstants.gridSize-1 {
-            for col in 1..<GameConstants.gridSize-1 {
-                if let centerColor = grid[row][col] {
-                    var xPatternCount = 1 // Count the center block
-                    var positions = [(row, col)]
-                    
-                    // Check in all four diagonal directions
-                    let directions = [(1,1), (1,-1), (-1,1), (-1,-1)]
-                    for (dx, dy) in directions {
-                        var currentRow = row + dx
-                        var currentCol = col + dy
-                        while currentRow >= 0 && currentRow < GameConstants.gridSize &&
-                              currentCol >= 0 && currentCol < GameConstants.gridSize &&
-                              grid[currentRow][currentCol] == centerColor {
-                            xPatternCount += 1
-                            positions.append((currentRow, currentCol))
-                            currentRow += dx
-                            currentCol += dy
-                        }
-                    }
-                    
-                    if xPatternCount >= 10 {
-                        addScore(250, at: CGPoint(x: CGFloat(col) * GameConstants.blockSize, y: CGFloat(row) * GameConstants.blockSize))
-                        print("[Bonus] X pattern with \(xPatternCount) blocks found! +250 points!")
-                    }
-                }
-            }
+        let xPatternScore = checkXPattern()
+        if xPatternScore > 0 {
+            addScore(xPatternScore, at: CGPoint(x: frameSize.width/2, y: frameSize.height/2))
+            Logger.shared.log("X pattern found! +\(xPatternScore) points", category: .lineClear, level: .info)
         }
         
-        // Check for diagonal patterns (10+ blocks in a row)
-        for row in 0..<GameConstants.gridSize {
-            for col in 0..<GameConstants.gridSize {
-                if let startColor = grid[row][col] {
-                    // Check forward diagonal (/)
-                    var forwardCount = 1
-                    var currentRow = row - 1
-                    var currentCol = col + 1
-                    while currentRow >= 0 && currentCol < GameConstants.gridSize &&
-                          grid[currentRow][currentCol] == startColor {
-                        forwardCount += 1
-                        currentRow -= 1
-                        currentCol += 1
-                    }
-                    
-                    if forwardCount >= 10 {
-                        let patternKey = "forward_\(row),\(col)"
-                        if !diagonalPatternsFound.contains(patternKey) {
-                            diagonalPatternsFound.insert(patternKey)
-                            addScore(300, at: CGPoint(x: CGFloat(col) * GameConstants.blockSize, y: CGFloat(row) * GameConstants.blockSize))
-                            print("[Bonus] Forward diagonal with \(forwardCount) blocks found! +300 points!")
-                        }
-                    }
-                    
-                    // Check backward diagonal (\)
-                    var backwardCount = 1
-                    currentRow = row - 1
-                    currentCol = col - 1
-                    while currentRow >= 0 && currentCol >= 0 &&
-                          grid[currentRow][currentCol] == startColor {
-                        backwardCount += 1
-                        currentRow -= 1
-                        currentCol -= 1
-                    }
-                    
-                    if backwardCount >= 10 {
-                        let patternKey = "backward_\(row),\(col)"
-                        if !diagonalPatternsFound.contains(patternKey) {
-                            diagonalPatternsFound.insert(patternKey)
-                            addScore(300, at: CGPoint(x: CGFloat(col) * GameConstants.blockSize, y: CGFloat(row) * GameConstants.blockSize))
-                            print("[Bonus] Backward diagonal with \(backwardCount) blocks found! +300 points!")
-                        }
-                    }
-                }
-            }
-        }
-        
-        // Update chain bonus only for line clears
-        if linesClearedThisTurn > 0 {
-            currentChain += 1
-            let chainBonus = currentChain * 100
-            addScore(chainBonus, at: CGPoint(x: frameSize.width/2, y: frameSize.height/2))
-            print("[Chain] Chain \(currentChain)! +\(chainBonus) bonus points!")
-            // Update total lines cleared
-            linesCleared += linesClearedThisTurn
+        // Check for perfect level (grid completely empty)
+        if isGridEmpty() && isPerfectLevel {
+            let perfectBonus = 1000
+            addScore(perfectBonus, at: CGPoint(x: frameSize.width/2, y: frameSize.height/2))
+            print("[Perfect] Perfect level! +\(perfectBonus) bonus points!")
+            achievementsManager.updateAchievement(id: "perfect_level", value: 1)
+            perfectLevels += 1
+            achievementsManager.updateAchievement(id: "perfect_levels_3", value: perfectLevels)
+            achievementsManager.updateAchievement(id: "perfect_levels_5", value: perfectLevels)
             
-            // Check for quick clear achievement (within 5 seconds of game start)
-            if let startTime = gameStartTime {
-                let timeSinceStart = Date().timeIntervalSince(startTime)
-                if timeSinceStart <= 5.0 {
-                    achievementsManager.increment(id: "quick_clear")
-                }
-            }
-            
-            // Check for speed master achievement (5 lines within 30 seconds)
-            if linesClearedThisTurn >= 5 {
-                if let startTime = gameStartTime {
-                    let timeSinceStart = Date().timeIntervalSince(startTime)
-                    if timeSinceStart <= 30.0 {
-                        achievementsManager.increment(id: "speed_master")
-                    }
-                }
-            }
-        } else {
-            currentChain = 0
+            // Mark level as complete
+            levelComplete = true
+            print("[DEBUG] Level complete - grid is empty and perfect")
         }
         
-        // Update achievements in batch
+        // Update achievements
         if linesClearedThisTurn > 0 {
             achievementsToUpdate["clear_10"] = linesClearedThisTurn
             achievementsToUpdate["clear_50"] = linesClearedThisTurn
@@ -1164,17 +1131,6 @@ final class GameState: ObservableObject {
         // Batch update achievements
         if !achievementsToUpdate.isEmpty {
             achievementsManager.batchUpdateAchievements(achievementsToUpdate)
-        }
-        
-        // Check for perfect level
-        if isGridEmpty() && isPerfectLevel {
-            let perfectBonus = 1000
-            addScore(perfectBonus, at: CGPoint(x: frameSize.width/2, y: frameSize.height/2))
-            print("[Perfect] Perfect level! +\(perfectBonus) bonus points!")
-            achievementsManager.updateAchievement(id: "perfect_level", value: 1)
-            perfectLevels += 1
-            achievementsManager.updateAchievement(id: "perfect_levels_3", value: perfectLevels)
-            achievementsManager.updateAchievement(id: "perfect_levels_5", value: perfectLevels)
         }
         
         // Track line clear event
@@ -1328,8 +1284,8 @@ final class GameState: ObservableObject {
                     )
                     print("[Leaderboard] Successfully updated leaderboard")
                     
-                    // Refresh leaderboard high score
-                    await fetchLeaderboardHighScore()
+                    // Refresh leaderboard high score - REMOVED: Only fetch at end of game or main menu
+                    // await fetchLeaderboardHighScore()
                 } else {
                     print("[Leaderboard] Skipping update - score is 0")
                 }
@@ -1388,55 +1344,104 @@ final class GameState: ObservableObject {
     }
     
     private func continueLevelUp() {
+        print("[DEBUG] Level up - clearing grid for level \(level + 1)")
+        print("[DEBUG] Grid state before clear: \(grid.flatMap { $0 }.compactMap { $0 }.count) blocks")
+        
         level += 1
         print("[Level] Level up! Now at level \(level)")
         setSeed(for: level)
+        
+        // 1. Clear the data model - THIS IS THE SINGLE SOURCE OF TRUTH
         grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
+        print("[DEBUG] Grid state after clear: \(grid.flatMap { $0 }.compactMap { $0 }.count) blocks")
+        print("[DEBUG] Grid state validation - all cells should be nil")
+        
+        // Validate that grid is properly cleared
+        for row in 0..<GameConstants.gridSize {
+            for col in 0..<GameConstants.gridSize {
+                if grid[row][col] != nil {
+                    print("[ERROR] Grid cell (\(row), \(col)) still contains \(grid[row][col]?.rawValue ?? "unknown") after clear!")
+                }
+            }
+        }
+        
         tray = []
         
         // Update personal highest level
         if level > highestLevel {
             highestLevel = level
             userDefaults.set(highestLevel, forKey: levelKey)
-            achievementsManager.updateAchievement(id: "highest_level", value: level)
-            print("[Level] New personal highest level: \(level)")
         }
         
-        let availableShapes = BlockShape.availableShapes(for: level)
-        print("[Level] Level \(level) - Available shapes: \(availableShapes.map { String(describing: $0) }.joined(separator: ", "))")
+        // 2. Force immediate visual update to clear any block remnants
+        delegate?.gameStateDidUpdate()
+        
+        // 3. Additional cleanup to ensure no visual artifacts remain
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.delegate?.gameStateDidUpdate()
+        }
+        
+        // Final cleanup after a longer delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            self?.delegate?.gameStateDidUpdate()
+        }
+        
         refillTray()
         levelComplete = false
-        if isPerfectLevel {
-            perfectLevels += 1
-        }
-        isPerfectLevel = true
-        currentChain = 0
-        usedColors.removeAll()
-        usedShapes.removeAll()
-        delegate?.gameStateDidUpdate()
-        checkAchievements()
     }
     
     func advanceToNextLevel() {
-        // Clear the grid immediately and notify delegate
+        print("[DEBUG] Level completion - clearing grid immediately")
+        print("[DEBUG] Grid state before clear: \(grid.flatMap { $0 }.compactMap { $0 }.count) blocks")
+        
+        // 1. Clear the data model immediately - THIS IS THE SINGLE SOURCE OF TRUTH
         self.grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
+        print("[DEBUG] Grid state after clear: \(grid.flatMap { $0 }.compactMap { $0 }.count) blocks")
+        print("[DEBUG] Grid state validation - all cells should be nil")
+        
+        // Validate that grid is properly cleared
+        for row in 0..<GameConstants.gridSize {
+            for col in 0..<GameConstants.gridSize {
+                if grid[row][col] != nil {
+                    print("[ERROR] Grid cell (\(row), \(col)) still contains \(grid[row][col]?.rawValue ?? "unknown") after clear!")
+                }
+            }
+        }
+        
+        // 2. Force immediate visual update to clear any block remnants
         self.delegate?.gameStateDidUpdate()
         
         // Add a small delay before advancing to ensure the level complete overlay is visible
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             guard let self = self else { return }
+            
+            print("[DEBUG] Advancing to next level - setting up new level")
             self.level += 1
             print("[Level] Advancing to level \(self.level)")
             self.setSeed(for: self.level)
             self.tray = []
+            
             if self.level > UserDefaults.standard.integer(forKey: self.levelKey) {
                 self.achievementsManager.updateAchievement(id: "highest_level", value: self.level)
             }
+            
             let availableShapes = BlockShape.availableShapes(for: self.level)
             print("[Level] Level \(self.level) - Available shapes: \(availableShapes.map { String(describing: $0) }.joined(separator: ", "))")
             self.refillTray()
             self.levelComplete = false
+            
+            // 3. Force multiple grid updates to ensure no visual artifacts remain
             self.delegate?.gameStateDidUpdate()
+            
+            // Additional cleanup to ensure no block remnants
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                self?.delegate?.gameStateDidUpdate()
+            }
+            
+            // Final cleanup after a longer delay to catch any remaining artifacts
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.delegate?.gameStateDidUpdate()
+            }
         }
     }
     
@@ -1763,7 +1768,8 @@ final class GameState: ObservableObject {
                         type: .score
                     )
                     print("[Leaderboard] ✅ Final score submitted successfully (manual end)")
-                    await fetchLeaderboardHighScore()
+                    // Refresh leaderboard high score - REMOVED: Only fetch at end of game or main menu
+                    // await fetchLeaderboardHighScore()
                 } catch {
                     print("[Leaderboard] ❌ Error submitting final score (manual end): \(error.localizedDescription)")
                 }
@@ -1783,9 +1789,19 @@ final class GameState: ObservableObject {
             
             // Update state on main thread
             await MainActor.run {
+                // Check if this is a new game (no saved progress) or resuming an existing game
+                let isNewGame = progress.score == 0 && progress.blocksPlaced == 0 && progress.level == 1
+                
                 // Restore core game state
                 self.score = progress.score
-                self.level = progress.level
+                // Always start at level 1 for new games, regardless of saved progress
+                if isNewGame {
+                    self.level = 1
+                    print("[DEBUG] New game detected - setting level to 1")
+                } else {
+                    self.level = progress.level
+                    print("[DEBUG] Resuming saved game - level: \(progress.level)")
+                }
                 self.blocksPlaced = progress.blocksPlaced
                 self.linesCleared = progress.linesCleared
                 self.gamesCompleted = progress.gamesCompleted
@@ -1801,8 +1817,25 @@ final class GameState: ObservableObject {
                     }
                 }
                 
-                // Restore tray state
-                self.tray = progress.tray
+                // FIXED: Always ensure tray is properly initialized
+                // Check if saved tray is valid (has 3 blocks) and not empty
+                if !isNewGame && !progress.tray.isEmpty && progress.tray.count == 3 {
+                    // Use saved tray only if it's valid
+                    self.tray = progress.tray
+                    print("[DEBUG] Using saved tray with \(self.tray.count) blocks")
+                } else {
+                    // For new games or invalid saved trays, ensure tray is properly initialized
+                    print("[DEBUG] Initializing fresh tray (new game or invalid saved tray)")
+                    self.tray = []
+                    self.refillTray()
+                }
+                
+                // SAFETY CHECK: Ensure tray always has the correct number of blocks
+                if self.tray.count != 3 {
+                    print("[DEBUG] Tray has incorrect number of blocks (\(self.tray.count)), refilling...")
+                    self.tray = []
+                    self.refillTray()
+                }
                 
                 // Restore game state flags
                 self.isGameOver = false
@@ -2127,7 +2160,22 @@ final class GameState: ObservableObject {
     }
     
     func reset() {
+        print("[DEBUG] Resetting game state - clearing grid")
+        print("[DEBUG] Grid state before reset: \(grid.flatMap { $0 }.compactMap { $0 }.count) blocks")
+        
+        // 1. Clear the data model - THIS IS THE SINGLE SOURCE OF TRUTH
         grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
+        print("[DEBUG] Grid state after reset: \(grid.flatMap { $0 }.compactMap { $0 }.count) blocks")
+        
+        // Validate that grid is properly cleared
+        for row in 0..<GameConstants.gridSize {
+            for col in 0..<GameConstants.gridSize {
+                if grid[row][col] != nil {
+                    print("[ERROR] Grid cell (\(row), \(col)) still contains \(grid[row][col]?.rawValue ?? "unknown") after reset!")
+                }
+            }
+        }
+        
         tray = []
         score = 0
         temporaryScore = 0
@@ -2138,6 +2186,14 @@ final class GameState: ObservableObject {
         previousTray = nil
         lastMove = nil
         refillTray()
+        
+        // 2. Force immediate visual update to clear any block remnants
+        delegate?.gameStateDidUpdate()
+        
+        // 3. Additional cleanup to ensure no visual artifacts remain
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.delegate?.gameStateDidUpdate()
+        }
     }
     
     // Add this method to handle continuing the game after watching an ad
@@ -2228,25 +2284,8 @@ final class GameState: ObservableObject {
         hasUsedContinueAd = false
     }
     
-    private func getLevelScoreThreshold() -> Int {
-        switch level {
-        case 1...5:
-            return 1000
-        case 6...10:
-            return 2000
-        case 11...50:
-            return 3000
-        case 51...99:
-            return 5000
-        case 100...:
-            return 10000
-        default:
-            return 5000
-        }
-    }
-    
     private func updateLevelRequirements() {
-        levelScoreThreshold = getLevelScoreThreshold()
+        levelScoreThreshold = calculateRequiredScore()
         
         // Dynamic difficulty adjustment based on player performance
         let playerSkill = calculatePlayerSkill()
@@ -2650,44 +2689,9 @@ final class GameState: ObservableObject {
         // Get adjusted difficulty for next level
         let adjustedDifficulty = adaptiveDifficultyManager.getAdjustedDifficulty(for: level + 1)
         
-        // Calculate the next level's required score
+        // Calculate the next level's required score using the cumulative system
         let nextLevel = level + 1
-        let nextLevelRequiredScore: Int
-        switch nextLevel {
-        case 1...5:
-            // Levels 1-5: 1000 points each
-            nextLevelRequiredScore = nextLevel * 1000
-        case 6...10:
-            // Levels 6-10: 1000 points each
-            nextLevelRequiredScore = nextLevel * 1000
-        case 11...25:
-            // Levels 11-25: 1100 points each
-            nextLevelRequiredScore = 10000 + ((nextLevel - 10) * 1100)
-        case 26...50:
-            // Levels 26-50: 1100 points each
-            nextLevelRequiredScore = 26500 + ((nextLevel - 25) * 1100)
-        case 51...100:
-            // Levels 51-100: 1250 points each
-            nextLevelRequiredScore = 52500 + ((nextLevel - 50) * 1250)
-        case 101...200:
-            // Levels 101-200: 1500 points each
-            nextLevelRequiredScore = 112500 + ((nextLevel - 100) * 1500)
-        case 201...300:
-            // Levels 201-300: 1750 points each
-            nextLevelRequiredScore = 262500 + ((nextLevel - 200) * 1750)
-        case 301...500:
-            // Levels 301-500: 2000 points each
-            nextLevelRequiredScore = 437500 + ((nextLevel - 300) * 2000)
-        case 501...:
-            // Level 501+: 2500 points each, increasing by 500 every 200 levels
-            let basePoints = 2500
-            let levelGroup = (nextLevel - 500) / 200
-            let additionalPoints = levelGroup * 500
-            let pointsPerLevel = basePoints + additionalPoints
-            nextLevelRequiredScore = 837500 + ((nextLevel - 500) * pointsPerLevel)
-        default:
-            nextLevelRequiredScore = nextLevel * 1000
-        }
+        let nextLevelRequiredScore = calculateRequiredScoreForLevel(nextLevel)
         
         // Apply difficulty adjustments while ensuring we don't go below the base threshold
         let safeNextLevelScore = min(nextLevelRequiredScore, Int.max / 2) // Prevent overflow
@@ -2850,51 +2854,98 @@ final class GameState: ObservableObject {
     }
 
     func calculateRequiredScore() -> Int {
-        // Calculate the total required score for the current level
-        let totalRequiredScore: Int
-        switch level {
-        case 1...5:
-            // Levels 1-5: 1000 points each
-            totalRequiredScore = level * 1000
-        case 6...10:
-            // Levels 6-10: 1000 points each
-            totalRequiredScore = level * 1000
-        case 11...25:
-            // Levels 11-25: 1100 points each
-            totalRequiredScore = 10000 + ((level - 10) * 1100)
-        case 26...50:
-            // Levels 26-50: 1100 points each
-            totalRequiredScore = 26500 + ((level - 25) * 1100)
-        case 51...100:
-            // Levels 51-100: 1250 points each
-            totalRequiredScore = 52500 + ((level - 50) * 1250)
-        case 101...200:
-            // Levels 101-200: 1500 points each
-            totalRequiredScore = 112500 + ((level - 100) * 1500)
-        case 201...300:
-            // Levels 201-300: 1750 points each
-            totalRequiredScore = 262500 + ((level - 200) * 1750)
-        case 301...500:
-            // Levels 301-500: 2000 points each
-            totalRequiredScore = 437500 + ((level - 300) * 2000)
-        case 501...:
-            // Level 501+: 2500 points each, increasing by 500 every 200 levels
-            let basePoints = 2500
-            let levelGroup = (level - 500) / 200
-            let additionalPoints = levelGroup * 500
-            let pointsPerLevel = basePoints + additionalPoints
-            totalRequiredScore = 837500 + ((level - 500) * pointsPerLevel)
-        default:
-            totalRequiredScore = level * 1000
+        return calculateRequiredScoreForLevel(level)
+    }
+    
+    func calculateRequiredScoreForLevel(_ targetLevel: Int) -> Int {
+        // Calculate the cumulative required score for the specified level
+        // This represents the TOTAL score needed to reach this level
+        
+        // Calculate cumulative score by summing up all previous level requirements
+        var cumulativeScore = 0
+        
+        // Calculate points needed for each level up to the target level
+        for currentLevel in 1...targetLevel {
+            let levelPoints: Int
+            
+            switch currentLevel {
+            case 1:
+                levelPoints = 1000
+            case 2:
+                levelPoints = 1100
+            case 3:
+                levelPoints = 1200
+            case 4:
+                levelPoints = 1300
+            case 5:
+                levelPoints = 1400
+            case 6...10:
+                // Levels 6-10: Increase by 150 per level
+                levelPoints = 1400 + ((currentLevel - 5) * 150)
+            case 11...25:
+                // Levels 11-25: Increase by 200 per level
+                levelPoints = 2150 + ((currentLevel - 10) * 200)
+            case 26...50:
+                // Levels 26-50: Increase by 250 per level
+                levelPoints = 5150 + ((currentLevel - 25) * 250)
+            case 51...100:
+                // Levels 51-100: Increase by 300 per level
+                levelPoints = 11350 + ((currentLevel - 50) * 300)
+            case 101...200:
+                // Levels 101-200: Increase by 350 per level
+                levelPoints = 26350 + ((currentLevel - 100) * 350)
+            case 201...300:
+                // Levels 201-300: Increase by 400 per level
+                levelPoints = 61350 + ((currentLevel - 200) * 400)
+            case 301...500:
+                // Levels 301-500: Increase by 450 per level
+                levelPoints = 101350 + ((currentLevel - 300) * 450)
+            case 501...:
+                // Level 501+: Dynamic scaling
+                let baseIncrease = 500
+                let levelGroup = (currentLevel - 500) / 100
+                let additionalIncrease = levelGroup * 50
+                let pointsPerLevel = baseIncrease + additionalIncrease
+                levelPoints = 191350 + ((currentLevel - 500) * pointsPerLevel)
+            default:
+                levelPoints = currentLevel * 1000
+            }
+            
+            cumulativeScore += levelPoints
         }
         
-        // Add bonus for perfect levels
+        // Add bonus for perfect levels (this is additional to the cumulative score)
         let perfectBonus = perfectLevels * 500
         
-        // Add bonus for consecutive days played
+        // Add bonus for consecutive days played (this is additional to the cumulative score)
         let streakBonus = consecutiveDays * 200
         
-        return totalRequiredScore + perfectBonus + streakBonus
+        let totalRequiredScore = cumulativeScore + perfectBonus + streakBonus
+        
+        return totalRequiredScore
+    }
+    
+    // Debug function to verify cumulative scoring system
+    func debugCumulativeScores() {
+        print("=== CUMULATIVE SCORING SYSTEM DEBUG ===")
+        print("Expected cumulative scores:")
+        print("Level 1: 1,000 total points")
+        print("Level 2: 2,100 total points (1,000 + 1,100)")
+        print("Level 3: 3,300 total points (2,100 + 1,200)")
+        print("Level 4: 4,600 total points (3,300 + 1,300)")
+        print("Level 5: 6,000 total points (4,600 + 1,400)")
+        print("Level 6: 7,550 total points (6,000 + 1,550)")
+        print("Level 7: 9,250 total points (7,550 + 1,700)")
+        print("Level 8: 11,100 total points (9,250 + 1,850)")
+        print("Level 9: 13,100 total points (11,100 + 2,000)")
+        print("Level 10: 15,250 total points (13,100 + 2,150)")
+        print("")
+        print("Actual calculated scores:")
+        for i in 1...10 {
+            let score = calculateRequiredScoreForLevel(i)
+            print("Level \(i): \(score) total points")
+        }
+        print("=====================================")
     }
     
     // MARK: - Tray Management
@@ -2906,10 +2957,16 @@ final class GameState: ObservableObject {
     }
     
     func addBlockToTray(_ block: Block) {
+        print("[DEBUG] Adding block to tray: \(block.shape)-\(block.color)")
+        print("[DEBUG] Tray before adding: \(tray.map { "\($0.shape)-\($0.color)" })")
+        
         // Only add if we have less than 3 shapes
         if tray.count < 3 {
             tray.append(block)
+            print("[DEBUG] Block added to tray successfully. Tray after: \(tray.map { "\($0.shape)-\($0.color)" })")
             delegate?.gameStateDidUpdate()
+        } else {
+            print("[ERROR] Cannot add block to tray - tray is full (\(tray.count)/3)")
         }
     }
 
@@ -3228,5 +3285,66 @@ final class GameState: ObservableObject {
         levelComplete = false
         
         Logger.shared.log("Game state cleanup completed", category: .systemMemory, level: .info)
+    }
+    
+    // MARK: - Grid State Validation
+    
+    private func validateGridStateAfterPlacement() {
+        let gridBlockCount = grid.flatMap { $0 }.compactMap { $0 }.count
+        print("[DEBUG] Grid state validation - Total blocks in grid: \(gridBlockCount)")
+        
+        // Additional validation could be added here
+        // For example, checking for orphaned blocks, invalid positions, etc.
+        
+        #if DEBUG
+        // In debug builds, we could add more thorough validation
+        // assert(gridBlockCount >= 0, "Grid block count should never be negative")
+        #endif
+    }
+    
+    // MARK: - Initialization Safety Check
+    
+    /// Ensures the game state is properly initialized for a new game
+    func ensureProperInitialization() {
+        print("[DEBUG] Ensuring proper game initialization...")
+        
+        // Check if level is correct
+        if level != 1 {
+            print("[DEBUG] Level is \(level), resetting to 1")
+            level = 1
+        }
+        
+        // Check if tray is properly filled
+        if tray.count != 3 {
+            print("[DEBUG] Tray has \(tray.count) blocks, refilling to 3")
+            tray = []
+            refillTray()
+        }
+        
+        // Check if grid is empty
+        let gridBlockCount = grid.flatMap { $0 }.compactMap { $0 }.count
+        if gridBlockCount > 0 {
+            print("[DEBUG] Grid has \(gridBlockCount) blocks, clearing")
+            grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
+        }
+        
+        // Check if score is reset
+        if score != 0 || temporaryScore != 0 {
+            print("[DEBUG] Score not reset, clearing")
+            score = 0
+            temporaryScore = 0
+        }
+        
+        // Check if game state flags are correct
+        if isGameOver || levelComplete {
+            print("[DEBUG] Game state flags incorrect, resetting")
+            isGameOver = false
+            levelComplete = false
+        }
+        
+        print("[DEBUG] Game initialization check complete - Level: \(level), Tray: \(tray.count), Score: \(score)")
+        
+        // Notify delegate of any changes
+        delegate?.gameStateDidUpdate()
     }
 }

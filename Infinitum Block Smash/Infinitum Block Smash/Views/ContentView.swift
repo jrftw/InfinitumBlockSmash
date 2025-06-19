@@ -365,12 +365,17 @@ struct ContentView: View {
             Task {
                 await AdManager.shared.checkTopThreeStatus()
             }
+            
+            // Fetch leaderboard high score when main menu appears (not during gameplay)
+            Task {
+                await gameState.fetchLeaderboardHighScore()
+            }
         }
         .onDisappear {
             cleanup()
         }
         .fullScreenCover(isPresented: $showingGameView) {
-            GameView()
+            GameView(gameState: gameState)
         }
         .sheet(isPresented: $showingLeaderboard) {
             LeaderboardView()
@@ -427,6 +432,7 @@ struct ContentView: View {
                 onClassic: {
                     UserDefaults.standard.set(false, forKey: "isTimedMode")
                     showingGameModeSelection = false
+                    gameState.resetGame()
                     showingGameView = true
                 },
                 onClassicTimed: {
