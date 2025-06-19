@@ -125,7 +125,6 @@
 import SwiftUI
 import AppTrackingTransparency
 import MessageUI
-import SafariServices
 import Firebase
 import FirebaseAuth
 
@@ -627,7 +626,6 @@ private struct DataManagementSection: View {
 }
 
 private struct InformationSection: View {
-    @Binding var showingDiscordWebView: Bool
     @Binding var showingTestFlightAlert: Bool
     @Binding var showingFeedbackMail: Bool
     @Binding var showingFeatureMail: Bool
@@ -643,7 +641,9 @@ private struct InformationSection: View {
             }
             
             Button("Join the Discord") {
-                showingDiscordWebView = true
+                if let url = URL(string: "https://discord.gg/8xx4QzceRA") {
+                    UIApplication.shared.open(url)
+                }
             }
             
             Button("Test New Features") {
@@ -746,11 +746,9 @@ struct SettingsView: View {
     @State private var showingChangelog = false
     @State private var showingFeedbackMail = false
     @State private var showingFeatureMail = false
-    @State private var showingDiscordWebView = false
     @State private var showingPlacementPrecisionInfo = false
     @State private var showingBlockDragInfo = false
     @State private var showingTestFlightAlert = false
-    @State private var showingTestFlightWebView = false
     @State private var showingStore = false
     @AppStorage("forceUpdateEnabled") private var forceUpdateEnabled = false
     @AppStorage("autoSyncEnabled") private var autoSyncEnabled = true
@@ -874,7 +872,6 @@ struct SettingsView: View {
                 if loadedSections.contains("information") {
                     Group {
                         InformationSection(
-                            showingDiscordWebView: $showingDiscordWebView,
                             showingTestFlightAlert: $showingTestFlightAlert,
                             showingFeedbackMail: $showingFeedbackMail,
                             showingFeatureMail: $showingFeatureMail
@@ -952,19 +949,15 @@ struct SettingsView: View {
             .sheet(isPresented: $showingFeatureMail) {
                 MailView(isShowing: $showingFeatureMail, recipient: "jrftw@infinitumlive.com", subject: "Infinitum Block Smash Feature Suggestion")
             }
-            .sheet(isPresented: $showingDiscordWebView) {
-                SafariView(url: URL(string: "https://discord.gg/8xx4QzceRA")!)
-            }
             .alert("Test New Features", isPresented: $showingTestFlightAlert) {
                 Button("Cancel", role: .cancel) { }
                 Button("Join TestFlight") {
-                    showingTestFlightWebView = true
+                    if let url = URL(string: "https://testflight.apple.com/join/nd4DWxbT") {
+                        UIApplication.shared.open(url)
+                    }
                 }
             } message: {
                 Text("Join our TestFlight program to experience upcoming features before they're released. Your feedback helps us improve the game and ensure the highest quality experience for all players.")
-            }
-            .sheet(isPresented: $showingTestFlightWebView) {
-                SafariView(url: URL(string: "https://testflight.apple.com/join/nd4DWxbT")!)
             }
             .sheet(isPresented: $showingStore) {
                 StoreView()
@@ -1026,19 +1019,5 @@ struct MailView: UIViewControllerRepresentable {
         func mailComposeController(_ controller: MFMailComposeViewController, didFinishWith result: MFMailComposeResult, error: Error?) {
             isShowing = false
         }
-    }
-}
-
-struct SafariView: UIViewControllerRepresentable {
-    let url: URL
-    
-    func makeUIViewController(context: UIViewControllerRepresentableContext<SafariView>) -> SFSafariViewController {
-        let config = SFSafariViewController.Configuration()
-        config.entersReaderIfAvailable = false
-        let safariVC = SFSafariViewController(url: url, configuration: config)
-        return safariVC
-    }
-    
-    func updateUIViewController(_ uiViewController: SFSafariViewController, context: UIViewControllerRepresentableContext<SafariView>) {
     }
 } 
