@@ -288,9 +288,11 @@ final class GameState: ObservableObject {
     
     private func startPlayTimeTimer() {
         playTimeTimer?.invalidate()
-        playTimeTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.updatePlayTime()
+        DispatchQueue.main.async {
+            self.playTimeTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.updatePlayTime()
+                }
             }
         }
     }
@@ -378,6 +380,9 @@ final class GameState: ObservableObject {
     func resetGame() {
         // Delete any saved game first
         deleteSavedGame()
+        #if DEBUG
+        print("[Memory] Resetting game. Tray: \(tray.count), Grid blocks: \(grid.flatMap { $0 }.compactMap { $0 }.count)")
+        #endif
         
         // Clear cloud state if user is logged in
         if !UserDefaults.standard.bool(forKey: "isGuest") {
@@ -1320,6 +1325,9 @@ final class GameState: ObservableObject {
     }
 
     private func handleGameOver() {
+        #if DEBUG
+        print("[Memory] Game over. Tray: \(tray.count), Grid blocks: \(grid.flatMap { $0 }.compactMap { $0 }.count)")
+        #endif
         print("[GameState] Handling game over")
         print("[GameState] Final score: \(score)")
         print("[GameState] Final level: \(level)")

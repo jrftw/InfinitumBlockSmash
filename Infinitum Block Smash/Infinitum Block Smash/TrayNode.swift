@@ -33,8 +33,12 @@ class TrayNode: SKNode {
     }
 
     func updateBlocks(_ blocks: [Block], blockSize: CGFloat) {
-        // Remove old nodes
-        for node in blockNodes { node.removeFromParent() }
+        // Remove old nodes with proper cleanup
+        for node in blockNodes { 
+            node.removeAllActions()
+            node.removeAllChildren()
+            node.removeFromParent()
+        }
         blockNodes.removeAll(keepingCapacity: true)
 
         guard !blocks.isEmpty else { return }

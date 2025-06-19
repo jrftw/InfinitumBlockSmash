@@ -33,6 +33,8 @@ final class NodePool {
     
     func returnBlockNode(_ node: SKNode) {
         guard blockNodePool.count < maxPoolSize else {
+            node.removeAllActions()
+            node.removeAllChildren()
             node.removeFromParent()
             return
         }
@@ -55,6 +57,8 @@ final class NodePool {
     
     func returnParticleEmitter(_ emitter: SKEmitterNode) {
         guard particleEmitterPool.count < maxPoolSize else {
+            emitter.removeAllActions()
+            emitter.particleBirthRate = 0
             emitter.removeFromParent()
             return
         }
@@ -77,6 +81,8 @@ final class NodePool {
     
     func returnHighlightNode(_ node: SKNode) {
         guard highlightNodePool.count < maxPoolSize else {
+            node.removeAllActions()
+            node.removeAllChildren()
             node.removeFromParent()
             return
         }
@@ -100,6 +106,8 @@ final class NodePool {
     
     func returnPreviewNode(_ node: SKNode) {
         guard previewNodePool.count < maxPoolSize else {
+            node.removeAllActions()
+            node.removeAllChildren()
             node.removeFromParent()
             return
         }
@@ -142,10 +150,26 @@ final class NodePool {
     }
     
     func clearAllPools() {
-        blockNodePool.forEach { $0.removeFromParent() }
-        particleEmitterPool.forEach { $0.removeFromParent() }
-        highlightNodePool.forEach { $0.removeFromParent() }
-        previewNodePool.forEach { $0.removeFromParent() }
+        blockNodePool.forEach { node in
+            node.removeAllActions()
+            node.removeAllChildren()
+            node.removeFromParent()
+        }
+        particleEmitterPool.forEach { emitter in
+            emitter.removeAllActions()
+            emitter.particleBirthRate = 0
+            emitter.removeFromParent()
+        }
+        highlightNodePool.forEach { node in
+            node.removeAllActions()
+            node.removeAllChildren()
+            node.removeFromParent()
+        }
+        previewNodePool.forEach { node in
+            node.removeAllActions()
+            node.removeAllChildren()
+            node.removeFromParent()
+        }
         
         blockNodePool.removeAll()
         particleEmitterPool.removeAll()

@@ -13,6 +13,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var lastPlacementTime: CFTimeInterval = 0
     private let placementDebounceInterval: CFTimeInterval = 0.1 // Reduced from previous value
     
+    // Touch throttling properties
+    private var lastTouchMoveUpdate: TimeInterval = 0
+    private let touchUpdateThrottle: TimeInterval = 0.008 // ~120fps for maximum responsiveness
+    private var isHeavyOperationActive: Bool = false
+    
     // Visual effects
     private var particleEmitter: SKEmitterNode?
     private var glowNode: SKNode?
@@ -611,6 +616,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
            let blockIdString = node.name?.replacingOccurrences(of: "trayShape_", with: ""),
            let block = gameState.tray.first(where: { $0.id.uuidString == blockIdString }) {
             draggingBlock = block
+            
+            // Clean up existing drag node before creating new one
+            if let existing = dragNode {
+                existing.removeAllActions()
+                existing.removeAllChildren()
+                existing.removeFromParent()
+                dragNode = nil
+            }
+            
             // Create drag node at full grid size and apply the grid's scale
             dragNode = ShapeNode(block: block, blockSize: GameConstants.blockSize)
             dragNode?.setScale(gridNode.xScale) // Apply the same scale as the grid
@@ -693,6 +707,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
               let dragNode = dragNode,
               let draggingBlock = draggingBlock else { return }
         
+        // Conditional throttling - only throttle during heavy operations
+        let now = CACurrentMediaTime()
+        if isHeavyOperationActive && (now - lastTouchMoveUpdate < touchUpdateThrottle) {
+            return
+        }
+        lastTouchMoveUpdate = now
+        
         let touchPoint = touch.location(in: self)
         let gridPoint = convertToGridCoordinates(touchPoint)
         
@@ -705,91 +726,106 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let blockDragOffset = UserDefaults.standard.double(forKey: "blockDragOffset")
         dragNode.position = CGPoint(x: touchPoint.x, y: touchPoint.y + GameConstants.blockSize * blockDragOffset)
         
-        // Explicitly cleanup previous preview and highlights
-        if let oldPreview = previewNode {
-            Logger.shared.log("Removing old preview node", category: .preview, level: .debug)
-            oldPreview.removeFromParent()
-            previewNode = nil
-        }
+        // Check if we need to perform heavy operations (preview/highlight updates)
+        let needsPreviewUpdate = previewNode == nil || 
+                               !gameState.canPlaceBlock(draggingBlock, at: gridPoint) ||
+                               (previewNode != nil && gameState.canPlaceBlock(draggingBlock, at: gridPoint))
         
-        // Remove any existing highlight containers
-        gridNode.children.forEach { node in
-            if node.name?.hasPrefix("highlight_") == true {
-                Logger.shared.log("Removing old highlight container", category: .preview, level: .debug)
-                node.removeFromParent()
+        if needsPreviewUpdate {
+            isHeavyOperationActive = true
+            
+            // Explicitly cleanup previous preview and highlights
+            if let oldPreview = previewNode {
+                Logger.shared.log("Removing old preview node", category: .preview, level: .debug)
+                oldPreview.removeAllActions()
+                oldPreview.removeAllChildren()
+                oldPreview.removeFromParent()
+                previewNode = nil
             }
-        }
-        
-        // Only show preview if placement is valid
-        if gameState.canPlaceBlock(draggingBlock, at: gridPoint) {
-            Logger.shared.log("Creating preview at grid position: \(gridPoint)", category: .preview, level: .debug)
             
-            // Create preview node for the entire shape
-            let preview = SKNode()
-            preview.name = "preview_block" // Add name for easier cleanup
-            preview.zPosition = 5 // Set preview z-position above grid but below highlights
+            // Remove any existing highlight containers
+            gridNode.children.forEach { node in
+                if node.name?.hasPrefix("highlight_") == true {
+                    Logger.shared.log("Removing old highlight container", category: .preview, level: .debug)
+                    node.removeAllActions()
+                    node.removeAllChildren()
+                    node.removeFromParent()
+                }
+            }
             
-            // Create preview for each cell in the shape at BASE size
-            for (dx, dy) in draggingBlock.shape.cells {
-                let cellNode = SKShapeNode(rectOf: CGSize(width: GameConstants.blockSize, height: GameConstants.blockSize))
-                cellNode.fillColor = SKColor.from(draggingBlock.color.color)
-                cellNode.strokeColor = .clear
-                cellNode.alpha = 0.5
-                cellNode.name = "preview_cell" // Add name for easier cleanup
-                // Position each cell relative to the shape's anchor point (BASE size)
-                cellNode.position = CGPoint(
-                    x: CGFloat(dx) * GameConstants.blockSize,
-                    y: CGFloat(dy) * GameConstants.blockSize
+            // Only show preview if placement is valid
+            if gameState.canPlaceBlock(draggingBlock, at: gridPoint) {
+                Logger.shared.log("Creating preview at grid position: \(gridPoint)", category: .preview, level: .debug)
+                
+                // Create preview node for the entire shape
+                let preview = SKNode()
+                preview.name = "preview_block" // Add name for easier cleanup
+                preview.zPosition = 5 // Set preview z-position above grid but below highlights
+                
+                // Create preview for each cell in the shape at BASE size
+                for (dx, dy) in draggingBlock.shape.cells {
+                    let cellNode = SKShapeNode(rectOf: CGSize(width: GameConstants.blockSize, height: GameConstants.blockSize))
+                    cellNode.fillColor = SKColor.from(draggingBlock.color.color)
+                    cellNode.strokeColor = .clear
+                    cellNode.alpha = 0.5
+                    cellNode.name = "preview_cell" // Add name for easier cleanup
+                    // Position each cell relative to the shape's anchor point (BASE size)
+                    cellNode.position = CGPoint(
+                        x: CGFloat(dx) * GameConstants.blockSize,
+                        y: CGFloat(dy) * GameConstants.blockSize
+                    )
+                    preview.addChild(cellNode)
+                    Logger.shared.log("Added preview cell at relative position: (\(dx), \(dy))", category: .preview, level: .debug)
+                }
+                
+                // Calculate the grid's total size (BASE size)
+                let totalWidth = CGFloat(GameConstants.gridSize) * GameConstants.blockSize
+                let totalHeight = CGFloat(GameConstants.gridSize) * GameConstants.blockSize
+                
+                // Position the preview at the grid point (BASE size)
+                preview.position = CGPoint(
+                    x: -totalWidth / 2 + CGFloat(gridPoint.x) * GameConstants.blockSize + GameConstants.blockSize / 2,
+                    y: -totalHeight / 2 + CGFloat(gridPoint.y) * GameConstants.blockSize + GameConstants.blockSize / 2
                 )
-                preview.addChild(cellNode)
-                Logger.shared.log("Added preview cell at relative position: (\(dx), \(dy))", category: .preview, level: .debug)
+                
+                // Check which lines would be cleared
+                let (rowsToClear, columnsToClear) = gameState.wouldClearLines(block: draggingBlock, at: gridPoint)
+                
+                Logger.shared.log("Creating highlights for \(rowsToClear.count) rows and \(columnsToClear.count) columns", category: .preview, level: .debug)
+                
+                // Create highlights for rows and columns that would be cleared
+                let highlightColor = SKColor.from(draggingBlock.color.color)
+                
+                // Create a separate container for highlights
+                let highlightContainer = SKNode()
+                highlightContainer.name = "highlight_container" // Add name for easier cleanup
+                highlightContainer.zPosition = 10 // Ensure highlights are above everything else
+                
+                for row in rowsToClear {
+                    let highlight = createLineHighlight(for: row, isRow: true, color: highlightColor, blockSize: GameConstants.blockSize)
+                    highlight.name = "highlight_row_\(row)" // Add name for easier cleanup
+                    highlightContainer.addChild(highlight)
+                    Logger.shared.log("Added row highlight at row: \(row)", category: .preview, level: .debug)
+                }
+                
+                for col in columnsToClear {
+                    let highlight = createLineHighlight(for: col, isRow: false, color: highlightColor, blockSize: GameConstants.blockSize)
+                    highlight.name = "highlight_column_\(col)" // Add name for easier cleanup
+                    highlightContainer.addChild(highlight)
+                    Logger.shared.log("Added column highlight at column: \(col)", category: .preview, level: .debug)
+                }
+                
+                // Add both preview and highlights to gridNode
+                gridNode.addChild(preview)
+                gridNode.addChild(highlightContainer)
+                previewNode = preview
+                dragNode.alpha = 0.7
+            } else {
+                Logger.shared.log("Invalid placement at grid position: \(gridPoint)", category: .preview, level: .debug)
+                dragNode.alpha = 1.0
             }
             
-            // Calculate the grid's total size (BASE size)
-            let totalWidth = CGFloat(GameConstants.gridSize) * GameConstants.blockSize
-            let totalHeight = CGFloat(GameConstants.gridSize) * GameConstants.blockSize
-            
-            // Position the preview at the grid point (BASE size)
-            preview.position = CGPoint(
-                x: -totalWidth / 2 + CGFloat(gridPoint.x) * GameConstants.blockSize + GameConstants.blockSize / 2,
-                y: -totalHeight / 2 + CGFloat(gridPoint.y) * GameConstants.blockSize + GameConstants.blockSize / 2
-            )
-            
-            // Check which lines would be cleared
-            let (rowsToClear, columnsToClear) = gameState.wouldClearLines(block: draggingBlock, at: gridPoint)
-            
-            Logger.shared.log("Creating highlights for \(rowsToClear.count) rows and \(columnsToClear.count) columns", category: .preview, level: .debug)
-            
-            // Create highlights for rows and columns that would be cleared
-            let highlightColor = SKColor.from(draggingBlock.color.color)
-            
-            // Create a separate container for highlights
-            let highlightContainer = SKNode()
-            highlightContainer.name = "highlight_container" // Add name for easier cleanup
-            highlightContainer.zPosition = 10 // Ensure highlights are above everything else
-            
-            for row in rowsToClear {
-                let highlight = createLineHighlight(for: row, isRow: true, color: highlightColor, blockSize: GameConstants.blockSize)
-                highlight.name = "highlight_row_\(row)" // Add name for easier cleanup
-                highlightContainer.addChild(highlight)
-                Logger.shared.log("Added row highlight at row: \(row)", category: .preview, level: .debug)
-            }
-            
-            for col in columnsToClear {
-                let highlight = createLineHighlight(for: col, isRow: false, color: highlightColor, blockSize: GameConstants.blockSize)
-                highlight.name = "highlight_column_\(col)" // Add name for easier cleanup
-                highlightContainer.addChild(highlight)
-                Logger.shared.log("Added column highlight at column: \(col)", category: .preview, level: .debug)
-            }
-            
-            // Add both preview and highlights to gridNode
-            gridNode.addChild(preview)
-            gridNode.addChild(highlightContainer)
-            previewNode = preview
-            dragNode.alpha = 0.7
-        } else {
-            Logger.shared.log("Invalid placement at grid position: \(gridPoint)", category: .preview, level: .debug)
-            dragNode.alpha = 1.0
+            isHeavyOperationActive = false
         }
     }
     
@@ -840,19 +876,30 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         
         // Clean up all temporary nodes
-        dragNode.removeFromParent()
-        previewNode?.removeFromParent()
+        if let existing = self.dragNode {
+            existing.removeAllActions()
+            existing.removeAllChildren()
+            existing.removeFromParent()
+            self.dragNode = nil
+        }
+        
+        if let existing = self.previewNode {
+            existing.removeAllActions()
+            existing.removeAllChildren()
+            existing.removeFromParent()
+            self.previewNode = nil
+        }
         
         // Remove any highlight containers and ensure all block nodes are properly cleaned up
         gridNode.children.forEach { node in
             if node.name?.hasPrefix("highlight_") == true {
+                node.removeAllActions()
+                node.removeAllChildren()
                 node.removeFromParent()
             }
         }
         
-        self.dragNode = nil
         self.draggingBlock = nil
-        self.previewNode = nil
     }
     
     private func convertToGridCoordinates(_ point: CGPoint) -> CGPoint {
@@ -1106,17 +1153,23 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             
             // Clear any remaining preview or drag nodes
             if let preview = previewNode {
-                cleanupNode(preview)
+                preview.removeAllActions()
+                preview.removeAllChildren()
+                preview.removeFromParent()
                 previewNode = nil
             }
             if let drag = dragNode {
-                cleanupNode(drag)
+                drag.removeAllActions()
+                drag.removeAllChildren()
+                drag.removeFromParent()
                 dragNode = nil
             }
             
             // Clear any remaining hint highlights
             if let hint = hintHighlight {
-                cleanupNode(hint)
+                hint.removeAllActions()
+                hint.removeAllChildren()
+                hint.removeFromParent()
                 hintHighlight = nil
             }
             
@@ -1299,7 +1352,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Remove existing hint highlight if any
         if hintHighlight != nil {
             Logger.shared.debug("[Hint] Removing existing hint highlight", category: .debugGameScene)
+            hintHighlight?.removeAllActions()
+            hintHighlight?.removeAllChildren()
             hintHighlight?.removeFromParent()
+            hintHighlight = nil
         }
         
         // Create new hint highlight container
@@ -1344,7 +1400,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Remove highlight after 3 seconds
         DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
             Logger.shared.debug("[Hint] Removing hint highlight after timeout", category: .debugGameScene)
-            self?.hintHighlight?.removeFromParent()
+            if let existing = self?.hintHighlight {
+                existing.removeAllActions()
+                existing.removeAllChildren()
+                existing.removeFromParent()
+            }
             self?.hintHighlight = nil
         }
     }
@@ -1585,12 +1645,26 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     private func cleanupTemporaryData() {
         // Clear temporary nodes
-        dragNode?.removeFromParent()
-        dragNode = nil
-        previewNode?.removeFromParent()
-        previewNode = nil
-        hintHighlight?.removeFromParent()
-        hintHighlight = nil
+        if let existing = dragNode {
+            existing.removeAllActions()
+            existing.removeAllChildren()
+            existing.removeFromParent()
+            dragNode = nil
+        }
+        
+        if let existing = previewNode {
+            existing.removeAllActions()
+            existing.removeAllChildren()
+            existing.removeFromParent()
+            previewNode = nil
+        }
+        
+        if let existing = hintHighlight {
+            existing.removeAllActions()
+            existing.removeAllChildren()
+            existing.removeFromParent()
+            hintHighlight = nil
+        }
         
         // Clear temporary arrays
         blockNodes.removeAll()
@@ -1730,16 +1804,22 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Review and cleanup temporary nodes
         if let dragNode = dragNode, dragNode.parent == nil {
             Logger.shared.debug("[Memory] Removing orphaned drag node", category: .debugGameScene)
+            dragNode.removeAllActions()
+            dragNode.removeAllChildren()
             self.dragNode = nil
         }
         
         if let previewNode = previewNode, previewNode.parent == nil {
             Logger.shared.debug("[Memory] Removing orphaned preview node", category: .debugGameScene)
+            previewNode.removeAllActions()
+            previewNode.removeAllChildren()
             self.previewNode = nil
         }
         
         if let hintHighlight = hintHighlight, hintHighlight.parent == nil {
             Logger.shared.debug("[Memory] Removing orphaned hint highlight", category: .debugGameScene)
+            hintHighlight.removeAllActions()
+            hintHighlight.removeAllChildren()
             self.hintHighlight = nil
         }
     }

@@ -619,15 +619,21 @@ class FirebaseManager: ObservableObject {
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: Date())
         let startOfDayTimestamp = Timestamp(date: startOfDay)
-        
+
         print("[FirebaseManager] Getting daily players count since: \(startOfDay)")
-        
+
         do {
             // First try to get from RTDB for faster response
-            let rtdbSnapshot = try await rtdb.child("daily_stats").child("players_today").getData()
+            let rtdbPlayersTodayRef = rtdb.child("daily_stats").child("players_today")
+            let rtdbSnapshot = try await rtdbPlayersTodayRef.getData()
+            // Clean up unused observers to prevent memory leaks
+            rtdb.child("daily_stats").child("players_today").removeAllObservers()
             if let count = rtdbSnapshot.value as? Int {
                 // Check if the count needs to be reset (if it's from a previous day)
-                let lastResetSnapshot = try await rtdb.child("daily_stats").child("last_reset").getData()
+                let rtdbLastResetRef = rtdb.child("daily_stats").child("last_reset")
+                let lastResetSnapshot = try await rtdbLastResetRef.getData()
+                // Clean up unused observers to prevent memory leaks
+                rtdb.child("daily_stats").child("last_reset").removeAllObservers()
                 if let lastResetTimestamp = lastResetSnapshot.value as? TimeInterval {
                     let lastResetDate = Date(timeIntervalSince1970: lastResetTimestamp)
                     if !calendar.isDate(lastResetDate, inSameDayAs: Date()) {
@@ -637,24 +643,24 @@ class FirebaseManager: ObservableObject {
                         return 0
                     }
                 }
-                
+
                 print("[FirebaseManager] Got daily players count from RTDB: \(count)")
                 return count
             }
-            
+
             // Fallback to Firestore if RTDB doesn't have the data
             print("[FirebaseManager] Falling back to Firestore for daily players count")
             let query = db.collection("users")
                 .whereField("lastActive", isGreaterThan: startOfDayTimestamp)
-            
+
             let snapshot = try await query.count.getAggregation(source: .server)
             let count = Int(truncating: snapshot.count)
             print("[FirebaseManager] Daily players count from Firestore: \(count)")
-            
+
             // Update RTDB with the count and last reset time
             try await rtdb.child("daily_stats").child("players_today").setValue(count)
             try await rtdb.child("daily_stats").child("last_reset").setValue(Date().timeIntervalSince1970)
-            
+
             return count
         } catch {
             print("[FirebaseManager] Error getting daily players count: \(error)")
