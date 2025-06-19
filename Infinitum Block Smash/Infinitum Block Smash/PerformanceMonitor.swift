@@ -25,11 +25,21 @@ class PerformanceMonitor: ObservableObject {
     private var lastInputTimestamp: CFTimeInterval = 0
     private var processInfo: ProcessInfo { ProcessInfo.processInfo }
     
+    // Timer properties for proper cleanup
+    private var memoryTimer: Timer?
+    private var cpuTimer: Timer?
+    private var networkTimer: Timer?
+    
     private init() {
         setupDisplayLink()
         startMemoryMonitoring()
         startCPUMonitoring()
         startNetworkMonitoring()
+    }
+    
+    deinit {
+        stopAllTimers()
+        displayLink?.invalidate()
     }
     
     private func setupDisplayLink() {
@@ -39,21 +49,30 @@ class PerformanceMonitor: ObservableObject {
     
     private func startMemoryMonitoring() {
         // Start periodic memory monitoring
-        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+        memoryTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.updateMemoryUsage()
         }
     }
     
     private func startCPUMonitoring() {
-        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+        cpuTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.updateCPUUsage()
         }
     }
     
     private func startNetworkMonitoring() {
-        Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+        networkTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             self?.updateNetworkLatency()
         }
+    }
+    
+    private func stopAllTimers() {
+        memoryTimer?.invalidate()
+        memoryTimer = nil
+        cpuTimer?.invalidate()
+        cpuTimer = nil
+        networkTimer?.invalidate()
+        networkTimer = nil
     }
     
     private func updateMemoryUsage() {
@@ -156,9 +175,5 @@ class PerformanceMonitor: ObservableObject {
             performanceMetrics["input_latency"] = inputLatency
         }
         lastInputTimestamp = currentTime
-    }
-    
-    deinit {
-        displayLink?.invalidate()
     }
 } 

@@ -65,11 +65,6 @@ class GameCenterManager: NSObject {
         static let place500 = "place_500"
         static let place1000 = "place_1000"
         
-        // Group achievements
-        static let group10 = "group_10"
-        static let group20 = "group_20"
-        static let group30 = "group_30"
-        
         // Perfect level achievements
         static let perfectLevel = "perfect_level"
         static let perfectLevels3 = "perfect_levels_3"
@@ -142,9 +137,6 @@ class GameCenterManager: NSObject {
         "place_100": ("Block Placer", "Place 100 blocks", "square.fill"),
         "place_500": ("Block Expert", "Place 500 blocks", "square.grid.2x2.fill"),
         "place_1000": ("Block Master", "Place 1,000 blocks", "square.grid.3x3.fill"),
-        "group_10": ("Group Starter", "Create 10 groups", "rectangle.3.group.fill"),
-        "group_20": ("Group Expert", "Create 20 groups", "rectangle.3.group.bubble.fill"),
-        "group_30": ("Group Master", "Create 30 groups", "rectangle.3.group.bubble.left.fill"),
         "perfect_level": ("Perfect Level", "Complete a level perfectly", "checkmark.circle.fill"),
         "perfect_levels_3": ("Perfect Expert", "Complete 3 levels perfectly", "checkmark.circle.badge.checkmark"),
         "perfect_levels_5": ("Perfect Master", "Complete 5 levels perfectly", "checkmark.circle.badge.xmark"),

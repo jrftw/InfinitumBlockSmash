@@ -22,8 +22,19 @@ class FPSManager: ObservableObject {
     @Published private(set) var currentFPS: Int = 0
     
     private init() {
-        // Get device's maximum refresh rate
-        let maxRefreshRate = UIScreen.main.maximumFramesPerSecond
+        // Get device's maximum refresh rate with simulation support
+        let deviceSimulator = DeviceSimulator.shared
+        let maxRefreshRate: Int
+        
+        if deviceSimulator.isRunningInSimulator() {
+            // Use simulated device's max FPS
+            maxRefreshRate = deviceSimulator.getSimulatedMaxFPS()
+            print("[FPSManager] Running in simulator mode with max FPS: \(maxRefreshRate)")
+        } else {
+            // Use real device's maximum refresh rate
+            maxRefreshRate = UIScreen.main.maximumFramesPerSecond
+            print("[FPSManager] Running on real device with max FPS: \(maxRefreshRate)")
+        }
         
         // Build available FPS options based on device capabilities
         var options: [Int] = [30] // 30 FPS is always available
@@ -41,15 +52,37 @@ class FPSManager: ObservableObject {
             options.append(0)
         }
         
+        // For low-end devices in simulator, limit options
+        if deviceSimulator.isRunningInSimulator() && deviceSimulator.isLowEndDevice() {
+            // Remove unlimited option for low-end devices
+            options = options.filter { $0 != 0 }
+            // Limit to 30 and 60 FPS for low-end devices
+            options = options.filter { $0 <= 60 }
+            print("[FPSManager] Limited FPS options for low-end device: \(options)")
+        }
+        
         // Initialize properties in correct order
         self.availableFPSOptions = options
         
         // Load saved FPS or use default based on device capabilities
         let savedFPS = userDefaults.integer(forKey: targetFPSKey)
         if savedFPS == 0 || !options.contains(savedFPS) {
-            self.targetFPS = options.first ?? 30
+            // Choose appropriate default based on device type
+            if deviceSimulator.isRunningInSimulator() && deviceSimulator.isLowEndDevice() {
+                self.targetFPS = 30 // Default to 30 FPS for low-end devices
+            } else {
+                self.targetFPS = options.first ?? 30
+            }
         } else {
             self.targetFPS = savedFPS
+        }
+        
+        // Log device simulation status
+        if deviceSimulator.isRunningInSimulator() {
+            print("[FPSManager] Simulated device: \(deviceSimulator.getCurrentDeviceModel())")
+            print("[FPSManager] Low-end device: \(deviceSimulator.isLowEndDevice())")
+            print("[FPSManager] Available FPS options: \(availableFPSOptions)")
+            print("[FPSManager] Target FPS: \(targetFPS)")
         }
     }
     
@@ -62,15 +95,31 @@ class FPSManager: ObservableObject {
             
             // Notify any observers that FPS has changed
             NotificationCenter.default.post(name: .fpsDidChange, object: nil, userInfo: ["fps": fps])
+            
+            // Log FPS change
+            let deviceSimulator = DeviceSimulator.shared
+            if deviceSimulator.isRunningInSimulator() {
+                print("[FPSManager] FPS changed to \(fps) on simulated device: \(deviceSimulator.getCurrentDeviceModel())")
+            }
         }
     }
     
     func getDisplayFPS(for targetFPS: Int) -> Int {
-        // If unlimited (0) is selected, use device's maximum refresh rate
-        if targetFPS == 0 {
-            return UIScreen.main.maximumFramesPerSecond
+        let deviceSimulator = DeviceSimulator.shared
+        
+        if deviceSimulator.isRunningInSimulator() {
+            // If unlimited (0) is selected, use device's maximum refresh rate
+            if targetFPS == 0 {
+                return deviceSimulator.getSimulatedMaxFPS()
+            }
+            return targetFPS
+        } else {
+            // If unlimited (0) is selected, use device's maximum refresh rate
+            if targetFPS == 0 {
+                return UIScreen.main.maximumFramesPerSecond
+            }
+            return targetFPS
         }
-        return targetFPS
     }
     
     func getFPSDisplayName(for fps: Int) -> String {
@@ -102,6 +151,87 @@ class FPSManager: ObservableObject {
         }
         
         lastFrameTime = currentTime
+    }
+    
+    // MARK: - Device Simulation Support
+    
+    /// Get the effective FPS considering device simulation constraints
+    func getEffectiveFPS() -> Int {
+        let deviceSimulator = DeviceSimulator.shared
+        
+        if deviceSimulator.isRunningInSimulator() {
+            let displayFPS = getDisplayFPS(for: targetFPS)
+            
+            // Apply thermal throttling simulation
+            let thermalThrottling = deviceSimulator.getSimulatedThermalThrottling()
+            if thermalThrottling > 0.7 { // If thermal throttling is high
+                // Reduce FPS by up to 50% for low-end devices, 30% for others
+                let reductionFactor = deviceSimulator.isLowEndDevice() ? 0.5 : 0.7
+                let throttledFPS = Double(displayFPS) * reductionFactor
+                return Int(throttledFPS)
+            }
+            
+            return displayFPS
+        } else {
+            return getDisplayFPS(for: targetFPS)
+        }
+    }
+    
+    /// Check if FPS should be limited due to device constraints
+    func shouldLimitFPS() -> Bool {
+        let deviceSimulator = DeviceSimulator.shared
+        
+        if deviceSimulator.isRunningInSimulator() {
+            // Check memory pressure
+            let memoryPressure = deviceSimulator.getSimulatedMemoryPressure()
+            if memoryPressure > 0.8 {
+                return true
+            }
+            
+            // Check thermal throttling
+            let thermalThrottling = deviceSimulator.getSimulatedThermalThrottling()
+            if thermalThrottling > 0.6 {
+                return true
+            }
+            
+            // Low-end devices should always limit FPS
+            if deviceSimulator.isLowEndDevice() {
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    /// Get recommended FPS for current device conditions
+    func getRecommendedFPS() -> Int {
+        let deviceSimulator = DeviceSimulator.shared
+        
+        if deviceSimulator.isRunningInSimulator() {
+            if deviceSimulator.isLowEndDevice() {
+                return 30 // Always recommend 30 FPS for low-end devices
+            }
+            
+            // Check memory pressure
+            let memoryPressure = deviceSimulator.getSimulatedMemoryPressure()
+            if memoryPressure > 0.8 {
+                return 30 // Reduce to 30 FPS under high memory pressure
+            } else if memoryPressure > 0.6 {
+                return 60 // Limit to 60 FPS under moderate memory pressure
+            }
+            
+            // Check thermal throttling
+            let thermalThrottling = deviceSimulator.getSimulatedThermalThrottling()
+            if thermalThrottling > 0.7 {
+                return 30 // Reduce to 30 FPS under high thermal throttling
+            } else if thermalThrottling > 0.5 {
+                return 60 // Limit to 60 FPS under moderate thermal throttling
+            }
+            
+            return getDisplayFPS(for: targetFPS)
+        } else {
+            return getDisplayFPS(for: targetFPS)
+        }
     }
 }
 

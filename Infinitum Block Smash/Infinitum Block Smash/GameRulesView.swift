@@ -11,11 +11,10 @@ struct GameRulesView: View {
                 • 1 point for each block that touches another block
                 • 2x bonus multiplier for touching 3 or more blocks
                 • 100 points for clearing a row or column
-                • 500 bonus points for clearing a row/column of the same color
-                • 200 points for creating a group of 10 or more blocks
+                • 200 bonus points for clearing a row/column of the same color
                 • Chain bonuses for multiple clears
-                • 500 bonus points for creating a diagonal pattern with same color
-                • 1000 bonus points for creating an X pattern with same color
+                • 300 bonus points for creating a diagonal pattern with same color
+                • 250 bonus points for creating an X pattern with same color
                 • Perfect level bonus for clearing without mistakes
                 """),
             ("Level Progression", "Complete levels by reaching the score threshold. Each level introduces new shapes and challenges."),
@@ -54,12 +53,12 @@ struct GameRulesView: View {
                         RuleItem(icon: "1.circle.fill", text: "1 point for each block that touches another block")
                         RuleItem(icon: "2.circle.fill", text: "2x bonus multiplier for touching 3 or more blocks")
                         RuleItem(icon: "line.horizontal.3.decrease.circle.fill", text: "100 points for clearing a row or column")
-                        RuleItem(icon: "paintpalette.fill", text: "500 bonus points for clearing a row/column of the same color")
-                        RuleItem(icon: "sparkles.fill", text: "200 points for creating a group of 10 or more blocks")
-                        RuleItem(icon: "arrow.triangle.2.circlepath", text: "Chain bonuses for multiple clears")
+                        RuleItem(icon: "paintpalette.fill", text: "200 bonus points for clearing a row/column of the same color")
+                        RuleItem(icon: "sparkles.fill", text: "Chain bonuses for multiple clears")
+                        RuleItem(icon: "arrow.triangle.2.circlepath", text: "300 bonus points for creating a diagonal pattern with same color")
                         RuleItem(icon: "checkmark.seal.fill", text: "Perfect level bonus for clearing without mistakes")
-                        RuleItem(icon: "xmark", text: "1000 bonus points for creating an X pattern with same color")
-                        RuleItem(icon: "slash", text: "500 bonus points for creating a diagonal pattern with same color")
+                        RuleItem(icon: "xmark", text: "250 bonus points for creating an X pattern with same color")
+                        RuleItem(icon: "slash", text: "300 bonus points for creating a diagonal pattern with same color")
                     }
                 }
                 

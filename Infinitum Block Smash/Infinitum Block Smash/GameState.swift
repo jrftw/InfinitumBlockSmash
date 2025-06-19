@@ -871,13 +871,17 @@ final class GameState: ObservableObject {
         var columnsToClear = Set<Int>()
         var rowCounts = Array(repeating: 0, count: GameConstants.gridSize)
         var columnCounts = Array(repeating: 0, count: GameConstants.gridSize)
+        var rowColors = Array(repeating: Set<BlockColor>(), count: GameConstants.gridSize)
+        var columnColors = Array(repeating: Set<BlockColor>(), count: GameConstants.gridSize)
         
         // Single pass through the grid to check both rows and columns
         for row in 0..<GameConstants.gridSize {
             for col in 0..<GameConstants.gridSize {
-                if grid[row][col] != nil {
+                if let color = grid[row][col] {
                     rowCounts[row] += 1
                     columnCounts[col] += 1
+                    rowColors[row].insert(color)
+                    columnColors[col].insert(color)
                 }
             }
         }
@@ -889,12 +893,24 @@ final class GameState: ObservableObject {
                 clearedPositions.append((i, -1))  // -1 indicates entire row
                 linesClearedThisTurn += 1
                 addScore(100, at: CGPoint(x: frameSize.width/2, y: CGFloat(i) * GameConstants.blockSize))
+                
+                // Check for same color bonus (200 points if all blocks are the same color)
+                if rowColors[i].count == 1 {
+                    addScore(200, at: CGPoint(x: frameSize.width/2, y: CGFloat(i) * GameConstants.blockSize))
+                    print("[Bonus] Same color row cleared! +200 bonus points!")
+                }
             }
             if columnCounts[i] == GameConstants.gridSize {
                 columnsToClear.insert(i)
                 clearedPositions.append((-1, i))  // -1 indicates entire column
                 linesClearedThisTurn += 1
                 addScore(100, at: CGPoint(x: CGFloat(i) * GameConstants.blockSize, y: frameSize.height/2))
+                
+                // Check for same color bonus (200 points if all blocks are the same color)
+                if columnColors[i].count == 1 {
+                    addScore(200, at: CGPoint(x: CGFloat(i) * GameConstants.blockSize, y: frameSize.height/2))
+                    print("[Bonus] Same color column cleared! +200 bonus points!")
+                }
             }
         }
         
@@ -930,8 +946,8 @@ final class GameState: ObservableObject {
                     }
                     
                     if xPatternCount >= 10 {
-                        addScore(1000, at: CGPoint(x: CGFloat(col) * GameConstants.blockSize, y: CGFloat(row) * GameConstants.blockSize))
-                        print("[Bonus] X pattern with \(xPatternCount) blocks found! +1000 points!")
+                        addScore(250, at: CGPoint(x: CGFloat(col) * GameConstants.blockSize, y: CGFloat(row) * GameConstants.blockSize))
+                        print("[Bonus] X pattern with \(xPatternCount) blocks found! +250 points!")
                     }
                 }
             }
@@ -956,8 +972,8 @@ final class GameState: ObservableObject {
                         let patternKey = "forward_\(row),\(col)"
                         if !diagonalPatternsFound.contains(patternKey) {
                             diagonalPatternsFound.insert(patternKey)
-                            addScore(500, at: CGPoint(x: CGFloat(col) * GameConstants.blockSize, y: CGFloat(row) * GameConstants.blockSize))
-                            print("[Bonus] Forward diagonal with \(forwardCount) blocks found! +500 points!")
+                            addScore(300, at: CGPoint(x: CGFloat(col) * GameConstants.blockSize, y: CGFloat(row) * GameConstants.blockSize))
+                            print("[Bonus] Forward diagonal with \(forwardCount) blocks found! +300 points!")
                         }
                     }
                     
@@ -976,16 +992,13 @@ final class GameState: ObservableObject {
                         let patternKey = "backward_\(row),\(col)"
                         if !diagonalPatternsFound.contains(patternKey) {
                             diagonalPatternsFound.insert(patternKey)
-                            addScore(500, at: CGPoint(x: CGFloat(col) * GameConstants.blockSize, y: CGFloat(row) * GameConstants.blockSize))
-                            print("[Bonus] Backward diagonal with \(backwardCount) blocks found! +500 points!")
+                            addScore(300, at: CGPoint(x: CGFloat(col) * GameConstants.blockSize, y: CGFloat(row) * GameConstants.blockSize))
+                            print("[Bonus] Backward diagonal with \(backwardCount) blocks found! +300 points!")
                         }
                     }
                 }
             }
         }
-        
-        // Check for groups after clearing lines
-        checkGroups()
         
         // Update chain bonus only for line clears
         if linesClearedThisTurn > 0 {
@@ -1391,6 +1404,8 @@ final class GameState: ObservableObject {
     
     
     // Award points for grouping 10 or more contiguous squares
+    // REMOVED: Group formation bonuses have been removed
+    /*
     private func checkGroups() {
         var visited = Array(repeating: Array(repeating: false, count: GameConstants.gridSize), count: GameConstants.gridSize)
         var currentShapePositions = Set<String>()
@@ -1453,6 +1468,7 @@ final class GameState: ObservableObject {
         }
         return group
     }
+    */
     
     private func loadLastPlayDate() {
         if let savedDate = userDefaults.object(forKey: "lastPlayDate") as? Date {
@@ -2829,7 +2845,8 @@ final class GameState: ObservableObject {
     }
     
     private func handleGroupAchievement(groupsCreated: Int) {
-        // Group achievements
+        // Group achievements - REMOVED: Group formation bonuses have been removed
+        /*
         if groupsCreated >= 10 {
             handleAchievement(id: "group_10", value: min(100, Double(groupsCreated) / 10 * 100))
         }
@@ -2839,6 +2856,7 @@ final class GameState: ObservableObject {
         if groupsCreated >= 30 {
             handleAchievement(id: "group_30", value: min(100, Double(groupsCreated) / 30 * 100))
         }
+        */
     }
     
     private func handlePerfectLevelAchievement(perfectLevels: Int) {

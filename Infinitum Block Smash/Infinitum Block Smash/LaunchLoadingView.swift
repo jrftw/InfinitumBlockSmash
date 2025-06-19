@@ -1,12 +1,14 @@
 import SwiftUI
+import Combine
 
 struct LaunchLoadingView: View {
     @State private var progress: Double = 0.0
     @State private var show: Bool = false
     @State private var ellipsis: String = ""
     @AppStorage("lastTipIndex") private var tipIndex: Int = 0
-    private let timer = Timer.publish(every: 0.04, on: .main, in: .common).autoconnect() // 4s total
-    private let ellipsisTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+    @State private var timerCancellable: Cancellable?
+    @State private var ellipsisTimerCancellable: Cancellable?
+    
     private let tips = [
         "Tip: You can undo your last move!",
         "Did you know? You can change themes in Settings.",
@@ -108,13 +110,29 @@ struct LaunchLoadingView: View {
             show = true
             // Advance to next tip on each app launch
             tipIndex = (tipIndex + 1) % tips.count
+            
+            // Start timers
+            startTimers()
         }
-        .onReceive(timer) { _ in
+        .onDisappear {
+            // Clean up timers
+            stopTimers()
+        }
+        .transition(.opacity)
+    }
+    
+    private func startTimers() {
+        // Start progress timer
+        let timer = Timer.publish(every: 0.04, on: .main, in: .common).autoconnect()
+        timerCancellable = timer.sink { _ in
             if progress < 1.0 {
                 progress = min(progress + 0.01, 1.0)
             }
         }
-        .onReceive(ellipsisTimer) { _ in
+        
+        // Start ellipsis timer
+        let ellipsisTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+        ellipsisTimerCancellable = ellipsisTimer.sink { _ in
             let dots = ["", ".", "..", "..."]
             if let idx = dots.firstIndex(of: ellipsis) {
                 ellipsis = dots[(idx + 1) % dots.count]
@@ -126,7 +144,13 @@ struct LaunchLoadingView: View {
                 tipIndex = (tipIndex + 1) % tips.count
             }
         }
-        .transition(.opacity)
+    }
+    
+    private func stopTimers() {
+        timerCancellable?.cancel()
+        timerCancellable = nil
+        ellipsisTimerCancellable?.cancel()
+        ellipsisTimerCancellable = nil
     }
 }
 

@@ -26,6 +26,7 @@ struct ContentView: View {
     @State private var showingGameModeSelection = false
     @State private var isTopThreePlayer = false
     @StateObject private var appOpenManager = AppOpenManager.shared
+    @State private var showingDeviceSimulation = false
     
     var isLoggedIn: Bool {
         !userID.isEmpty && (!username.isEmpty || isGuest)
@@ -127,6 +128,13 @@ struct ContentView: View {
                         MenuButton(title: "Settings", icon: "gear") {
                             showingSettings = true
                         }
+                        
+                        // Device Simulation Debug (only in simulator)
+                        #if targetEnvironment(simulator)
+                        MenuButton(title: "Device Simulation", icon: "iphone") {
+                            showingDeviceSimulation = true
+                        }
+                        #endif
                         
                         MenuButton(title: "Log Out", icon: "rectangle.portrait.and.arrow.right") {
                             userID = ""
@@ -245,6 +253,9 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showingAnnouncements) {
             AnnouncementsView()
+        }
+        .sheet(isPresented: $showingDeviceSimulation) {
+            DeviceSimulationDebugView()
         }
         .sheet(isPresented: $showingNewGameConfirmation) {
             // ... existing code ...

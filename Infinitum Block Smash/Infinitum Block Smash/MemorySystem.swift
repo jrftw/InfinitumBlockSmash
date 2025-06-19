@@ -16,14 +16,67 @@ public enum MemoryStatus {
 final class MemorySystem {
     static let shared = MemorySystem()
     
-    // MARK: — Thresholds
-    private let warningThreshold: Double = 0.30   // 30% - ~90-120MB
-    private let criticalThreshold: Double = 0.45  // 45% - ~135-150MB
-    private let extremeThreshold: Double = 0.60   // 60% - ~180-200MB
+    // MARK: — Dynamic Thresholds based on Device Simulation
+    private var warningThreshold: Double {
+        let deviceSimulator = DeviceSimulator.shared
+        if deviceSimulator.isRunningInSimulator() {
+            // Use device-specific thresholds
+            if deviceSimulator.isLowEndDevice() {
+                return 0.25 // 25% for low-end devices
+            } else {
+                return 0.30 // 30% for mid/high-end devices
+            }
+        } else {
+            return 0.30 // Default for real devices
+        }
+    }
     
-    // Memory targets
-    private let targetMemoryUsage: Double = 100.0  // Target 100MB
-    private let maxMemoryUsage: Double = 150.0     // Max 150MB
+    private var criticalThreshold: Double {
+        let deviceSimulator = DeviceSimulator.shared
+        if deviceSimulator.isRunningInSimulator() {
+            if deviceSimulator.isLowEndDevice() {
+                return 0.35 // 35% for low-end devices
+            } else {
+                return 0.45 // 45% for mid/high-end devices
+            }
+        } else {
+            return 0.45 // Default for real devices
+        }
+    }
+    
+    private var extremeThreshold: Double {
+        let deviceSimulator = DeviceSimulator.shared
+        if deviceSimulator.isRunningInSimulator() {
+            if deviceSimulator.isLowEndDevice() {
+                return 0.45 // 45% for low-end devices
+            } else {
+                return 0.60 // 60% for mid/high-end devices
+            }
+        } else {
+            return 0.60 // Default for real devices
+        }
+    }
+    
+    // Dynamic memory targets based on device simulation
+    private var targetMemoryUsage: Double {
+        let deviceSimulator = DeviceSimulator.shared
+        if deviceSimulator.isRunningInSimulator() {
+            let limit = deviceSimulator.getSimulatedMemoryLimit()
+            return limit * 0.6 // Target 60% of available memory
+        } else {
+            return 100.0 // Default 100MB for real devices
+        }
+    }
+    
+    private var maxMemoryUsage: Double {
+        let deviceSimulator = DeviceSimulator.shared
+        if deviceSimulator.isRunningInSimulator() {
+            let limit = deviceSimulator.getSimulatedMemoryLimit()
+            return limit * 0.8 // Max 80% of available memory
+        } else {
+            return 150.0 // Default 150MB for real devices
+        }
+    }
     
     // MARK: — Timing
     private var lastCleanupDate = Date.distantPast
@@ -47,11 +100,20 @@ final class MemorySystem {
     
     // MARK: — Initialization
     private init() {
-        // Dynamic cache limits based on device RAM
-        let totalMB = Double(ProcessInfo.processInfo.physicalMemory) / 1024 / 1024
-        let targetMB = min(25.0, totalMB * 0.01)  // at most 25 MB, or 1% of RAM
-        memoryCache.totalCostLimit = Int(targetMB * 1024 * 1024)
-        memoryCache.countLimit = 50
+        // Dynamic cache limits based on device simulation
+        let deviceSimulator = DeviceSimulator.shared
+        if deviceSimulator.isRunningInSimulator() {
+            let limit = deviceSimulator.getSimulatedMemoryLimit()
+            let targetMB = min(limit * 0.02, 25.0) // 2% of available memory, max 25MB
+            memoryCache.totalCostLimit = Int(targetMB * 1024 * 1024)
+            memoryCache.countLimit = deviceSimulator.isLowEndDevice() ? 25 : 50
+        } else {
+            // Original logic for real devices
+            let totalMB = Double(ProcessInfo.processInfo.physicalMemory) / 1024 / 1024
+            let targetMB = min(25.0, totalMB * 0.01)  // at most 25 MB, or 1% of RAM
+            memoryCache.totalCostLimit = Int(targetMB * 1024 * 1024)
+            memoryCache.countLimit = 50
+        }
         
         // Set up system memory pressure monitoring
         pressureSource = DispatchSource.makeMemoryPressureSource(
@@ -73,6 +135,14 @@ final class MemorySystem {
             name: UIApplication.didReceiveMemoryWarningNotification,
             object: nil
         )
+        
+        // Log device simulation status
+        if deviceSimulator.isRunningInSimulator() {
+            log("[MemorySystem] Running in simulator mode")
+            log("[MemorySystem] Simulated device: \(deviceSimulator.getCurrentDeviceModel())")
+            log("[MemorySystem] Memory limit: \(String(format: "%.1f", deviceSimulator.getSimulatedMemoryLimit()))MB")
+            log("[MemorySystem] Low-end device: \(deviceSimulator.isLowEndDevice())")
+        }
     }
     
     // MARK: — Memory Monitoring
@@ -116,30 +186,40 @@ final class MemorySystem {
     }
     
     func getMemoryUsage() -> (used: Double, total: Double) {
-        var info = mach_task_basic_info()
-        var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size / MemoryLayout<natural_t>.size)
+        let deviceSimulator = DeviceSimulator.shared
         
-        let kr: kern_return_t = withUnsafeMutablePointer(to: &info) { infoPtr in
-            infoPtr.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { intPtr in
-                task_info(
-                    mach_task_self_,
-                    task_flavor_t(MACH_TASK_BASIC_INFO),
-                    intPtr,
-                    &count
-                )
+        if deviceSimulator.isRunningInSimulator() {
+            // Use simulated memory constraints
+            let currentMemory = Double(ProcessInfo.processInfo.physicalMemory) / 1024.0 / 1024.0
+            let simulatedLimit = deviceSimulator.getSimulatedMemoryLimit()
+            return (currentMemory, simulatedLimit)
+        } else {
+            // Original logic for real devices
+            var info = mach_task_basic_info()
+            var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size / MemoryLayout<natural_t>.size)
+            
+            let kr: kern_return_t = withUnsafeMutablePointer(to: &info) { infoPtr in
+                infoPtr.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { intPtr in
+                    task_info(
+                        mach_task_self_,
+                        task_flavor_t(MACH_TASK_BASIC_INFO),
+                        intPtr,
+                        &count
+                    )
+                }
             }
-        }
-        
-        if kr == KERN_SUCCESS {
-            let used = Double(info.resident_size) / 1024.0 / 1024.0
+            
+            if kr == KERN_SUCCESS {
+                let used = Double(info.resident_size) / 1024.0 / 1024.0
+                let total = Double(ProcessInfo.processInfo.physicalMemory) / 1024.0 / 1024.0
+                return (used, total)
+            }
+            
+            // Fallback method
             let total = Double(ProcessInfo.processInfo.physicalMemory) / 1024.0 / 1024.0
+            let used = total * 0.5
             return (used, total)
         }
-        
-        // Fallback method
-        let total = Double(ProcessInfo.processInfo.physicalMemory) / 1024.0 / 1024.0
-        let used = total * 0.5
-        return (used, total)
     }
     
     // MARK: — Cleanup Triggers
@@ -170,7 +250,15 @@ final class MemorySystem {
     }
     
     private func performAggressiveCleanup() async {
+        let deviceSimulator = DeviceSimulator.shared
+        let isLowEnd = deviceSimulator.isLowEndDevice()
+        
         log("[MemorySystem] Starting aggressive cleanup")
+        if deviceSimulator.isRunningInSimulator() {
+            log("[MemorySystem] Simulated device: \(deviceSimulator.getCurrentDeviceModel())")
+            log("[MemorySystem] Low-end device: \(isLowEnd)")
+        }
+        
         let startTime = Date()
         let initialMemory = getMemoryUsage()
         
@@ -186,6 +274,14 @@ final class MemorySystem {
             
             log("[MemorySystem] Purging SpriteKit textures")
             SKTextureAtlas.preloadTextureAtlases([], withCompletionHandler: {})
+            
+            // Additional cleanup for low-end devices in simulator
+            if deviceSimulator.isRunningInSimulator() && isLowEnd {
+                log("[MemorySystem] Performing low-end device specific cleanup")
+                // Clear more aggressively for low-end devices
+                UIImageView.clearOldImageCache()
+                BlockShapeView.clearCache()
+            }
         }
         
         // Reset cache statistics
@@ -202,7 +298,14 @@ final class MemorySystem {
     }
     
     private func performCleanup() async {
+        let deviceSimulator = DeviceSimulator.shared
+        let isLowEnd = deviceSimulator.isLowEndDevice()
+        
         log("[MemorySystem] Starting normal cleanup")
+        if deviceSimulator.isRunningInSimulator() {
+            log("[MemorySystem] Simulated device: \(deviceSimulator.getCurrentDeviceModel())")
+        }
+        
         let startTime = Date()
         let initialMemory = getMemoryUsage()
         
@@ -234,6 +337,13 @@ final class MemorySystem {
             
             log("[MemorySystem] Clearing old cached images")
             UIImageView.clearOldImageCache()
+            
+            // Additional cleanup for low-end devices in simulator
+            if deviceSimulator.isRunningInSimulator() && isLowEnd {
+                log("[MemorySystem] Performing low-end device specific cleanup")
+                // More aggressive cleanup for low-end devices
+                BlockShapeView.clearCache()
+            }
         }
         
         let endTime = Date()
@@ -247,7 +357,15 @@ final class MemorySystem {
     
     // MARK: — Cache Management
     func setMemoryCache<T: AnyObject>(_ object: T, forKey key: String, cost: Int = 1) {
-        memoryCache.setObject(object, forKey: key as NSString, cost: cost)
+        let deviceSimulator = DeviceSimulator.shared
+        
+        // Adjust cache cost based on device simulation
+        var adjustedCost = cost
+        if deviceSimulator.isRunningInSimulator() && deviceSimulator.isLowEndDevice() {
+            adjustedCost = Int(Double(cost) * 1.5) // Higher cost for low-end devices
+        }
+        
+        memoryCache.setObject(object, forKey: key as NSString, cost: adjustedCost)
     }
     
     func getMemoryCache<T: AnyObject>(forKey key: String) -> T? {
@@ -307,10 +425,18 @@ final class MemorySystem {
         let (used, total) = getMemoryUsage()
         let ratio = used / total
         let status = checkMemoryStatus()
+        let deviceSimulator = DeviceSimulator.shared
         
         log("[MemorySystem] Memory Status: \(status)")
         log("[MemorySystem] Memory Usage: \(String(format: "%.1f", used))MB / \(String(format: "%.1f", total))MB (\(String(format: "%.1f", ratio * 100))%)")
         log("[MemorySystem] Cache Stats - Hits: \(cacheHits), Misses: \(cacheMisses), Hit Ratio: \(String(format: "%.1f", Double(cacheHits) / Double(max(1, cacheHits + cacheMisses)) * 100))%")
+        
+        if deviceSimulator.isRunningInSimulator() {
+            log("[MemorySystem] Simulated Device: \(deviceSimulator.getCurrentDeviceModel())")
+            log("[MemorySystem] Low-end Device: \(deviceSimulator.isLowEndDevice())")
+            log("[MemorySystem] Simulated Memory Pressure: \(String(format: "%.1f", deviceSimulator.getSimulatedMemoryPressure() * 100))%")
+            log("[MemorySystem] Simulated Thermal Throttling: \(String(format: "%.1f", deviceSimulator.getSimulatedThermalThrottling() * 100))%")
+        }
     }
     
     deinit {

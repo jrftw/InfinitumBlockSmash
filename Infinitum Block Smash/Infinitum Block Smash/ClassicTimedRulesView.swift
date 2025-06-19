@@ -16,10 +16,10 @@ struct ClassicTimedRulesView: View {
                 • 1 point for each block that touches another block
                 • 2x bonus multiplier for touching 3 or more blocks
                 • 100 points for clearing a row or column
-                • 500 bonus points for creating a group of 10 or more blocks
+                • 200 bonus points for clearing a row/column of the same color
                 • Chain bonuses for multiple clears
-                • 500 points for diagonal patterns (both / and \\)
-                • 1000 points for X pattern
+                • 300 points for diagonal patterns (both / and \\)
+                • 250 points for X pattern
                 • 1000 points for perfect level (no mistakes)
                 • Time bonus: 10 points per second remaining
                 """),

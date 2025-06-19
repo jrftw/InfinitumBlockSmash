@@ -139,20 +139,6 @@ struct Achievement: Identifiable, Codable, Equatable {
                    earnedDescription: "You've placed 1,000 blocks! A legendary achievement!",
                    unlocked: false, progress: 0, goal: 1000, wasNotified: false, points: 50),
         
-        // Group achievements
-        Achievement(id: "group_10", name: "Group Creator", 
-                   description: "Create a group of 10 or more blocks", 
-                   earnedDescription: "You've created a massive group! Your strategic mind is impressive!",
-                   unlocked: false, progress: 0, goal: 1, wasNotified: false, points: 10),
-        Achievement(id: "group_20", name: "Group Master", 
-                   description: "Create a group of 20 or more blocks", 
-                   earnedDescription: "You've mastered group creation! Your strategic skills are legendary!",
-                   unlocked: false, progress: 0, goal: 1, wasNotified: false, points: 25),
-        Achievement(id: "group_30", name: "Group Legend", 
-                   description: "Create a group of 30 or more blocks", 
-                   earnedDescription: "You've created a legendary group! Unbelievable strategy!",
-                   unlocked: false, progress: 0, goal: 1, wasNotified: false, points: 50),
-        
         // Perfect level achievements
         Achievement(id: "perfect_level", name: "Perfect Level", 
                    description: "Complete a level without any mistakes", 
@@ -673,14 +659,6 @@ class AchievementsManager: ObservableObject {
             return isProgressAtLeast(500)
         case "place_1000":
             return isProgressAtLeast(1000)
-
-        // Group achievements
-        case "group_10":
-            fallthrough
-        case "group_20":
-            fallthrough
-        case "group_30":
-            return isProgressAtLeast(1)
 
         // Perfect level achievements
         case "perfect_level":

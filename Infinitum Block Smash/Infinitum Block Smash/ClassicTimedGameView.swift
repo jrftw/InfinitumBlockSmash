@@ -311,8 +311,6 @@ private struct StatsOverlayView: View {
     @AppStorage("showMemory") private var showMemory = false
     @AppStorage("showAdvancedStats") private var showAdvancedStats = false
     
-    let timer = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
-    
     var body: some View {
         VStack(spacing: 4) {
             if showFPS || showMemory || showAdvancedStats {
