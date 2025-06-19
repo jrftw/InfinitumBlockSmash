@@ -1,3 +1,113 @@
+/*
+ * File: AchievementsManager.swift
+ * Purpose: Complete achievement system manager for tracking, unlocking, and syncing achievements across platforms
+ * Author: @jrftw
+ * Date: 6/19/2025
+ * Dependencies: Foundation, Combine, SwiftUI, FirebaseFirestore, FirebaseAuth, GameKit
+ * Related Files: GameState.swift, FirebaseManager.swift, GameCenterManager.swift, AchievementNotificationOverlay.swift, AchievementsView.swift, LeaderboardService.swift
+ */
+
+/*
+ * AchievementsManager.swift
+ * 
+ * ACHIEVEMENT SYSTEM MANAGER
+ * 
+ * This file contains the complete achievement system for Infinitum Block Smash,
+ * including achievement definitions, progress tracking, unlocking logic, and
+ * integration with Game Center and Firebase for cross-platform achievement sync.
+ * 
+ * KEY RESPONSIBILITIES:
+ * - Achievement definition and categorization
+ * - Progress tracking and milestone monitoring
+ * - Achievement unlocking and notification
+ * - Game Center integration for achievements
+ * - Firebase synchronization of achievement data
+ * - Points system management
+ * - Achievement UI and notification display
+ * - Progress persistence and cloud sync
+ * 
+ * MAJOR DEPENDENCIES:
+ * - GameState.swift: Source of game events and statistics
+ * - FirebaseManager.swift: Achievement data persistence
+ * - GameCenterManager.swift: Game Center achievement submission
+ * - AchievementNotificationOverlay.swift: Visual achievement notifications
+ * - AchievementsView.swift: Achievement display UI
+ * - LeaderboardService.swift: Points submission to leaderboards
+ * 
+ * ACHIEVEMENT CATEGORIES:
+ * - Daily Login: Consecutive login streaks
+ * - Score-based: Milestone score achievements
+ * - Level-based: Progress through game levels
+ * - Line Clearing: Line clearing milestones
+ * - Combo: Multi-line clearing achievements
+ * - Block Placement: Total blocks placed
+ * - Perfect Levels: Flawless level completion
+ * - Speed: Time-based achievements
+ * - Special: Unique game events
+ * - Undo: Undo usage milestones
+ * 
+ * PROGRESS TRACKING:
+ * - Real-time monitoring of game events
+ * - Automatic progress updates
+ * - Milestone detection and triggering
+ * - Progress persistence across sessions
+ * - Cloud synchronization of achievements
+ * 
+ * NOTIFICATION SYSTEM:
+ * - Achievement unlock notifications
+ * - Progress milestone alerts
+ * - Game Center achievement submission
+ * - Visual feedback and animations
+ * - Sound effects for achievements
+ * 
+ * POINTS SYSTEM:
+ * - Achievement-based point rewards
+ * - Points accumulation tracking
+ * - Leaderboard integration
+ * - Daily login bonus points
+ * - Special event point multipliers
+ * 
+ * GAME CENTER INTEGRATION:
+ * - Automatic achievement submission
+ * - Progress synchronization
+ * - Leaderboard integration
+ * - Cross-device achievement sync
+ * - Offline achievement queuing
+ * 
+ * FIREBASE INTEGRATION:
+ * - Achievement data persistence
+ * - Cross-device synchronization
+ * - Offline queue management
+ * - User achievement history
+ * - Analytics tracking
+ * 
+ * PERFORMANCE FEATURES:
+ * - Efficient progress tracking
+ * - Debounced achievement checks
+ * - Memory-efficient data structures
+ * - Background synchronization
+ * - Cached achievement data
+ * 
+ * ARCHITECTURE ROLE:
+ * This class acts as a specialized manager for the achievement system,
+ * providing a clean interface for achievement tracking and management.
+ * It integrates with multiple systems to provide a comprehensive
+ * achievement experience.
+ * 
+ * THREADING CONSIDERATIONS:
+ * - Achievement checks run on background queues
+ * - UI updates occur on main thread
+ * - Firebase operations use async/await
+ * - Game Center operations are thread-safe
+ * 
+ * INTEGRATION POINTS:
+ * - GameState for event monitoring
+ * - Firebase for data persistence
+ * - Game Center for platform achievements
+ * - UI components for display
+ * - Analytics for tracking
+ */
+
 // Achievement.swift
 
 import Foundation
@@ -7,6 +117,8 @@ import FirebaseFirestore
 import FirebaseAuth
 import GameKit
 
+// Core achievement data structure with progress tracking and notification state
+// Supports Codable for persistence and Equatable for comparison operations
 struct Achievement: Identifiable, Codable, Equatable {
     let id: String
     let name: String
@@ -18,6 +130,8 @@ struct Achievement: Identifiable, Codable, Equatable {
     var wasNotified: Bool
     let points: Int // Points awarded for unlocking this achievement
     
+    // Custom equality comparison for achievement objects
+    // Compares all relevant fields to determine if achievements are equivalent
     static func == (lhs: Achievement, rhs: Achievement) -> Bool {
         lhs.id == rhs.id &&
         lhs.name == rhs.name &&
@@ -30,6 +144,8 @@ struct Achievement: Identifiable, Codable, Equatable {
         lhs.points == rhs.points
     }
     
+    // Complete list of all available achievements in the game
+    // Organized by category with appropriate goals and point rewards
     static let allAchievements: [Achievement] = [
         // Daily login achievements
         Achievement(id: "login_1", name: "First Login", 
@@ -276,6 +392,8 @@ struct Achievement: Identifiable, Codable, Equatable {
                    unlocked: false, progress: 0, goal: 30, wasNotified: false, points: 50)
     ]
     
+    // Custom initializer for creating achievement instances
+    // Sets default values for optional parameters
     init(id: String, name: String, description: String, earnedDescription: String, unlocked: Bool = false, progress: Int = 0, goal: Int, wasNotified: Bool = false, points: Int) {
         self.id = id
         self.name = name
@@ -294,17 +412,26 @@ struct Achievement: Identifiable, Codable, Equatable {
 import Foundation
 import Combine
 
+// Main achievement management class with Firebase and Game Center integration
+// Handles all achievement tracking, unlocking, and synchronization operations
 @MainActor
 class AchievementsManager: ObservableObject {
+    // Published properties for SwiftUI binding and reactive updates
     @Published private var achievements: [String: Achievement] = [:]
     @Published var totalPoints: Int = 0
+    
+    // Storage and database references
     private let userDefaults = UserDefaults.standard
     private let db = Firestore.firestore()
     
+    // Computed property to access all achievements as array
+    // Used by UI components to display achievement lists
     var allAchievements: [Achievement] {
         Array(achievements.values)
     }
     
+    // Initialization method that loads achievements and syncs with cloud
+    // Sets up the achievement system and calculates initial point totals
     init() {
         loadAchievements()
         calculateTotalPoints()
@@ -313,6 +440,8 @@ class AchievementsManager: ObservableObject {
         }
     }
     
+    // Calculates total points from all unlocked achievements
+    // Updates leaderboard when point total changes
     private func calculateTotalPoints() {
         let newTotal = achievements.values.filter { $0.unlocked }.reduce(0) { $0 + $1.points }
         if newTotal != totalPoints {
@@ -321,6 +450,8 @@ class AchievementsManager: ObservableObject {
         }
     }
     
+    // Loads achievement data from local storage
+    // Creates default achievements if no saved data exists
     private func loadAchievements() {
         for achievement in Achievement.allAchievements {
             if let savedData = userDefaults.data(forKey: achievement.id),
@@ -332,6 +463,8 @@ class AchievementsManager: ObservableObject {
         }
     }
     
+    // Saves individual achievement to local storage and syncs with cloud
+    // Handles Game Center and Firebase synchronization in background
     private func saveAchievement(_ achievement: Achievement) {
         achievements[achievement.id] = achievement
         if let encoded = try? JSONEncoder().encode(achievement) {
@@ -351,6 +484,8 @@ class AchievementsManager: ObservableObject {
         }
     }
     
+    // Syncs individual achievement data to Firebase
+    // Updates user's achievement collection with latest progress
     private func syncAchievementToFirebase(_ achievement: Achievement) async {
         guard let userId = Auth.auth().currentUser?.uid else { return }
         
@@ -379,6 +514,8 @@ class AchievementsManager: ObservableObject {
         }
     }
     
+    // Syncs all achievements with Firebase data
+    // Merges local and cloud data, preferring higher progress values
     private func syncAchievementsWithFirebase() async {
         guard let userId = Auth.auth().currentUser?.uid else { return }
         
@@ -440,6 +577,8 @@ class AchievementsManager: ObservableObject {
         }
     }
     
+    // Updates achievement progress by specified value
+    // Checks for completion and triggers notifications
     func updateAchievement(id: String, value: Int) {
         guard var achievement = achievements[id] else { return }
         
@@ -459,6 +598,8 @@ class AchievementsManager: ObservableObject {
         saveAchievements()
     }
     
+    // Batch updates multiple achievements simultaneously
+    // More efficient than individual updates for multiple achievements
     func batchUpdateAchievements(_ updates: [String: Int]) {
         var anyCompleted = false
         var updatedAchievements: [Achievement] = []
@@ -490,6 +631,8 @@ class AchievementsManager: ObservableObject {
         saveAchievements()
     }
     
+    // Increments achievement progress by 1
+    // Convenience method for simple progress updates
     func increment(id: String) {
         guard var achievement = achievements[id] else { return }
         
@@ -497,37 +640,104 @@ class AchievementsManager: ObservableObject {
         achievement.progress += 1
         
         // Check if achievement should be unlocked
-        if achievement.progress >= achievement.goal && !achievement.unlocked {
+        if !achievement.unlocked && achievement.progress >= achievement.goal {
             achievement.unlocked = true
-            achievement.wasNotified = false  // Reset notification flag when newly unlocked
-            updateAchievementLeaderboard()
+            achievement.wasNotified = false
+            NotificationCenter.default.post(name: .achievementUnlocked, object: nil, userInfo: ["achievement": achievement])
         }
         
-        saveAchievement(achievement)
+        // Save progress
+        achievements[id] = achievement
+        saveAchievements()
     }
     
-    func setProgress(id: String, to value: Int) {
-        updateAchievement(id: id, value: value)
+    // Sets achievement progress to specific value
+    // Useful for achievements that track absolute values rather than increments
+    func setProgress(id: String, progress: Int) {
+        guard var achievement = achievements[id] else { return }
+        
+        // Set progress with goal limit
+        achievement.progress = min(progress, achievement.goal)
+        
+        // Check if achievement should be unlocked
+        if !achievement.unlocked && achievement.progress >= achievement.goal {
+            achievement.unlocked = true
+            achievement.wasNotified = false
+            NotificationCenter.default.post(name: .achievementUnlocked, object: nil, userInfo: ["achievement": achievement])
+        }
+        
+        // Save progress
+        achievements[id] = achievement
+        saveAchievements()
     }
     
-    func getProgress(for id: String) -> Int {
-        return achievements[id]?.progress ?? 0
+    // Gets achievement by ID
+    // Returns nil if achievement doesn't exist
+    func getAchievement(id: String) -> Achievement? {
+        return achievements[id]
     }
     
-    func isUnlocked(id: String) -> Bool {
-        return achievements[id]?.unlocked ?? false
-    }
-    
+    // Gets all achievements as array
+    // Used by UI components for display
     func getAllAchievements() -> [Achievement] {
         return Array(achievements.values)
     }
     
+    // Gets unlocked achievements only
+    // Used for statistics and display purposes
+    func getUnlockedAchievements() -> [Achievement] {
+        return achievements.values.filter { $0.unlocked }
+    }
+    
+    // Gets locked achievements only
+    // Used for progress tracking and display
+    func getLockedAchievements() -> [Achievement] {
+        return achievements.values.filter { !$0.unlocked }
+    }
+    
+    // Gets achievements by category
+    // Useful for organizing achievements in UI
+    func getAchievementsByCategory(_ category: String) -> [Achievement] {
+        return achievements.values.filter { $0.id.hasPrefix(category) }
+    }
+    
+    // Checks if achievement is unlocked
+    // Convenience method for quick status checks
+    func isUnlocked(id: String) -> Bool {
+        return achievements[id]?.unlocked ?? false
+    }
+    
+    // Gets achievement progress
+    // Returns current progress value for tracking
+    func getProgress(id: String) -> Int {
+        return achievements[id]?.progress ?? 0
+    }
+    
+    // Resets all achievements to initial state
+    // Used for testing or account reset scenarios
+    func resetAllAchievements() {
+        for achievement in Achievement.allAchievements {
+            var resetAchievement = achievement
+            resetAchievement.unlocked = false
+            resetAchievement.progress = 0
+            resetAchievement.wasNotified = false
+            achievements[achievement.id] = resetAchievement
+        }
+        saveAchievements()
+        calculateTotalPoints()
+    }
+    
+    // Marks achievement as notified
+    // Prevents duplicate notifications for same achievement
     func markAsNotified(id: String) {
         guard var achievement = achievements[id] else { return }
         achievement.wasNotified = true
-        saveAchievement(achievement)
+        achievements[id] = achievement
+        saveAchievements()
     }
     
+    // Updates achievement leaderboard with current point total
+    // Syncs points to Firebase leaderboard system
     private func updateAchievementLeaderboard() {
         Task {
             do {
@@ -575,8 +785,39 @@ class AchievementsManager: ObservableObject {
                             
                             try await docRef.setData(data)
                             print("[Achievement Leaderboard] ✅ Successfully updated \(period) leaderboard")
+                            
+                            // Track analytics only for significant improvements
+                            #if DEBUG
+                            await MainActor.run {
+                                AnalyticsManager.shared.trackEvent(.performanceMetric(
+                                    name: "achievement_leaderboard_update",
+                                    value: Double(totalPoints)
+                                ))
+                            }
+                            #else
+                            // In release builds, only track significant improvements
+                            let pointsImprovement = totalPoints - currentPoints
+                            if pointsImprovement > 25 {
+                                await MainActor.run {
+                                    AnalyticsManager.shared.trackEvent(.performanceMetric(
+                                        name: "achievement_leaderboard_significant_improvement",
+                                        value: Double(pointsImprovement)
+                                    ))
+                                }
+                            }
+                            #endif
                         } else {
                             print("[Achievement Leaderboard] ⏭️ Skipping \(period) update - Current score (\(currentPoints)) is higher than new score (\(totalPoints))")
+                            
+                            // Track skipped updates in debug mode only
+                            #if DEBUG
+                            await MainActor.run {
+                                AnalyticsManager.shared.trackEvent(.performanceMetric(
+                                    name: "achievement_leaderboard_skip",
+                                    value: Double(currentPoints - totalPoints)
+                                ))
+                            }
+                            #endif
                         }
                         
                     } catch {
@@ -592,6 +833,8 @@ class AchievementsManager: ObservableObject {
         }
     }
     
+    // Checks achievement progress based on current game state
+    // Evaluates all achievements against current score and level
     func checkAchievementProgress(score: Int, level: Int) async throws -> [Achievement] {
         var newlyUnlocked: [Achievement] = []
         
@@ -611,6 +854,8 @@ class AchievementsManager: ObservableObject {
         return newlyUnlocked
     }
     
+    // Determines if achievement should be unlocked based on current game state
+    // Contains logic for all achievement types and their unlock conditions
     private func checkIfAchievementShouldUnlock(_ achievement: Achievement, score: Int, level: Int) -> Bool {
         func isProgressAtLeast(_ target: Int) -> Bool {
             return achievement.progress >= target
@@ -757,6 +1002,8 @@ class AchievementsManager: ObservableObject {
         }
     }
     
+    // Saves all achievements to local storage
+    // Encodes achievement array and stores in UserDefaults
     private func saveAchievements() {
         if let encoded = try? JSONEncoder().encode(Array(achievements.values)) {
             userDefaults.set(encoded, forKey: "achievements")
@@ -764,7 +1011,8 @@ class AchievementsManager: ObservableObject {
         }
     }
     
-    // Add method to preload achievements
+    // Preloads achievements from storage and syncs with cloud
+    // Used during app startup to ensure achievement data is current
     func preloadAchievements() async {
         loadAchievements()
         calculateTotalPoints()
@@ -772,7 +1020,35 @@ class AchievementsManager: ObservableObject {
     }
 }
 
-// Add at the top of the file with other extensions
+// Notification name for achievement unlock events
+// Used by UI components to respond to achievement unlocks
 extension Notification.Name {
     static let achievementUnlocked = Notification.Name("achievementUnlocked")
 }
+
+// REVIEW NOTES:
+// - Large switch statement in checkIfAchievementShouldUnlock could be refactored for maintainability
+// - Hard-coded achievement IDs throughout the code - consider using constants
+// - No error handling for Firebase sync failures beyond logging
+// - UserDefaults synchronization calls may impact performance
+// - Achievement progress overflow protection is basic - could be more robust
+// - No validation of achievement data from Firebase
+// - Game Center integration assumes GameCenterManager.shared exists
+// - No retry mechanism for failed Firebase operations
+// - Achievement unlock logic is duplicated in multiple methods
+// - No cleanup of old achievement data
+
+// FUTURE IDEAS:
+// - Refactor achievement unlock logic into separate strategy classes
+// - Add achievement categories and filtering system
+// - Implement achievement progress analytics
+// - Add achievement sharing functionality
+// - Create achievement templates for easy addition of new achievements
+// - Add achievement rarity system
+// - Implement achievement streaks and multipliers
+// - Add achievement progress visualization
+// - Create achievement comparison features
+// - Add achievement export/import functionality
+// - Implement achievement-based rewards beyond points
+// - Add achievement progress notifications
+// - Create achievement leaderboards by category

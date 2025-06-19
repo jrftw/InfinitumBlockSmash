@@ -43,11 +43,23 @@ class SecurityLogger {
             "deviceInfo": event.deviceInfo
         ]
         
+        #if DEBUG
+        // In debug builds, log all security events
         db.collection(securityLogsCollection).addDocument(data: logData) { error in
             if let error = error {
                 print("Error logging security event: \(error)")
             }
         }
+        #else
+        // In release builds, only log high-severity events to reduce noise
+        if event.severity >= 3 {
+            db.collection(securityLogsCollection).addDocument(data: logData) { error in
+                if let error = error {
+                    print("Error logging security event: \(error)")
+                }
+            }
+        }
+        #endif
         
         // Log to Crashlytics for high severity events
         if event.severity >= 4 {

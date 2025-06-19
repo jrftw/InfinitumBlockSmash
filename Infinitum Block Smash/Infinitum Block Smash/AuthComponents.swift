@@ -1,3 +1,147 @@
+/*
+ * AuthComponents.swift
+ * 
+ * REUSABLE AUTHENTICATION UI COMPONENTS AND STYLES
+ * 
+ * This file contains all reusable UI components, styles, and views for the authentication
+ * system in Infinitum Block Smash. It provides a consistent, modern design system for
+ * authentication forms, buttons, and visual elements.
+ * 
+ * KEY RESPONSIBILITIES:
+ * - Reusable authentication UI components
+ * - Modern button and text field styles
+ * - Authentication form layouts and validation
+ * - Visual design consistency across auth flows
+ * - Responsive design for different screen sizes
+ * - Accessibility support for auth components
+ * - Form validation and user feedback
+ * - Loading states and progress indicators
+ * - Error message display and styling
+ * - Cross-platform authentication UI
+ * 
+ * MAJOR DEPENDENCIES:
+ * - AuthViewModel.swift: Data binding and business logic
+ * - SwiftUI: Core UI framework
+ * - ProfanityFilter.swift: Username content validation
+ * - AuthenticationServices: Apple Sign-In UI integration
+ * - GameKit: Game Center authentication UI
+ * - UserNotifications: Permission request UI
+ * 
+ * UI COMPONENTS:
+ * - ModernButtonStyle: Consistent button styling
+ * - ModernTextFieldStyle: Text input field styling
+ * - AuthHeaderView: Welcome and branding header
+ * - SignInFormView: Email/password sign-in form
+ * - SignUpFormView: User registration form
+ * - AdditionalInfoFormView: Profile completion form
+ * - PasswordResetFormView: Password recovery form
+ * - MainAuthButtonsView: Primary authentication options
+ * - PhoneSignInView: SMS-based authentication
+ * - GameCenterSignInView: Game Center integration
+ * 
+ * DESIGN SYSTEM:
+ * - Consistent color scheme and theming
+ * - Modern gradient backgrounds
+ * - Card-based form layouts
+ * - Responsive typography
+ * - Accessibility-compliant design
+ * - Dark/light mode support
+ * - Haptic feedback integration
+ * - Smooth animations and transitions
+ * 
+ * FORM VALIDATION:
+ * - Real-time input validation
+ * - Username content filtering
+ * - Password strength indicators
+ * - Email format validation
+ * - Required field highlighting
+ * - Error message display
+ * - Success state feedback
+ * 
+ * RESPONSIVE DESIGN:
+ * - Adaptive layouts for different screen sizes
+ * - iPad and iPhone optimization
+ * - Landscape and portrait support
+ * - Dynamic type support
+ * - Accessibility scaling
+ * - Safe area handling
+ * 
+ * ACCESSIBILITY FEATURES:
+ * - VoiceOver support for all components
+ * - Dynamic type compatibility
+ * - High contrast mode support
+ * - Reduced motion preferences
+ * - Accessibility labels and hints
+ * - Keyboard navigation support
+ * 
+ * PERFORMANCE FEATURES:
+ * - Efficient view updates
+ * - Optimized rendering
+ * - Memory-efficient components
+ * - Lazy loading where appropriate
+ * - Background processing for validation
+ * 
+ * USER EXPERIENCE:
+ * - Intuitive form layouts
+ * - Clear visual hierarchy
+ * - Consistent interaction patterns
+ * - Smooth transitions
+ * - Immediate feedback
+ * - Error recovery guidance
+ * 
+ * INTEGRATION POINTS:
+ * - Authentication view models
+ * - Firebase authentication flows
+ * - Apple Sign-In integration
+ * - Game Center authentication
+ * - Push notification permissions
+ * - User profile management
+ * 
+ * ARCHITECTURE ROLE:
+ * This file provides the presentation layer components for authentication,
+ * ensuring consistent UI/UX while maintaining separation of concerns
+ * between visual design and business logic.
+ * 
+ * THREADING CONSIDERATIONS:
+ * - UI updates on main thread
+ * - Background validation processing
+ * - Thread-safe data binding
+ * - Async/await for network operations
+ * 
+ * SECURITY CONSIDERATIONS:
+ * - Secure text field handling
+ * - Input sanitization
+ * - Privacy-compliant UI
+ * - Secure credential display
+ * 
+ * REVIEW NOTES:
+ * - Verify all form validation logic and user feedback
+ * - Check accessibility compliance for all UI components
+ * - Test responsive design across different device sizes
+ * - Validate dark/light mode theming consistency
+ * - Check profanity filter integration in username fields
+ * - Test form submission and error handling flows
+ * - Verify loading states and progress indicators
+ * - Check keyboard navigation and accessibility features
+ * - Test dynamic type scaling and text wrapping
+ * - Validate haptic feedback integration
+ * - Check safe area handling on different devices
+ * - Test landscape and portrait orientation support
+ * - Verify error message localization and clarity
+ * - Check form field focus management and tab order
+ * - Test network connectivity error scenarios
+ * - Validate Apple Sign-In button integration
+ * - Check Game Center authentication UI flow
+ * - Test notification permission request UI
+ * - Verify password strength indicator accuracy
+ * - Check form validation timing and user experience
+ * - Test cross-device authentication UI consistency
+ * - Validate referral code input handling
+ * - Check guest mode UI flow and messaging
+ * - Test account linking and merging UI flows
+ * - Verify data privacy compliance in UI elements
+ */
+
 import SwiftUI
 
 // MARK: - Modern Button Style

@@ -1,3 +1,67 @@
+/*
+ * AppVersion.swift
+ * 
+ * MAIN PURPOSE:
+ * Centralized version management and changelog system for Infinitum Block Smash.
+ * Provides version information, build numbers, and comprehensive changelog history
+ * for display throughout the app and for user reference.
+ * 
+ * KEY FUNCTIONALITY:
+ * - Static version and build number management
+ * - Comprehensive changelog with detailed release notes
+ * - Version formatting and display utilities
+ * - Copyright and credits information
+ * - Changelog retrieval by version
+ * - App metadata and location information
+ * 
+ * DEPENDENCIES:
+ * - Foundation: Core framework for data structures and string handling
+ * - No external dependencies - self-contained version management
+ * 
+ * FILES THAT USE THIS:
+ * - SettingsView.swift: Likely displays version information in settings
+ * - ChangelogView.swift: Uses changelog data for display
+ * - ContentView.swift: May show version info in about section
+ * - Various views that need version information
+ * 
+ * FILES THIS USES EXTENSIVELY:
+ * - Foundation framework: For string operations and data structures
+ * 
+ * DATA FLOW:
+ * 1. App components request version information via static properties
+ * 2. Version data is displayed in UI components
+ * 3. Changelog is retrieved and displayed when needed
+ * 4. Version info is used for debugging and user support
+ * 
+ * REVIEW NOTES:
+ * 
+ * POTENTIAL ISSUES:
+ * - Hard-coded version strings require manual updates for each release
+ * - Large changelog dictionary could impact app size
+ * - No automatic version detection from bundle
+ * - Changelog entries are not validated or sanitized
+ * - No version comparison utilities
+ * - Build number is hard-coded and may not match actual build
+ * 
+ * AREAS FOR IMPROVEMENT:
+ * - Automate version detection from app bundle
+ * - Add version comparison utilities
+ * - Implement changelog filtering and search
+ * - Add version update notifications
+ * - Consider moving changelog to remote source
+ * - Add version analytics tracking
+ * - Implement semantic versioning support
+ * 
+ * DEPENDENCY CONCERNS:
+ * - No external dependencies - good for reliability
+ * - Manual version management required
+ * - No integration with CI/CD systems
+ * - Changelog maintenance is manual process
+ * 
+ * DATE: 6/19/2025
+ * AUTHOR: @jrftw
+ */
+
 import Foundation
 
 struct AppVersion {

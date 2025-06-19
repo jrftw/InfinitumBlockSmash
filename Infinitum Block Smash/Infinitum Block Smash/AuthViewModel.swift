@@ -1,3 +1,139 @@
+/*
+ * AuthViewModel.swift
+ * 
+ * AUTHENTICATION LOGIC AND STATE MANAGEMENT
+ * 
+ * This view model manages all authentication-related logic, state, and business rules
+ * for the Infinitum Block Smash game. It handles user authentication flows, data
+ * persistence, error handling, and integration with various authentication providers.
+ * 
+ * KEY RESPONSIBILITIES:
+ * - Authentication state management and persistence
+ * - Multiple authentication provider integration (Firebase, Apple, Google, Game Center)
+ * - User registration and profile management
+ * - Password reset and account recovery
+ * - Username validation and availability checking
+ * - Error handling and user feedback
+ * - Cross-device authentication synchronization
+ * - Guest user management
+ * - Notification permission handling
+ * - Referral system integration
+ * 
+ * MAJOR DEPENDENCIES:
+ * - FirebaseAuth: Core authentication services
+ * - FirebaseFirestore: User data persistence
+ * - GameKit: Game Center authentication
+ * - AuthenticationServices: Apple Sign-In
+ * - UserNotifications: Push notification permissions
+ * - ProfanityFilter.swift: Username content validation
+ * - UserDefaults: Local data persistence
+ * - AuthView.swift: UI presentation layer
+ * 
+ * AUTHENTICATION PROVIDERS:
+ * - Firebase Email/Password: Traditional authentication
+ * - Apple Sign-In: Privacy-focused authentication
+ * - Google Sign-In: Google account integration
+ * - Game Center: iOS gaming platform integration
+ * - Phone Authentication: SMS-based verification
+ * - Guest Mode: Anonymous user access
+ * 
+ * STATE MANAGEMENT:
+ * - Published properties for reactive UI updates
+ * - AppStorage for persistent user data
+ * - Loading states and progress indicators
+ * - Error state handling and display
+ * - Authentication flow state tracking
+ * - Form validation and user input management
+ * 
+ * USER DATA MANAGEMENT:
+ * - Username validation and availability
+ * - Profile information collection
+ * - Cross-device data synchronization
+ * - Account linking and merging
+ * - Data persistence and recovery
+ * - Privacy and security compliance
+ * 
+ * ERROR HANDLING:
+ * - Comprehensive Firebase Auth error mapping
+ * - Network connectivity issues
+ * - Service unavailability handling
+ * - User-friendly error messages
+ * - Retry logic and recovery mechanisms
+ * - Validation error feedback
+ * 
+ * SECURITY FEATURES:
+ * - Password strength validation
+ * - Username content filtering
+ * - Secure token management
+ * - Session security
+ * - Account recovery options
+ * - Fraud prevention measures
+ * 
+ * PERFORMANCE FEATURES:
+ * - Efficient state updates
+ * - Background authentication processing
+ * - Optimized data persistence
+ * - Memory-efficient error handling
+ * - Fast authentication flows
+ * 
+ * INTEGRATION POINTS:
+ * - Firebase backend services
+ * - Apple Sign-In framework
+ * - Google authentication
+ * - Game Center platform
+ * - Push notification system
+ * - User profile management
+ * - Referral system
+ * 
+ * USER EXPERIENCE:
+ * - Smooth authentication flows
+ * - Clear error feedback
+ * - Loading state management
+ * - Form validation feedback
+ * - Cross-device consistency
+ * - Accessibility support
+ * 
+ * ARCHITECTURE ROLE:
+ * This view model acts as the business logic layer for authentication,
+ * separating concerns between UI presentation and authentication logic
+ * while providing a clean interface for the view layer.
+ * 
+ * THREADING CONSIDERATIONS:
+ * - @MainActor for UI updates
+ * - Background authentication processing
+ * - Thread-safe state management
+ * - Async/await for network operations
+ * 
+ * SECURITY CONSIDERATIONS:
+ * - Secure credential handling
+ * - Token refresh management
+ * - Session security
+ * - Data encryption
+ * - Privacy compliance
+ * 
+ * REVIEW NOTES:
+ * - Verify Firebase Auth configuration and initialization
+ * - Check Apple Sign-In entitlements and capabilities
+ * - Validate Game Center authentication flow and error handling
+ * - Test network connectivity error scenarios
+ * - Verify password reset email functionality
+ * - Check username availability API integration and rate limiting
+ * - Validate cross-device authentication sync and conflict resolution
+ * - Test guest mode data persistence and migration
+ * - Verify notification permission flow and state management
+ * - Check profanity filter integration and performance
+ * - Validate error message localization and user experience
+ * - Test authentication state persistence across app launches and updates
+ * - Verify account linking and merging logic for multiple providers
+ * - Check security token refresh mechanisms and expiration handling
+ * - Test referral system integration and validation
+ * - Validate form validation logic and user feedback
+ * - Check memory management and potential retain cycles
+ * - Test authentication flow interruption and recovery
+ * - Verify accessibility compliance for error messages and loading states
+ * - Check data privacy compliance and user consent handling
+ */
+
 import SwiftUI
 import FirebaseAuth
 import FirebaseFirestore

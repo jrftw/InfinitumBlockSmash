@@ -1,3 +1,9 @@
+// MARK: 🚫 DO NOT MODIFY THIS FILE
+// PURPOSE: Manual leaderboard override utility for internal admin use ONLY
+// OWNER: jrftw (Kevin Doyle Jr.)
+// WARNING: This is NOT part of core game logic. DO NOT include in production updates.
+// ➤ Any updates must be authorized by jrftw directly.
+
 // This is not a implementation for the app this is a manually toggle for me to use don't update this as the core leaderboard logic update
 
 
@@ -126,8 +132,40 @@ class ManualLeaderboardUpdate {
                             print("[ManualUpdate] 📝 Updating existing \(period) entry for \(collection)")
                             try await docRef.setData(data, merge: true)
                             print("[ManualUpdate] ✅ Updated existing \(period) entry for \(collection)")
+                            
+                            // Track analytics only for significant score improvements
+                            #if DEBUG
+                            await MainActor.run {
+                                AnalyticsManager.shared.trackEvent(.performanceMetric(
+                                    name: "manual_leaderboard_update",
+                                    value: Double(finalScore)
+                                ))
+                            }
+                            #else
+                            // In release builds, only track significant improvements
+                            let scoreImprovement = collection == "classic_timed_leaderboard" ? 
+                                (currentTime - totalTime) : (finalScore - currentScore)
+                            if scoreImprovement > 50 {
+                                await MainActor.run {
+                                    AnalyticsManager.shared.trackEvent(.performanceMetric(
+                                        name: "manual_leaderboard_significant_improvement",
+                                        value: Double(scoreImprovement)
+                                    ))
+                                }
+                            }
+                            #endif
                         } else {
                             print("[ManualUpdate] ⏭️ Skipping update - current score is better")
+                            
+                            // Track skipped updates in debug mode only
+                            #if DEBUG
+                            await MainActor.run {
+                                AnalyticsManager.shared.trackEvent(.performanceMetric(
+                                    name: "manual_leaderboard_skip",
+                                    value: Double(currentScore - finalScore)
+                                ))
+                            }
+                            #endif
                         }
                     }
                     
@@ -569,8 +607,40 @@ class ManualLeaderboardUpdate {
                             print("[ManualUpdate] 📝 Updating existing \(period) entry for \(collection)")
                             try await docRef.setData(data, merge: true)
                             print("[ManualUpdate] ✅ Updated existing \(period) entry for \(collection)")
+                            
+                            // Track analytics only for significant score improvements
+                            #if DEBUG
+                            await MainActor.run {
+                                AnalyticsManager.shared.trackEvent(.performanceMetric(
+                                    name: "manual_leaderboard_update",
+                                    value: Double(finalScore)
+                                ))
+                            }
+                            #else
+                            // In release builds, only track significant improvements
+                            let scoreImprovement = collection == "classic_timed_leaderboard" ? 
+                                (currentTime - totalTime) : (finalScore - currentScore)
+                            if scoreImprovement > 50 {
+                                await MainActor.run {
+                                    AnalyticsManager.shared.trackEvent(.performanceMetric(
+                                        name: "manual_leaderboard_significant_improvement",
+                                        value: Double(scoreImprovement)
+                                    ))
+                                }
+                            }
+                            #endif
                         } else {
                             print("[ManualUpdate] ⏭️ Skipping update - current score is better")
+                            
+                            // Track skipped updates in debug mode only
+                            #if DEBUG
+                            await MainActor.run {
+                                AnalyticsManager.shared.trackEvent(.performanceMetric(
+                                    name: "manual_leaderboard_skip",
+                                    value: Double(currentScore - finalScore)
+                                ))
+                            }
+                            #endif
                         }
                     }
                     
@@ -665,3 +735,10 @@ class ManualLeaderboardUpdate {
         print("[ManualUpdate] ✅ Completed regeneration of deleted entries")
     }
 }
+
+// This is not a implementation for the app this is a manually toggle for me to use don't update this as the core leaderboard logic update
+// MARK: 🚫 DO NOT MODIFY THIS FILE
+// PURPOSE: Manual leaderboard override utility for internal admin use ONLY
+// OWNER: jrftw (Kevin Doyle Jr.)
+// WARNING: This is NOT part of core game logic. DO NOT include in production updates.
+// ➤ Any updates must be authorized by jrftw directly.

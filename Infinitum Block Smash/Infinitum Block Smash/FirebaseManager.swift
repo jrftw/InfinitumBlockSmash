@@ -1,3 +1,101 @@
+/*
+ * FirebaseManager.swift
+ * 
+ * FIREBASE BACKEND SERVICE LAYER
+ * 
+ * This is the central manager for all Firebase-related operations including authentication,
+ * data persistence, cloud synchronization, and real-time database operations. It serves
+ * as the bridge between the local app and Firebase backend services.
+ * 
+ * KEY RESPONSIBILITIES:
+ * - User authentication (anonymous, Apple, Google)
+ * - Data persistence and cloud synchronization
+ * - Real-time database operations
+ * - Offline data management and conflict resolution
+ * - Network connectivity monitoring
+ * - Rate limiting and retry logic
+ * - App Check token management
+ * - User data migration and versioning
+ * - Analytics and crash reporting integration
+ * - Storage operations for user data
+ * 
+ * MAJOR DEPENDENCIES:
+ * - GameState.swift: Source of game data to persist
+ * - LeaderboardService.swift: Score submission and leaderboard data
+ * - AchievementsManager.swift: Achievement data synchronization
+ * - NetworkMonitor.swift: Network connectivity status
+ * - BackupService.swift: Data backup and restore operations
+ * - VersionCheckService.swift: App version checking
+ * - NotificationService.swift: Push notification management
+ * - ReferralManager.swift: Referral system data
+ * 
+ * FIREBASE SERVICES USED:
+ * - Firebase Auth: User authentication and management
+ * - Firestore: Document-based data storage
+ * - Realtime Database: Real-time data synchronization
+ * - Storage: File and image storage
+ * - Functions: Server-side logic execution
+ * - App Check: Security and fraud prevention
+ * - Analytics: User behavior tracking
+ * - Crashlytics: Crash reporting
+ * 
+ * DATA STRUCTURES MANAGED:
+ * - User profiles and preferences
+ * - Game progress and statistics
+ * - Achievement data
+ * - Leaderboard entries
+ * - Referral information
+ * - Device-specific data
+ * - Analytics events
+ * 
+ * NETWORK FEATURES:
+ * - Automatic offline queue management
+ * - Network connectivity monitoring
+ * - Rate limiting to prevent API abuse
+ * - Exponential backoff retry logic
+ * - Conflict resolution for concurrent updates
+ * - Data validation and sanitization
+ * 
+ * SECURITY FEATURES:
+ * - App Check token validation
+ * - User authentication state management
+ * - Data access control and permissions
+ * - Secure token storage and refresh
+ * - Input validation and sanitization
+ * 
+ * PERFORMANCE OPTIMIZATIONS:
+ * - Caching of frequently accessed data
+ * - Batch operations for multiple updates
+ * - Lazy loading of user data
+ * - Background synchronization
+ * - Memory-efficient data structures
+ * 
+ * ERROR HANDLING:
+ * - Comprehensive error types and messages
+ * - Graceful degradation during network issues
+ * - User-friendly error reporting
+ * - Automatic retry with exponential backoff
+ * - Fallback to local data when offline
+ * 
+ * ARCHITECTURE ROLE:
+ * This class acts as the "Service" layer in the architecture, providing
+ * a clean abstraction over Firebase services. It handles all backend
+ * communication and data persistence operations.
+ * 
+ * THREADING MODEL:
+ * - @MainActor ensures UI updates happen on main thread
+ * - Background operations use async/await
+ * - Network operations use dedicated dispatch queues
+ * - Timer-based operations for periodic updates
+ * 
+ * INTEGRATION POINTS:
+ * - All data-persisting components (GameState, Achievements, etc.)
+ * - Authentication flows (AuthView, LoginView)
+ * - Analytics and crash reporting systems
+ * - Push notification services
+ * - Background task processing
+ */
+
 import Foundation
 import FirebaseFirestore
 import FirebaseAuth
@@ -896,18 +994,40 @@ class FirebaseManager: ObservableObject {
                         data["level"] = level
                     }
                     
+                    #if DEBUG
                     print("[Leaderboard] 📊 Writing score \(score) to \(period.uppercased()) leaderboard")
                     if let time = time {
                         print("[Leaderboard] ⏱️ Time: \(String(format: "%.2f", time))s")
                     }
+                    #endif
                     
                     try await docRef.setData(data)
+                    
+                    #if DEBUG
                     print("[Leaderboard] ✅ Successfully updated \(period.uppercased()) leaderboard")
+                    #endif
+                    
+                    // Track analytics only for significant score improvements in release builds
+                    #if !DEBUG
+                    if shouldUpdate && score > currentScore {
+                        let scoreImprovement = score - currentScore
+                        if scoreImprovement > 50 { // Only track improvements of 50+ points
+                            await MainActor.run {
+                                AnalyticsManager.shared.trackEvent(.performanceMetric(
+                                    name: "firebase_leaderboard_update",
+                                    value: Double(scoreImprovement)
+                                ))
+                            }
+                        }
+                    }
+                    #endif
                     
                     // Invalidate cache for this leaderboard
                     LeaderboardCache.shared.invalidateCache(type: type, period: period)
                 } else {
+                    #if DEBUG
                     print("[Leaderboard] ⏭️ Skipping \(period.uppercased()) update - Current score (\(currentScore)) is higher than new score (\(score))")
+                    #endif
                 }
                 
             } catch {

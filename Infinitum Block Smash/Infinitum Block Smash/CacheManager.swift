@@ -1,3 +1,147 @@
+/*
+ * CacheManager.swift
+ * 
+ * COMPREHENSIVE CACHING AND DATA MANAGEMENT SYSTEM
+ * 
+ * This service provides a complete caching solution for the Infinitum Block Smash game,
+ * including memory caching, disk caching, compression, and intelligent cache management.
+ * It optimizes performance through efficient data storage and retrieval.
+ * 
+ * KEY RESPONSIBILITIES:
+ * - Memory and disk caching management
+ * - Data compression and decompression
+ * - Cache expiration and cleanup
+ * - Cache statistics and monitoring
+ * - Performance optimization
+ * - Memory pressure handling
+ * - Cache size management
+ * - Background cleanup operations
+ * - Cache hit/miss tracking
+ * - Data persistence and recovery
+ * 
+ * MAJOR DEPENDENCIES:
+ * - Foundation: Core data management
+ * - Compression: Data compression framework
+ * - os.log: System logging
+ * - FileManager: File system operations
+ * - NSCache: Memory caching
+ * - Logger.swift: Application logging
+ * 
+ * CACHING FEATURES:
+ * - Memory Cache: Fast in-memory data storage
+ * - Disk Cache: Persistent file-based storage
+ * - Data Compression: Storage optimization
+ * - Cache Expiration: Automatic data cleanup
+ * - Size Management: Cache size limits
+ * - Statistics Tracking: Performance monitoring
+ * - Background Cleanup: Automatic maintenance
+ * 
+ * MEMORY CACHE:
+ * - 100 object limit
+ * - 25MB total cost limit
+ * - Thread-safe operations
+ * - Automatic eviction
+ * - Hit/miss tracking
+ * 
+ * DISK CACHE:
+ * - 50MB total size limit
+ * - 30-minute expiration
+ * - Compressed storage
+ * - File-based persistence
+ * - Automatic cleanup
+ * 
+ * COMPRESSION FEATURES:
+ * - LZ4 compression algorithm
+ * - Background compression
+ * - Automatic decompression
+ * - Compression ratio optimization
+ * - Memory-efficient processing
+ * 
+ * CACHE MANAGEMENT:
+ * - Periodic cleanup (3-minute intervals)
+ * - Expired entry removal
+ * - Size limit enforcement
+ * - Oldest-first eviction
+ * - Memory pressure response
+ * 
+ * PERFORMANCE FEATURES:
+ * - Efficient data serialization
+ * - Optimized compression
+ * - Background processing
+ * - Memory-efficient storage
+ * - Fast cache lookups
+ * 
+ * STATISTICS AND MONITORING:
+ * - Cache hit/miss ratios
+ * - Memory usage tracking
+ * - Disk usage monitoring
+ * - Performance metrics
+ * - Regular statistics logging
+ * 
+ * ERROR HANDLING:
+ * - File system errors
+ * - Compression failures
+ * - Memory pressure handling
+ * - Corrupted data recovery
+ * - Graceful degradation
+ * 
+ * INTEGRATION POINTS:
+ * - Game data caching
+ * - Image and asset caching
+ * - User preferences storage
+ * - Analytics data caching
+ * - Network response caching
+ * 
+ * ARCHITECTURE ROLE:
+ * This service acts as the central caching coordinator,
+ * providing efficient data storage and retrieval while
+ * maintaining performance and memory efficiency.
+ * 
+ * THREADING CONSIDERATIONS:
+ * - Thread-safe cache operations
+ * - Background compression processing
+ * - Concurrent cache access
+ * - Safe file system operations
+ * 
+ * PERFORMANCE CONSIDERATIONS:
+ * - Memory-efficient caching
+ * - Optimized compression
+ * - Fast cache lookups
+ * - Efficient cleanup strategies
+ * 
+ * REVIEW NOTES:
+ * - Verify cache size limits and memory management
+ * - Check compression performance and ratio
+ * - Test cache expiration and cleanup functionality
+ * - Validate cache hit/miss statistics accuracy
+ * - Check cache performance on low-end devices
+ * - Test cache operations during memory pressure
+ * - Verify cache data integrity and corruption handling
+ * - Check cache cleanup scheduling and efficiency
+ * - Test cache operations during app background/foreground
+ * - Validate cache compression algorithm effectiveness
+ * - Check cache file system operations and error handling
+ * - Test cache performance with large data sets
+ * - Verify cache statistics logging and monitoring
+ * - Check cache thread safety and concurrent access
+ * - Test cache operations during heavy game operations
+ * - Validate cache expiration time accuracy
+ * - Check cache memory pressure response
+ * - Test cache operations during network interruptions
+ * - Verify cache data serialization and deserialization
+ * - Check cache performance impact on overall app performance
+ * - Test cache operations with different data types
+ * - Validate cache cleanup algorithm efficiency
+ * - Check cache file system permissions and access
+ * - Test cache operations during app updates
+ * - Verify cache data privacy and security
+ * - Check cache integration with other systems
+ * - Test cache performance during rapid data changes
+ * - Validate cache error recovery mechanisms
+ * - Check cache compatibility with different iOS versions
+ * - Test cache operations during device storage pressure
+ */
+
 // MARK: - CacheManager.swift
 import Foundation
 import Compression

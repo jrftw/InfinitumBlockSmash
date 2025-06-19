@@ -1,3 +1,127 @@
+/*
+ * SettingsView.swift
+ * 
+ * APP SETTINGS AND USER PREFERENCES MANAGEMENT
+ * 
+ * This view provides a comprehensive settings interface for Infinitum Block Smash,
+ * allowing users to customize their game experience, manage their account,
+ * and configure various app features and preferences.
+ * 
+ * KEY RESPONSIBILITIES:
+ * - Game settings and customization options
+ * - Visual theme management and selection
+ * - Performance settings (FPS, graphics)
+ * - Gameplay preferences and controls
+ * - Account management and profile settings
+ * - Privacy and data management
+ * - Notification preferences
+ * - Language and localization settings
+ * - Premium feature management
+ * - Support and feedback options
+ * 
+ * MAJOR DEPENDENCIES:
+ * - GameState.swift: Game state and preferences
+ * - ThemeManager.swift: Visual theme management
+ * - FPSManager.swift: Performance optimization
+ * - SubscriptionManager.swift: Premium feature access
+ * - NotificationManager.swift: Push notification settings
+ * - FirebaseManager.swift: Account and data management
+ * - AppTrackingTransparency: Privacy settings
+ * - MessageUI: Support email functionality
+ * - SafariServices: External link handling
+ * 
+ * SETTINGS CATEGORIES:
+ * - Game Settings: Theme, FPS, tutorial, auto-save
+ * - Gameplay Settings: Precision, drag sensitivity, controls
+ * - Account Settings: Profile, privacy, data management
+ * - Notification Settings: Push notifications, alerts
+ * - Performance Settings: Graphics, memory, optimization
+ * - Support Settings: Help, feedback, contact
+ * - Premium Settings: Subscription management
+ * 
+ * THEME MANAGEMENT:
+ * - System theme integration
+ * - Custom theme selection
+ * - Premium theme unlocking
+ * - Theme preview and preview
+ * - Dynamic theme switching
+ * - Theme persistence
+ * 
+ * PERFORMANCE FEATURES:
+ * - FPS target selection
+ * - Graphics quality settings
+ * - Memory management options
+ * - Performance monitoring
+ * - Optimization recommendations
+ * - Device-specific settings
+ * 
+ * GAMEPLAY CUSTOMIZATION:
+ * - Placement precision controls
+ * - Block drag sensitivity
+ * - Control scheme options
+ * - Accessibility features
+ * - Haptic feedback settings
+ * - Sound and audio preferences
+ * 
+ * PRIVACY AND SECURITY:
+ * - Data collection preferences
+ * - Privacy policy access
+ * - Account deletion options
+ * - Data export functionality
+ * - Security settings
+ * - Tracking transparency
+ * 
+ * LOCALIZATION:
+ * - Multi-language support
+ * - Regional preferences
+ * - Date and time formats
+ * - Currency settings
+ * - Accessibility language
+ * 
+ * PREMIUM FEATURES:
+ * - Subscription status display
+ * - Premium feature access
+ * - Theme unlocking status
+ * - Purchase history
+ * - Trial management
+ * - Upgrade prompts
+ * 
+ * SUPPORT AND FEEDBACK:
+ * - Help documentation access
+ * - Contact support options
+ * - Bug reporting interface
+ * - Feature request submission
+ * - FAQ and troubleshooting
+ * - Community links
+ * 
+ * USER EXPERIENCE:
+ * - Intuitive settings organization
+ * - Clear option descriptions
+ * - Real-time setting previews
+ * - Responsive design
+ * - Accessibility compliance
+ * - Smooth transitions
+ * 
+ * ARCHITECTURE ROLE:
+ * This view acts as the central hub for user customization and
+ * app configuration, providing a comprehensive interface for
+ * managing all aspects of the user experience.
+ * 
+ * THREADING CONSIDERATIONS:
+ * - UI updates on main thread
+ * - Background settings validation
+ * - Async/await for network operations
+ * - State management with Combine
+ * 
+ * INTEGRATION POINTS:
+ * - Game state management
+ * - Theme system
+ * - Performance monitoring
+ * - Subscription system
+ * - Notification system
+ * - Analytics and tracking
+ */
+
 import SwiftUI
 import AppTrackingTransparency
 import MessageUI

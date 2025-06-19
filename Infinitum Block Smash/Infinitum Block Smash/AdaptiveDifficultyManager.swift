@@ -1,3 +1,69 @@
+/*
+ * AdaptiveDifficultyManager.swift
+ * 
+ * MAIN PURPOSE:
+ * Manages dynamic difficulty adjustment based on player performance and statistics.
+ * Analyzes player behavior and adjusts game parameters to maintain optimal challenge level.
+ * Currently uses fixed difficulty settings but has infrastructure for adaptive calculations.
+ * 
+ * KEY FUNCTIONALITY:
+ * - Tracks comprehensive player statistics (scores, times, chains, mistakes, etc.)
+ * - Calculates performance metrics and trends
+ * - Provides difficulty settings for shape complexity, time limits, scoring
+ * - Manages random shape spawn rates based on level progression
+ * - Persists player stats using UserDefaults
+ * - Supports both adaptive and fixed difficulty modes
+ * 
+ * DEPENDENCIES:
+ * - Foundation: Core framework for data structures and persistence
+ * - UserDefaults: Local data storage for player statistics
+ * - JSONEncoder/JSONDecoder: Data serialization for persistence
+ * 
+ * FILES THAT USE THIS:
+ * - GameScene.swift: Likely uses difficulty settings for game mechanics
+ * - GameState.swift: May reference for level progression and scoring
+ * - GameView.swift: Could use for UI adjustments based on difficulty
+ * 
+ * FILES THIS USES EXTENSIVELY:
+ * - UserDefaults: For persistent storage of player statistics
+ * - Foundation framework: For data structures and time calculations
+ * 
+ * DATA FLOW:
+ * 1. Game calls updatePlayerStats() after each level completion
+ * 2. Manager calculates and stores performance metrics
+ * 3. Difficulty settings are updated based on performance
+ * 4. Game requests adjusted difficulty via getAdjustedDifficulty()
+ * 5. Settings are applied to game mechanics and UI
+ * 
+ * REVIEW NOTES:
+ * 
+ * POTENTIAL ISSUES:
+ * - All adaptive calculation methods return fixed values (1.0, 0.0) - adaptive features disabled
+ * - No validation for extreme performance values that could break calculations
+ * - UserDefaults key "playerStats" could conflict with other components
+ * - No error handling for JSON encoding/decoding failures
+ * - Performance array limited to 5 entries may not provide enough data for trends
+ * - No cleanup of old/stale statistics data
+ * 
+ * AREAS FOR IMPROVEMENT:
+ * - Implement actual adaptive difficulty calculations
+ * - Add data validation and sanitization
+ * - Consider using Core Data for better data management
+ * - Add difficulty reset functionality
+ * - Implement difficulty presets (easy, normal, hard)
+ * - Add analytics for difficulty effectiveness
+ * - Consider machine learning for better adaptation
+ * 
+ * DEPENDENCY CONCERNS:
+ * - Heavy reliance on UserDefaults for data persistence
+ * - No dependency injection - tightly coupled to UserDefaults
+ * - Performance calculations are currently disabled
+ * - No interface for external difficulty overrides
+ * 
+ * DATE: 6/19/2025
+ * AUTHOR: @jrftw
+ */
+
 import Foundation
 
 class AdaptiveDifficultyManager {

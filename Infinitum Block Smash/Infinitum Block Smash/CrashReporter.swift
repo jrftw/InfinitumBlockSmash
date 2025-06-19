@@ -1,3 +1,158 @@
+/*
+ * CrashReporter.swift
+ * 
+ * CRASH REPORTING AND DEBUG LOGGING SYSTEM
+ * 
+ * This service provides comprehensive crash reporting, debug logging, and performance
+ * monitoring for the Infinitum Block Smash game. It integrates with Firebase Crashlytics
+ * and provides detailed logging for debugging and performance analysis.
+ * 
+ * KEY RESPONSIBILITIES:
+ * - Crash reporting and error tracking
+ * - Debug logging and log management
+ * - Performance monitoring and metrics
+ * - Memory usage tracking and reporting
+ * - Gameplay analytics logging
+ * - User consent management for crash reports
+ * - Real-time log monitoring
+ * - Crash report generation and export
+ * - Error categorization and prioritization
+ * - Debug information collection
+ * 
+ * MAJOR DEPENDENCIES:
+ * - FirebaseCrashlytics: Crash reporting service
+ * - FirebaseAuth: User identification
+ * - MemorySystem.swift: Memory usage monitoring
+ * - AnalyticsManager.swift: Gameplay analytics
+ * - UserDefaults: User consent storage
+ * - UIKit: Device information collection
+ * - os.log: System logging integration
+ * 
+ * CRASH REPORTING FEATURES:
+ * - Automatic crash detection and reporting
+ * - User consent management
+ * - Custom error recording
+ * - User identification
+ * - Custom value tracking
+ * - Crash report generation
+ * - Debug information collection
+ * 
+ * LOGGING FEATURES:
+ * - Debug log management (1000 entries)
+ * - Real-time log monitoring (100 entries)
+ * - Timestamp-based logging
+ * - Log rotation and cleanup
+ * - Performance-optimized logging
+ * - Conditional logging (DEBUG vs RELEASE)
+ * 
+ * PERFORMANCE MONITORING:
+ * - Memory usage tracking (5-second intervals)
+ * - Gameplay metrics logging (10-second intervals)
+ * - Cache performance monitoring
+ * - FPS tracking and reporting
+ * - Session duration monitoring
+ * - Performance degradation detection
+ * 
+ * MEMORY MONITORING:
+ * - Real-time memory usage tracking
+ * - Memory pressure detection
+ * - Cache hit/miss ratio monitoring
+ * - Memory status reporting
+ * - Memory optimization recommendations
+ * 
+ * GAMEPLAY ANALYTICS:
+ * - Session duration tracking
+ * - Average score per level
+ * - Blocks per minute metrics
+ * - Chain length monitoring
+ * - FPS performance tracking
+ * - Gameplay pattern analysis
+ * 
+ * USER CONSENT MANAGEMENT:
+ * - Crash report consent tracking
+ * - Privacy-compliant logging
+ * - User preference respect
+ * - Consent change handling
+ * - Data protection compliance
+ * 
+ * DEBUG INFORMATION:
+ * - Device information collection
+ * - App version tracking
+ * - User identification
+ * - System information
+ * - Performance metrics
+ * - Error context collection
+ * 
+ * ERROR HANDLING:
+ * - Graceful error recording
+ * - Network failure handling
+ * - Log corruption prevention
+ * - Memory pressure response
+ * - Service unavailability handling
+ * 
+ * INTEGRATION POINTS:
+ * - Firebase Crashlytics backend
+ * - Memory monitoring system
+ * - Analytics tracking system
+ * - User authentication system
+ * - Debug interface components
+ * 
+ * ARCHITECTURE ROLE:
+ * This service acts as the central crash reporting and debugging
+ * coordinator, providing comprehensive error tracking and performance
+ * monitoring while respecting user privacy and consent.
+ * 
+ * THREADING CONSIDERATIONS:
+ * - @MainActor for UI updates
+ * - Background logging operations
+ * - Thread-safe log management
+ * - Safe crash reporting
+ * 
+ * PERFORMANCE CONSIDERATIONS:
+ * - Efficient log storage
+ * - Minimal performance impact
+ * - Background monitoring
+ * - Memory-efficient logging
+ * 
+ * PRIVACY CONSIDERATIONS:
+ * - User consent compliance
+ * - Data minimization
+ * - Secure data transmission
+ * - Privacy-by-design approach
+ * 
+ * REVIEW NOTES:
+ * - Verify Firebase Crashlytics integration and configuration
+ * - Check user consent management and privacy compliance
+ * - Test crash reporting functionality and data collection
+ * - Validate debug logging performance and storage
+ * - Check memory monitoring accuracy and impact
+ * - Test gameplay analytics logging and metrics
+ * - Verify log rotation and cleanup mechanisms
+ * - Check crash report generation and export functionality
+ * - Test performance monitoring during heavy game operations
+ * - Validate error categorization and prioritization
+ * - Check debug information collection completeness
+ * - Test logging during network interruptions
+ * - Verify real-time log monitoring performance
+ * - Check log storage efficiency and memory usage
+ * - Test crash reporting during app background/foreground
+ * - Validate user consent change handling
+ * - Check crash report data privacy and security
+ * - Test logging performance on low-end devices
+ * - Verify crash reporting integration with other systems
+ * - Check debug log export and sharing functionality
+ * - Test memory monitoring during memory pressure
+ * - Validate gameplay analytics accuracy
+ * - Check crash reporting during app updates
+ * - Test logging during rapid state changes
+ * - Verify crash report data integrity and completeness
+ * - Check performance impact of monitoring systems
+ * - Test crash reporting during device storage pressure
+ * - Validate debug information accuracy and relevance
+ * - Check crash reporting compatibility with different iOS versions
+ * - Test logging during heavy network operations
+ */
+
 import Foundation
 import FirebaseCrashlytics
 import UIKit
@@ -28,7 +183,15 @@ class CrashReporter {
     
     func log(_ message: String) {
         guard UserDefaults.standard.bool(forKey: "allowCrashReports") else { return }
+        
+        #if DEBUG
         Crashlytics.crashlytics().log(message)
+        #else
+        // In release builds, only log critical messages to reduce noise
+        if message.contains("ERROR") || message.contains("CRITICAL") || message.contains("FAILED") {
+            Crashlytics.crashlytics().log(message)
+        }
+        #endif
         
         // Add to debug logs
         let timestamp = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)

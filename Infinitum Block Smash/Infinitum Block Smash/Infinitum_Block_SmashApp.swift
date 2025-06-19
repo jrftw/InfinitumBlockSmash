@@ -1,3 +1,57 @@
+/*
+ * Infinitum_Block_SmashApp.swift
+ * 
+ * MAIN APPLICATION ENTRY POINT
+ * 
+ * This is the primary SwiftUI app file that serves as the entry point for the Infinitum Block Smash game.
+ * It handles all app-level initialization, configuration, and lifecycle management.
+ * 
+ * KEY RESPONSIBILITIES:
+ * - App lifecycle management (launch, background, foreground)
+ * - Firebase configuration and initialization
+ * - Third-party service setup (Game Center, Analytics, Ads, etc.)
+ * - Push notification handling
+ * - App tracking transparency
+ * - Background task registration
+ * - Authentication state monitoring
+ * 
+ * MAJOR DEPENDENCIES:
+ * - FirebaseManager.swift: Core Firebase operations and data management
+ * - StartupManager.swift: App startup sequence coordination
+ * - ForceLogout.swift: Version migration and forced logout handling
+ * - VersionCheckService.swift: App update checking
+ * - NotificationManager.swift: Push notification management
+ * - GameCenterManager.swift: Game Center integration
+ * - AdManager.swift: Advertisement management
+ * - AnalyticsManager.swift: Analytics tracking
+ * 
+ * EXTERNAL FRAMEWORKS:
+ * - SwiftUI: Main UI framework
+ * - Firebase: Backend services (Auth, Firestore, Analytics, etc.)
+ * - GoogleMobileAds: Advertisement integration
+ * - GameKit: Game Center features
+ * - StoreKit: In-app purchases
+ * - UserNotifications: Push notifications
+ * - BackgroundTasks: Background processing
+ * 
+ * ARCHITECTURE ROLE:
+ * This file acts as the "bootstrap" layer that initializes all core services
+ * before the main UI is presented. It ensures all dependencies are properly
+ * configured and ready before the user interacts with the app.
+ * 
+ * CRITICAL INITIALIZATION ORDER:
+ * 1. Firebase configuration
+ * 2. App Check setup
+ * 3. Analytics and Performance monitoring
+ * 4. Remote Config setup
+ * 5. Push notification configuration
+ * 6. Game Center authentication
+ * 7. Firestore and RTDB persistence
+ * 8. Core manager initialization
+ * 9. Background task registration
+ * 10. Tracking authorization request
+ */
+
 // MARK: - Imports
 import SwiftUI
 import GoogleMobileAds
@@ -25,19 +79,25 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
         // First, configure Firebase
         FirebaseApp.configure()
+        #if DEBUG
         print("[Firebase] Successfully configured Firebase")
+        #endif
         
         // Then configure App Check based on environment
         #if targetEnvironment(simulator)
         // Use debug provider in Simulator
         let providerFactory = AppCheckDebugProviderFactory()
         AppCheck.setAppCheckProviderFactory(providerFactory)
+        #if DEBUG
         print("[AppCheck] Using debug provider for simulator")
+        #endif
         #else
         // Use DeviceCheck provider for all non-simulator environments
         let providerFactory = DeviceCheckProviderFactory()
         AppCheck.setAppCheckProviderFactory(providerFactory)
+        #if DEBUG
         print("[AppCheck] Using DeviceCheck provider")
+        #endif
         #endif
         
         // Enable token auto-refresh
@@ -71,7 +131,9 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
         // Configure Game Center
         GKLocalPlayer.local.authenticateHandler = { viewController, error in
             if let error = error {
+                #if DEBUG
                 print("Game Center authentication error: \(error.localizedDescription)")
+                #endif
             }
         }
         
@@ -79,20 +141,28 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
         let settingsFirestore = FirestoreSettings()
         settingsFirestore.cacheSettings = PersistentCacheSettings(sizeBytes: NSNumber(value: FirestoreCacheSizeUnlimited))
         Firestore.firestore().settings = settingsFirestore
+        #if DEBUG
         print("[Firebase] Firestore settings configured")
+        #endif
         
         // Now configure RTDB persistence
         Database.database().isPersistenceEnabled = true
+        #if DEBUG
         print("[Firebase] RTDB persistence enabled")
+        #endif
         
         // Initialize FirebaseManager
         _ = FirebaseManager.shared
+        #if DEBUG
         print("[Firebase] FirebaseManager initialized")
+        #endif
         
         // Only enable force logout for specific version migrations
         if ForceLogout.shared.shouldEnableForceLogout() {
             ForceLogout.shared.isForceLogoutEnabled = true
+            #if DEBUG
             print("[Firebase] Force logout enabled for version migration")
+            #endif
         }
         
         // Configure In-App Messaging
@@ -113,7 +183,9 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
         // Add auth state listener
         _ = Auth.auth().addStateDidChangeListener { auth, user in
             if let user = user {
+                #if DEBUG
                 print("[Firebase] User is signed in with uid: \(user.uid)")
+                #endif
                 // Update last login time
                 Task {
                     do {
@@ -124,19 +196,27 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
                                 "lastLogin": FieldValue.serverTimestamp(),
                                 "lastActive": FieldValue.serverTimestamp()
                             ])
+                        #if DEBUG
                         print("[Firebase] Successfully updated last login time for user: \(user.uid)")
+                        #endif
                     } catch {
+                        #if DEBUG
                         print("[Firebase] Error updating last login: \(error)")
+                        #endif
                     }
                 }
             } else {
+                #if DEBUG
                 print("[Firebase] User is signed out")
+                #endif
             }
         }
         
         // Configure Google Mobile Ads
         MobileAds.shared.start { status in
+            #if DEBUG
             print("Google Mobile Ads SDK initialization status: \(status)")
+            #endif
         }
         
         // Request App Tracking Transparency on first launch
@@ -296,11 +376,16 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
     private func configureAnalytics() {
         // Configure Analytics
         Analytics.setAnalyticsCollectionEnabled(true)
+        #if DEBUG
         print("[Analytics] ✅ Analytics collection enabled")
         
         // Log app open event
         Analytics.logEvent(AnalyticsEventAppOpen, parameters: nil)
         print("[Analytics] ✅ Logged app open event")
+        #else
+        // In release builds, only log critical app events
+        Analytics.logEvent(AnalyticsEventAppOpen, parameters: nil)
+        #endif
     }
 
     // MARK: - Crashlytics Configuration
@@ -318,7 +403,9 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
             Crashlytics.crashlytics().setCrashlyticsCollectionEnabled(UserDefaults.standard.bool(forKey: "allowCrashReports"))
         }
         
+        #if DEBUG
         print("[Crashlytics] Crash reporting is \(UserDefaults.standard.bool(forKey: "allowCrashReports") ? "enabled" : "disabled")")
+        #endif
     }
 
     func application(_ application: UIApplication,

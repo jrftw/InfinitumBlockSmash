@@ -1,3 +1,120 @@
+/*
+ * SubscriptionManager.swift
+ * 
+ * IN-APP PURCHASE AND SUBSCRIPTION MANAGEMENT SERVICE
+ * 
+ * This service manages all in-app purchases, subscriptions, and premium features
+ * for the Infinitum Block Smash game. It handles product loading, purchase
+ * validation, subscription status tracking, and premium feature access control.
+ * 
+ * KEY RESPONSIBILITIES:
+ * - In-app purchase product management
+ * - Subscription status tracking and validation
+ * - Premium feature access control
+ * - Trial period management
+ * - Purchase transaction handling
+ * - Product availability verification
+ * - Receipt validation and verification
+ * - Premium content unlocking
+ * - Subscription renewal monitoring
+ * - Purchase history tracking
+ * 
+ * MAJOR DEPENDENCIES:
+ * - StoreKit: Apple's in-app purchase framework
+ * - FirebaseManager.swift: Purchase data synchronization
+ * - AdManager.swift: Ad removal for premium users
+ * - GameState.swift: Premium feature integration
+ * - ThemeManager.swift: Premium theme unlocking
+ * - UserDefaults: Local purchase data storage
+ * 
+ * PRODUCT TYPES MANAGED:
+ * - Subscriptions: Weekly, monthly, yearly premium passes
+ * - One-time purchases: Hints, undos, ad removal
+ * - Premium themes: Visual customization options
+ * - Consumable items: Game enhancement items
+ * 
+ * SUBSCRIPTION TIERS:
+ * - Smash Pass: Basic premium features (Remove Ads)
+ * - Smash+: Enhanced premium features (Remove ads + Unlimited hints)
+ * - Smash Elite: Ultimate premium experience (Remove ads + Unlimited hints + Unlimited Undos + All Themes Unlocked)
+ *
+ * PREMIUM FEATURES:
+ * - Ad removal across the app
+ * - Unlimited undos
+ * - Premium themes and customization
+ * - Enhanced hint system
+ * - Priority support
+ * - Exclusive content access
+ * 
+ * TRIAL MANAGEMENT:
+ * - 3-day free trial for new subscribers
+ * - Trial usage tracking
+ * - Trial expiration handling
+ * - Trial to paid conversion
+ * - Trial restoration across devices
+ * 
+ * PURCHASE VALIDATION:
+ * - Receipt verification
+ * - Transaction validation
+ * - Subscription status checking
+ * - Purchase history verification
+ * - Fraud prevention measures
+ * 
+ * DATA SYNCHRONIZATION:
+ * - Cross-device purchase sync
+ * - Cloud backup of purchase data
+ * - Purchase restoration
+ * - Subscription status sync
+ * - Premium feature access sync
+ * 
+ * ERROR HANDLING:
+ * - Purchase failure recovery
+ * - Network error handling
+ * - Receipt validation errors
+ * - Subscription renewal failures
+ * - User-friendly error messages
+ * 
+ * SECURITY FEATURES:
+ * - Receipt validation
+ * - Transaction verification
+ * - Purchase authenticity checking
+ * - Subscription fraud prevention
+ * - Secure purchase data storage
+ * 
+ * PERFORMANCE OPTIMIZATIONS:
+ * - Cached product information
+ * - Efficient purchase validation
+ * - Background subscription monitoring
+ * - Optimized receipt verification
+ * - Memory-efficient data structures
+ * 
+ * USER EXPERIENCE:
+ * - Seamless purchase flow
+ * - Clear pricing information
+ * - Trial period transparency
+ * - Easy subscription management
+ * - Purchase restoration support
+ * 
+ * ARCHITECTURE ROLE:
+ * This service acts as the central coordinator for all monetization-related
+ * operations, providing a clean interface for purchase management while
+ * ensuring security and user experience.
+ * 
+ * THREADING MODEL:
+ * - @MainActor ensures UI updates on main thread
+ * - Background operations for purchase validation
+ * - Async/await for StoreKit operations
+ * - Transaction listener for real-time updates
+ * 
+ * INTEGRATION POINTS:
+ * - StoreView for purchase UI
+ * - GameState for premium features
+ * - AdManager for ad removal
+ * - ThemeManager for premium themes
+ * - Firebase for purchase sync
+ * - Analytics for purchase tracking
+ */
+
 import Foundation
 import StoreKit
 

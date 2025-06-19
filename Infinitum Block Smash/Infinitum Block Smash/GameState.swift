@@ -1,3 +1,72 @@
+/*
+ * GameState.swift
+ * 
+ * CORE GAME STATE MANAGEMENT
+ * 
+ * This is the central state management class for the Infinitum Block Smash game.
+ * It serves as the single source of truth for all game-related data and logic.
+ * 
+ * KEY RESPONSIBILITIES:
+ * - Game state management (score, level, grid, tray, etc.)
+ * - Game logic implementation (block placement, line clearing, scoring)
+ * - Progress tracking and persistence
+ * - Achievement system integration
+ * - Undo/redo functionality
+ * - Offline queue management for data sync
+ * - Performance monitoring and FPS management
+ * - Adaptive difficulty adjustment
+ * - Analytics and statistics tracking
+ * - Memory management and cleanup
+ * 
+ * MAJOR DEPENDENCIES:
+ * - GameScene.swift: Visual representation and user interaction
+ * - GameView.swift: SwiftUI wrapper for game presentation
+ * - AchievementsManager.swift: Achievement tracking and notifications
+ * - FirebaseManager.swift: Data persistence and cloud sync
+ * - LeaderboardService.swift: Score submission and leaderboard data
+ * - AdManager.swift: Advertisement integration for undos
+ * - SubscriptionManager.swift: Premium features and purchases
+ * - AnalyticsManager.swift: Game analytics and metrics
+ * - AdaptiveDifficultyManager.swift: Dynamic difficulty adjustment
+ * - HintManager.swift: Hint system for player assistance
+ * - FPSManager.swift: Performance optimization
+ * - MemorySystem.swift: Memory management and cleanup
+ * 
+ * CORE DATA STRUCTURES:
+ * - grid: 2D array representing the game board
+ * - tray: Array of available blocks for placement
+ * - score: Current game score
+ * - level: Current game level
+ * - achievementsManager: Achievement tracking instance
+ * - undoStack: Stack for undo/redo operations
+ * - offlineChangesQueue: Queue for offline data changes
+ * 
+ * PUBLISHED PROPERTIES:
+ * All game state is exposed through @Published properties to enable
+ * reactive UI updates. The UI automatically updates when these properties change.
+ * 
+ * THREADING MODEL:
+ * - @MainActor ensures all updates happen on the main thread
+ * - Background operations use async/await for data persistence
+ * - Offline queue uses dedicated dispatch queue for save operations
+ * 
+ * PERSISTENCE STRATEGY:
+ * - Local: UserDefaults for basic game state
+ * - Cloud: Firebase Firestore for cross-device sync
+ * - Offline: Queue system for handling network interruptions
+ * 
+ * PERFORMANCE CONSIDERATIONS:
+ * - Memory cleanup every 60 seconds
+ * - Debounced save operations to prevent excessive writes
+ * - Cached data management for frequently accessed values
+ * - FPS monitoring and adaptive performance adjustment
+ * 
+ * ARCHITECTURE ROLE:
+ * This class acts as the "Model" in the MVVM architecture, containing
+ * all business logic and state management. It communicates with the
+ * View layer through Combine publishers and delegate callbacks.
+ */
+
 import Foundation
 import Combine
 import SwiftUI
@@ -515,20 +584,22 @@ final class GameState: ObservableObject {
         delegate?.gameStateDidUpdate()
     }
     
-    func canPlaceBlockAnywhere(_ block: Block) -> Bool {
+    private func checkCanPlaceBlock(_ block: Block) -> Bool {
+        #if DEBUG
         print("[Placement] Checking if block \(block.shape)-\(block.color) can be placed anywhere")
-        var validPositions = 0
+        #endif
         
         for row in 0..<GameConstants.gridSize {
             for col in 0..<GameConstants.gridSize {
                 if canPlaceBlock(block, at: CGPoint(x: col, y: row)) {
-                    validPositions += 1
+                    #if DEBUG
+                    print("[Placement] Found valid position for block \(block.shape)-\(block.color)")
+                    #endif
+                    return true
                 }
             }
         }
-        
-        print("[Placement] Found \(validPositions) valid positions for block \(block.shape)-\(block.color)")
-        return validPositions > 0
+        return false
     }
     
     // Call this before placing a block
@@ -710,11 +781,13 @@ final class GameState: ObservableObject {
             }
         }
         
-        // Award bonus points for multiple touches
+        // Multiple touches bonus
         if hasAnyTouches && totalTouchingPoints >= 3 {
             let bonusPoints = totalTouchingPoints * 2
             addScore(bonusPoints, at: CGPoint(x: frameSize.width/2, y: frameSize.height/2))
+            #if DEBUG
             print("[Bonus] Multiple touches! +\(bonusPoints) bonus points!")
+            #endif
         }
         
         // Check for matches and patterns
@@ -1292,35 +1365,38 @@ final class GameState: ObservableObject {
     }
     
     func checkGameState() {
-        let currentTime = CACurrentMediaTime()
-        guard currentTime - lastGameOverCheck >= gameOverCheckDebounce else {
+        // Debounce game over checks
+        let currentTime = Date().timeIntervalSinceReferenceDate
+        if currentTime - lastGameOverCheck < gameOverCheckDebounce {
+            #if DEBUG
             print("[GameState] Skipping game over check - too soon since last check")
+            #endif
             return
         }
         lastGameOverCheck = currentTime
         
+        #if DEBUG
         print("[GameState] Checking game state...")
-        if !isGameOver {
-            // First check if any current tray blocks can be placed
-            let canPlaceAny = tray.contains { canPlaceBlockAnywhere($0) }
-            print("[GameState] Can place any current tray blocks: \(canPlaceAny)")
-            print("[GameState] Current tray blocks: \(tray.map { "\($0.shape)-\($0.color)" })")
-
-            // If no current blocks can be placed, trigger game over
-            if !canPlaceAny {
-                print("[GameOver] No available moves for current tray blocks. Game over triggered.")
-                print("[GameOver] Current grid state:")
-                for (rowIndex, row) in grid.enumerated() {
-                    print("[GameOver] Row \(rowIndex): \(row.map { $0?.rawValue ?? "nil" })")
-                }
-                isGameOver = true
-                DispatchQueue.main.async { [weak self] in
-                    print("[GameOver] Dispatching game over handler...")
-                    self?.handleGameOver()
-                }
+        #endif
+        
+        let canPlaceAny = tray.contains { canPlaceBlockAnywhere($0) }
+        #if DEBUG
+        print("[GameState] Can place any current tray blocks: \(canPlaceAny)")
+        print("[GameState] Current tray blocks: \(tray.map { "\($0.shape)-\($0.color)" })")
+        #endif
+        
+        if !canPlaceAny {
+            #if DEBUG
+            print("[GameOver] No available moves for current tray blocks. Game over triggered.")
+            print("[GameOver] Current grid state:")
+            for (rowIndex, row) in grid.enumerated() {
+                print("[GameOver] Row \(rowIndex): \(row.map { $0?.rawValue ?? "nil" })")
             }
-        } else {
-            print("[GameState] Game is already over, skipping state check")
+            print("[GameOver] Dispatching game over handler...")
+            #endif
+            DispatchQueue.main.async {
+                self.handleGameOver()
+            }
         }
     }
 
@@ -2900,6 +2976,26 @@ final class GameState: ObservableObject {
         }
         print("[Placement] No valid placements found for any tray blocks")
         return false
+    }
+
+    func canPlaceBlockAnywhere(_ block: Block) -> Bool {
+        #if DEBUG
+        print("[Placement] Checking if block \(block.shape)-\(block.color) can be placed anywhere")
+        #endif
+        var validPositions = 0
+        
+        for row in 0..<GameConstants.gridSize {
+            for col in 0..<GameConstants.gridSize {
+                if canPlaceBlock(block, at: CGPoint(x: col, y: row)) {
+                    validPositions += 1
+                }
+            }
+        }
+        
+        #if DEBUG
+        print("[Placement] Found \(validPositions) valid positions for block \(block.shape)-\(block.color)")
+        #endif
+        return validPositions > 0
     }
 }
 

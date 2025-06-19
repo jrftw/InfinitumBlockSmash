@@ -1,3 +1,103 @@
+/*
+ * LeaderboardService.swift
+ * 
+ * LEADERBOARD AND SCORE MANAGEMENT SERVICE
+ * 
+ * This service manages all leaderboard operations including score submission,
+ * leaderboard retrieval, periodic resets, and real-time updates. It handles
+ * multiple leaderboard types and time periods with automatic cleanup and
+ * synchronization.
+ * 
+ * KEY RESPONSIBILITIES:
+ * - Score submission and validation
+ * - Leaderboard data retrieval and caching
+ * - Periodic score resets (daily, weekly, monthly)
+ * - Real-time leaderboard updates
+ * - Score cleanup and maintenance
+ * - Multiple leaderboard type management
+ * - Time zone handling for resets
+ * - Offline score queuing
+ * - Anti-cheat measures and validation
+ * 
+ * MAJOR DEPENDENCIES:
+ * - FirebaseManager.swift: Authentication and user data
+ * - GameState.swift: Source of game scores and statistics
+ * - LeaderboardView.swift: UI display of leaderboard data
+ * - LeaderboardCache.swift: Local caching of leaderboard data
+ * - LeaderboardModels.swift: Data structures for leaderboard entries
+ * - Firebase Firestore: Backend data storage
+ * 
+ * LEADERBOARD TYPES:
+ * - classic_leaderboard: Standard game scores
+ * - achievement_leaderboard: Achievement-based points
+ * - classic_timed_leaderboard: Time-based game scores
+ * 
+ * TIME PERIODS:
+ * - daily: Resets every day at EST midnight
+ * - weekly: Resets every week on Sunday EST
+ * - monthly: Resets every month on the 1st EST
+ * - alltime: Permanent cumulative scores
+ * 
+ * DATA STRUCTURES:
+ * - LeaderboardEntry: Individual score entries
+ * - LeaderboardType: Enumeration of leaderboard types
+ * - TimeRange: Time period definitions
+ * - Score validation and sanitization
+ * 
+ * PERIODIC RESETS:
+ * - Automatic daily/weekly/monthly resets
+ * - EST timezone-based reset timing
+ * - Score regeneration from alltime data
+ * - Cleanup of expired entries
+ * - Reset timestamp tracking
+ * 
+ * REAL-TIME FEATURES:
+ * - Live leaderboard updates
+ * - Real-time score submissions
+ * - Automatic cache invalidation
+ * - Background synchronization
+ * - Offline queue processing
+ * 
+ * PERFORMANCE OPTIMIZATIONS:
+ * - Pagination for large datasets
+ * - Caching of frequently accessed data
+ * - Debounced score submissions
+ * - Background cleanup operations
+ * - Memory-efficient data structures
+ * 
+ * SECURITY FEATURES:
+ * - Score validation and sanitization
+ * - Anti-cheat measures
+ * - Rate limiting for submissions
+ * - User authentication verification
+ * - App version tracking
+ * 
+ * ERROR HANDLING:
+ * - Network error recovery
+ * - Retry logic for failed operations
+ * - Graceful degradation during outages
+ * - Offline queue management
+ * - Error logging and reporting
+ * 
+ * ARCHITECTURE ROLE:
+ * This service acts as the central coordinator for all leaderboard-related
+ * operations, providing a clean interface for score management and
+ * leaderboard display.
+ * 
+ * THREADING MODEL:
+ * - @MainActor ensures UI updates on main thread
+ * - Background operations for data processing
+ * - Async/await for Firebase operations
+ * - Timer-based periodic operations
+ * 
+ * INTEGRATION POINTS:
+ * - GameState for score submission
+ * - Firebase for data persistence
+ * - UI components for display
+ * - Analytics for tracking
+ * - Background tasks for cleanup
+ */
+
 import Foundation
 import FirebaseFirestore
 import Combine
@@ -359,10 +459,6 @@ final class LeaderboardService: ObservableObject {
                     shouldUpdate = currentScore == -1 || score > currentScore
                 }
 
-                if !shouldUpdate {
-                    print("[Leaderboard] ❌ Skipping \(period) update — existing score (\(currentScore)) >= new score (\(score))")
-                }
-
                 if shouldUpdate {
                     var data: [String: Any] = [
                         "username": username,
@@ -392,11 +488,44 @@ final class LeaderboardService: ObservableObject {
 
                     try await docRef.setData(data, merge: true)
                     print("[Leaderboard] ✅ Successfully updated \(period) leaderboard")
+                    
+                    // Track analytics only when score actually improves
+                    #if DEBUG
+                    await MainActor.run {
+                        AnalyticsManager.shared.trackEvent(.performanceMetric(
+                            name: "leaderboard_update",
+                            value: Double(score)
+                        ))
+                    }
+                    #else
+                    // In release builds, only track significant score improvements
+                    let scoreImprovement = score - currentScore
+                    if scoreImprovement > 100 { // Only track improvements of 100+ points
+                        await MainActor.run {
+                            AnalyticsManager.shared.trackEvent(.performanceMetric(
+                                name: "leaderboard_significant_improvement",
+                                value: Double(scoreImprovement)
+                            ))
+                        }
+                    }
+                    #endif
 
                     if !(try await verifyScoreUpdate(userId: userId, type: type, period: period, expectedScore: score)) {
                         print("[Leaderboard] ⚠️ Score verification failed - scheduling retry")
                         await handleFailedUpdate(userId: userId, type: type, period: period, score: score, level: level, time: time)
                     }
+                } else {
+                    print("[Leaderboard] ❌ Skipping \(period) update — existing score (\(currentScore)) >= new score (\(score))")
+                    
+                    // Track skipped updates in debug mode only
+                    #if DEBUG
+                    await MainActor.run {
+                        AnalyticsManager.shared.trackEvent(.performanceMetric(
+                            name: "leaderboard_skip",
+                            value: Double(currentScore - score)
+                        ))
+                    }
+                    #endif
                 }
             } catch {
                 print("[Leaderboard] ❌ Error updating \(period) leaderboard: \(error.localizedDescription)")

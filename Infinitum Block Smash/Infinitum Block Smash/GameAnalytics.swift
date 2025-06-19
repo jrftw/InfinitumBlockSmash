@@ -1,3 +1,172 @@
+/*
+ * GameAnalytics.swift
+ * 
+ * GAME ANALYTICS AND PERFORMANCE TRACKING SYSTEM
+ * 
+ * This service provides comprehensive analytics tracking, performance monitoring, and
+ * user behavior analysis for the Infinitum Block Smash game. It collects detailed
+ * metrics for game optimization, user engagement, and performance analysis.
+ * 
+ * KEY RESPONSIBILITIES:
+ * - Game event tracking and analytics
+ * - Performance metrics collection
+ * - User engagement analysis
+ * - Session tracking and management
+ * - Pattern analysis and optimization
+ * - Firebase Analytics integration
+ * - Data caching and synchronization
+ * - Real-time metrics monitoring
+ * - Analytics data persistence
+ * - Performance trend analysis
+ * 
+ * MAJOR DEPENDENCIES:
+ * - FirebaseAnalytics: Core analytics service
+ * - FirebaseFirestore: Analytics data storage
+ * - GameState.swift: Game event source
+ * - UserDefaults: Analytics data caching
+ * - NotificationCenter: App lifecycle tracking
+ * - Block.swift: Block placement analytics
+ * 
+ * ANALYTICS CATEGORIES:
+ * - Game Analytics: Core gameplay metrics
+ * - Pattern Analytics: Block placement patterns
+ * - Engagement Metrics: User engagement tracking
+ * - Performance Metrics: System performance monitoring
+ * - Session Analytics: User session analysis
+ * 
+ * GAME EVENTS TRACKED:
+ * - Session start/end events
+ * - Level start/completion events
+ * - Block placement events
+ * - Line clearing events
+ * - Pattern formation events
+ * - Achievement unlocking events
+ * - Feature usage events
+ * - Performance metric events
+ * 
+ * PERFORMANCE METRICS:
+ * - Memory usage over time
+ * - Cache efficiency tracking
+ * - Load time measurements
+ * - Frame drop rate monitoring
+ * - Battery impact assessment
+ * - FPS performance tracking
+ * 
+ * ENGAGEMENT METRICS:
+ * - Daily/weekly/monthly active users
+ * - Session length analysis
+ * - User return rate tracking
+ * - Feature usage patterns
+ * - Achievement completion rates
+ * - User retention analysis
+ * 
+ * PATTERN ANALYTICS:
+ * - Successful pattern tracking
+ * - Failed pattern analysis
+ * - Pattern success rates
+ * - Average pattern scores
+ * - Pattern difficulty ratings
+ * - Block placement optimization
+ * 
+ * SESSION TRACKING:
+ * - Session duration monitoring
+ * - Session event collection
+ * - App lifecycle integration
+ * - Background/foreground tracking
+ * - Session data persistence
+ * 
+ * DATA SYNCHRONIZATION:
+ * - Periodic Firebase sync (5-minute intervals)
+ * - Offline data caching
+ * - Data persistence and recovery
+ * - Conflict resolution
+ * - Network error handling
+ * 
+ * CACHING SYSTEM:
+ * - Local analytics data storage
+ * - Offline data collection
+ * - Data compression and optimization
+ * - Cache cleanup and management
+ * - Data integrity validation
+ * 
+ * PRIVACY FEATURES:
+ * - User consent management
+ * - Data anonymization
+ * - Privacy-compliant tracking
+ * - Data retention policies
+ * - GDPR compliance support
+ * 
+ * PERFORMANCE FEATURES:
+ * - Efficient event tracking
+ * - Background data processing
+ * - Memory-efficient storage
+ * - Optimized data transmission
+ * - Real-time metrics calculation
+ * 
+ * INTEGRATION POINTS:
+ * - Firebase Analytics backend
+ * - Game state management
+ * - Performance monitoring systems
+ * - User authentication system
+ * - Achievement system
+ * - Memory management system
+ * 
+ * ARCHITECTURE ROLE:
+ * This service acts as the central analytics coordinator,
+ * providing comprehensive data collection and analysis while
+ * maintaining performance and privacy compliance.
+ * 
+ * THREADING CONSIDERATIONS:
+ * - @MainActor for UI updates
+ * - Background data processing
+ * - Thread-safe analytics collection
+ * - Safe Firebase operations
+ * 
+ * PERFORMANCE CONSIDERATIONS:
+ * - Efficient event tracking
+ * - Optimized data storage
+ * - Background synchronization
+ * - Memory-efficient analytics
+ * 
+ * PRIVACY CONSIDERATIONS:
+ * - User consent compliance
+ * - Data minimization
+ * - Secure data transmission
+ * - Privacy-by-design approach
+ * 
+ * REVIEW NOTES:
+ * - Verify Firebase Analytics integration and configuration
+ * - Check analytics data collection accuracy and completeness
+ * - Test performance metrics tracking and accuracy
+ * - Validate session tracking and lifecycle management
+ * - Check analytics data caching and persistence
+ * - Test analytics synchronization with Firebase
+ * - Verify pattern analytics accuracy and relevance
+ * - Check engagement metrics calculation and reporting
+ * - Test analytics performance impact on game performance
+ * - Validate analytics data privacy and security
+ * - Check analytics event categorization and parameters
+ * - Test analytics data compression and optimization
+ * - Verify analytics data integrity and corruption handling
+ * - Check analytics synchronization during network interruptions
+ * - Test analytics performance on low-end devices
+ * - Validate analytics data retention and cleanup policies
+ * - Check analytics integration with other systems
+ * - Test analytics data export and sharing functionality
+ * - Verify analytics event timing and accuracy
+ * - Check analytics memory usage and optimization
+ * - Test analytics during heavy game operations
+ * - Validate analytics data format compatibility
+ * - Check analytics real-time monitoring performance
+ * - Test analytics during app background/foreground transitions
+ * - Verify analytics data age-appropriateness and filtering
+ * - Check analytics integration with user consent management
+ * - Test analytics during rapid game state changes
+ * - Validate analytics error handling and recovery
+ * - Check analytics compatibility with different iOS versions
+ * - Test analytics during device storage pressure
+ */
+
 import Foundation
 import FirebaseAnalytics
 import FirebaseFirestore
@@ -239,8 +408,24 @@ final class AnalyticsManager: ObservableObject {
         // Track locally
         currentSessionEvents.append(event)
         
-        // Track in Firebase
+        // Only log to Firebase Analytics in debug builds or for critical events
+        #if DEBUG
         Analytics.logEvent(event.name, parameters: event.parameters)
+        #else
+        // In release builds, only log critical events to reduce noise
+        switch event {
+        case .sessionStart, .sessionEnd, .levelComplete, .achievementUnlocked:
+            Analytics.logEvent(event.name, parameters: event.parameters)
+        case .performanceMetric(let name, let value):
+            // Only log performance metrics that indicate issues
+            if name.contains("error") || name.contains("failure") || value < 0.5 {
+                Analytics.logEvent(event.name, parameters: event.parameters)
+            }
+        default:
+            // Skip logging for frequent events like block placement, line clears, etc.
+            break
+        }
+        #endif
         
         // Update relevant metrics
         updateMetrics(for: event)

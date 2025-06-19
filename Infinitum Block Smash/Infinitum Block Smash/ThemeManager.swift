@@ -1,3 +1,129 @@
+/*
+ * ThemeManager.swift
+ * 
+ * VISUAL THEME MANAGEMENT AND CUSTOMIZATION SYSTEM
+ * 
+ * This service manages all visual themes, color schemes, and customization options
+ * for the Infinitum Block Smash game. It provides a comprehensive theming system
+ * with premium themes, system integration, and dynamic theme switching.
+ * 
+ * KEY RESPONSIBILITIES:
+ * - Theme definition and management
+ * - Color scheme customization
+ * - Premium theme access control
+ * - System theme integration
+ * - Dynamic theme switching
+ * - Theme persistence and storage
+ * - Visual consistency across the app
+ * - Premium feature unlocking
+ * - Theme preview and selection
+ * - Accessibility color support
+ * 
+ * MAJOR DEPENDENCIES:
+ * - SubscriptionManager.swift: Premium theme access control
+ * - SettingsView.swift: Theme selection interface
+ * - GameScene.swift: Visual theme application
+ * - GameView.swift: UI theme integration
+ * - ContentView.swift: Main interface theming
+ * - UserDefaults: Theme persistence
+ * - NotificationCenter: Theme change notifications
+ * 
+ * THEME CATEGORIES:
+ * - System Themes: Auto, Light, Dark (free)
+ * - Premium Themes: Custom visual themes (paid)
+ * - Special Themes: Limited edition and event themes
+ * - Accessibility Themes: High contrast and colorblind support
+ * 
+ * AVAILABLE THEMES:
+ * - System: Automatic light/dark mode
+ * - Neon: Bright green cyberpunk style
+ * - Retro: Orange and yellow vintage look
+ * - Nature: Green and natural colors
+ * - Execution: Red and dark theme
+ * - Rainbow: Colorful and vibrant
+ * - Adventure: Brown and earthy tones
+ * - Cyberpunk: Pink and neon blue
+ * - Sunset: Orange and purple gradients
+ * - Ocean: Blue and aquatic colors
+ * - Forest: Green and natural
+ * - Nordic: Clean and minimal
+ * - Midnight: Purple and dark
+ * - Desert: Warm and sandy
+ * - Aurora: Teal and green
+ * - Cherry: Pink and light
+ * 
+ * COLOR SYSTEM:
+ * - Primary colors for main UI elements
+ * - Background colors for app surfaces
+ * - Secondary colors for supporting elements
+ * - Text colors for readability
+ * - Gradient support for visual depth
+ * - Accessibility color considerations
+ * 
+ * PREMIUM FEATURES:
+ * - Premium theme unlocking
+ * - Subscription-based access
+ * - Theme preview functionality
+ * - Exclusive theme designs
+ * - Limited edition themes
+ * - Custom theme creation
+ * 
+ * SYSTEM INTEGRATION:
+ * - iOS system theme detection
+ * - Automatic theme switching
+ * - Dark mode support
+ * - Light mode optimization
+ * - Dynamic color adaptation
+ * - System appearance changes
+ * 
+ * PERSISTENCE AND STORAGE:
+ * - Theme selection persistence
+ * - User preference storage
+ * - Cross-device theme sync
+ * - Theme history tracking
+ * - Backup and restore functionality
+ * 
+ * PERFORMANCE FEATURES:
+ * - Efficient theme switching
+ * - Cached color definitions
+ * - Optimized theme loading
+ * - Memory-efficient storage
+ * - Fast theme application
+ * 
+ * ACCESSIBILITY:
+ * - High contrast theme support
+ * - Colorblind-friendly themes
+ * - Dynamic type integration
+ * - Reduced motion support
+ * - VoiceOver compatibility
+ * 
+ * USER EXPERIENCE:
+ * - Smooth theme transitions
+ * - Real-time theme preview
+ * - Intuitive theme selection
+ * - Consistent visual design
+ * - Personalized experience
+ * 
+ * ARCHITECTURE ROLE:
+ * This service acts as the central coordinator for all visual theming,
+ * providing a unified interface for theme management while ensuring
+ * consistency across the entire application.
+ * 
+ * THREADING CONSIDERATIONS:
+ * - UI updates on main thread
+ * - Background theme loading
+ * - Thread-safe theme access
+ * - Efficient notification handling
+ * 
+ * INTEGRATION POINTS:
+ * - Settings interface
+ * - Game visual system
+ * - Subscription management
+ * - Analytics and tracking
+ * - User preferences
+ * - System appearance
+ */
+
 import SwiftUI
 
 class ThemeManager: ObservableObject {

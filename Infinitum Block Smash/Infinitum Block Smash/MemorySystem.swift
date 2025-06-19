@@ -4,6 +4,172 @@ import SpriteKit
 import MachO
 import Combine
 
+/*
+ * MemorySystem.swift
+ * 
+ * ADVANCED MEMORY MANAGEMENT AND MONITORING SYSTEM
+ * 
+ * This service provides comprehensive memory management, monitoring, and optimization
+ * for the Infinitum Block Smash game. It includes device simulation support, dynamic
+ * thresholds, and intelligent memory cleanup strategies.
+ * 
+ * KEY RESPONSIBILITIES:
+ * - Real-time memory usage monitoring
+ * - Dynamic memory threshold management
+ * - Device simulation memory constraints
+ * - Memory pressure detection and response
+ * - Intelligent memory cleanup strategies
+ * - Cache management and optimization
+ * - Memory status tracking and reporting
+ * - Performance monitoring and logging
+ * - Memory warning handling
+ * - Device-specific memory optimization
+ * 
+ * MAJOR DEPENDENCIES:
+ * - UIKit: Memory warning notifications
+ * - SpriteKit: Game rendering memory management
+ * - MachO: System memory information
+ * - Combine: Memory status publishing
+ * - DeviceSimulator.swift: Device simulation support
+ * - NotificationCenter: System notifications
+ * - DispatchSource: Memory pressure monitoring
+ * 
+ * MEMORY MONITORING:
+ * - Real-time memory usage tracking
+ * - Dynamic threshold calculation
+ * - Memory pressure detection
+ * - Device-specific constraints
+ * - Performance impact monitoring
+ * - Memory trend analysis
+ * 
+ * DEVICE SIMULATION:
+ * - Simulated memory constraints
+ * - Low-end device simulation
+ * - Dynamic threshold adjustment
+ * - Memory limit simulation
+ * - Device-specific optimization
+ * - Performance testing support
+ * 
+ * MEMORY THRESHOLDS:
+ * - Warning threshold (25-30% usage)
+ * - Critical threshold (35-45% usage)
+ * - Extreme threshold (45-60% usage)
+ * - Device-specific adjustments
+ * - Dynamic threshold calculation
+ * - Adaptive memory management
+ * 
+ * CLEANUP STRATEGIES:
+ * - Normal cleanup: Standard memory optimization
+ * - Aggressive cleanup: Critical memory pressure response
+ * - Cache cleanup: Memory cache optimization
+ * - Texture cleanup: SpriteKit texture management
+ * - Background cleanup: Periodic maintenance
+ * - Emergency cleanup: Extreme memory pressure
+ * 
+ * CACHE MANAGEMENT:
+ * - Dynamic cache size limits
+ * - Cache hit/miss tracking
+ * - Memory-efficient caching
+ * - Cache cleanup strategies
+ * - Performance optimization
+ * - Device-specific limits
+ * 
+ * PERFORMANCE FEATURES:
+ * - Efficient memory monitoring
+ * - Background cleanup operations
+ * - Memory pressure response
+ * - Performance impact minimization
+ * - Real-time status updates
+ * - Optimized cleanup timing
+ * 
+ * MEMORY PRESSURE HANDLING:
+ * - System memory pressure detection
+ * - Automatic cleanup triggers
+ * - Progressive cleanup strategies
+ * - Memory warning response
+ * - Emergency memory recovery
+ * - Performance degradation prevention
+ * 
+ * DEVICE OPTIMIZATION:
+ * - Low-end device support
+ * - High-end device optimization
+ * - Device-specific thresholds
+ * - Memory constraint simulation
+ * - Performance testing
+ * - Cross-device compatibility
+ * 
+ * MONITORING FEATURES:
+ * - Real-time memory tracking
+ * - Status change detection
+ * - Performance logging
+ * - Memory usage statistics
+ * - Cleanup effectiveness tracking
+ * - Device simulation logging
+ * 
+ * INTEGRATION POINTS:
+ * - GameScene for texture management
+ * - CacheManager for cache optimization
+ * - DeviceSimulator for constraints
+ * - Performance monitoring systems
+ * - Crash reporting system
+ * - Analytics tracking
+ * 
+ * ARCHITECTURE ROLE:
+ * This service acts as the central memory management coordinator,
+ * providing intelligent memory optimization while maintaining
+ * performance and device compatibility.
+ * 
+ * THREADING CONSIDERATIONS:
+ * - @MainActor for UI updates
+ * - Background cleanup operations
+ * - Thread-safe memory monitoring
+ * - Safe pressure handling
+ * 
+ * PERFORMANCE CONSIDERATIONS:
+ * - Minimal monitoring overhead
+ * - Efficient cleanup strategies
+ * - Background processing
+ * - Memory-efficient operations
+ * 
+ * DEVICE COMPATIBILITY:
+ * - Cross-device optimization
+ * - Low-end device support
+ * - High-end device utilization
+ * - Device simulation testing
+ * 
+ * REVIEW NOTES:
+ * - Verify memory monitoring accuracy and performance impact
+ * - Check device simulation memory constraint accuracy
+ * - Test memory cleanup strategies effectiveness
+ * - Validate memory pressure detection and response
+ * - Check cache management and optimization
+ * - Test memory thresholds on different device types
+ * - Verify memory warning handling and recovery
+ * - Check device-specific memory optimization
+ * - Test memory monitoring during heavy game operations
+ * - Validate memory cleanup timing and frequency
+ * - Check memory usage statistics and reporting
+ * - Test memory pressure response during gameplay
+ * - Verify cache hit/miss ratio optimization
+ * - Check memory monitoring during app background/foreground
+ * - Test memory cleanup during low memory conditions
+ * - Validate device simulation memory constraints
+ * - Check memory optimization impact on game performance
+ * - Test memory monitoring during rapid state changes
+ * - Verify memory cleanup integration with other systems
+ * - Check memory usage tracking accuracy
+ * - Test memory pressure handling during network operations
+ * - Validate memory optimization during app updates
+ * - Check memory monitoring compatibility with different iOS versions
+ * - Test memory cleanup during device storage pressure
+ * - Verify memory threshold calculation accuracy
+ * - Check memory monitoring during heavy rendering operations
+ * - Test memory optimization during background processing
+ * - Validate memory pressure detection timing
+ * - Check memory cleanup effectiveness on low-end devices
+ * - Test memory monitoring during rapid UI updates
+ */
+
 // MARK: - Supporting Types
 public enum MemoryStatus {
     case normal
@@ -301,19 +467,25 @@ final class MemorySystem {
         let deviceSimulator = DeviceSimulator.shared
         let isLowEnd = deviceSimulator.isLowEndDevice()
         
+        #if DEBUG
         log("[MemorySystem] Starting normal cleanup")
         if deviceSimulator.isRunningInSimulator() {
             log("[MemorySystem] Simulated device: \(deviceSimulator.getCurrentDeviceModel())")
         }
+        #endif
         
         let startTime = Date()
         let initialMemory = getMemoryUsage()
         
         autoreleasepool {
+            #if DEBUG
             log("[MemorySystem] Clearing URL cache")
+            #endif
             URLCache.shared.removeAllCachedResponses()
             
+            #if DEBUG
             log("[MemorySystem] Removing old temporary files")
+            #endif
             let tmp = FileManager.default.temporaryDirectory
             let thirtyMinutesAgo = Date().addingTimeInterval(-1800)
             if let files = try? FileManager.default.contentsOfDirectory(
@@ -329,18 +501,26 @@ final class MemorySystem {
                         removedCount += 1
                     }
                 }
+                #if DEBUG
                 log("[MemorySystem] Removed \(removedCount) old temporary files")
+                #endif
             }
             
+            #if DEBUG
             log("[MemorySystem] Purging unused SpriteKit textures")
+            #endif
             SKTextureAtlas.preloadTextureAtlases([], withCompletionHandler: {})
             
+            #if DEBUG
             log("[MemorySystem] Clearing old cached images")
+            #endif
             UIImageView.clearOldImageCache()
             
             // Additional cleanup for low-end devices in simulator
             if deviceSimulator.isRunningInSimulator() && isLowEnd {
+                #if DEBUG
                 log("[MemorySystem] Performing low-end device specific cleanup")
+                #endif
                 // More aggressive cleanup for low-end devices
                 BlockShapeView.clearCache()
             }
@@ -350,9 +530,11 @@ final class MemorySystem {
         let finalMemory = getMemoryUsage()
         let memoryReduction = initialMemory.used - finalMemory.used
         
+        #if DEBUG
         log("[MemorySystem] Normal cleanup completed in \(String(format: "%.2f", endTime.timeIntervalSince(startTime)))s")
         log("[MemorySystem] Memory reduced by \(String(format: "%.1f", memoryReduction))MB")
         logMemoryUsage()
+        #endif
     }
     
     // MARK: — Cache Management
@@ -427,6 +609,7 @@ final class MemorySystem {
         let status = checkMemoryStatus()
         let deviceSimulator = DeviceSimulator.shared
         
+        #if DEBUG
         log("[MemorySystem] Memory Status: \(status)")
         log("[MemorySystem] Memory Usage: \(String(format: "%.1f", used))MB / \(String(format: "%.1f", total))MB (\(String(format: "%.1f", ratio * 100))%)")
         log("[MemorySystem] Cache Stats - Hits: \(cacheHits), Misses: \(cacheMisses), Hit Ratio: \(String(format: "%.1f", Double(cacheHits) / Double(max(1, cacheHits + cacheMisses)) * 100))%")
@@ -437,6 +620,13 @@ final class MemorySystem {
             log("[MemorySystem] Simulated Memory Pressure: \(String(format: "%.1f", deviceSimulator.getSimulatedMemoryPressure() * 100))%")
             log("[MemorySystem] Simulated Thermal Throttling: \(String(format: "%.1f", deviceSimulator.getSimulatedThermalThrottling() * 100))%")
         }
+        #else
+        // In production, only log critical memory issues
+        if status == .critical || ratio > 0.8 {
+            log("[MemorySystem] Memory Status: \(status)")
+            log("[MemorySystem] Memory Usage: \(String(format: "%.1f", used))MB / \(String(format: "%.1f", total))MB (\(String(format: "%.1f", ratio * 100))%)")
+        }
+        #endif
     }
     
     deinit {

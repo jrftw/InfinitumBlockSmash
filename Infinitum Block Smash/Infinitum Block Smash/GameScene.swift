@@ -1,3 +1,84 @@
+/*
+ * GameScene.swift
+ * 
+ * SPRITEKIT GAME SCENE - VISUAL LAYER
+ * 
+ * This is the SpriteKit scene that handles all visual rendering, user interactions,
+ * and animations for the Infinitum Block Smash game. It serves as the bridge between
+ * the game logic (GameState) and the visual presentation.
+ * 
+ * KEY RESPONSIBILITIES:
+ * - Visual rendering of game grid and blocks
+ * - Touch handling and drag-and-drop interactions
+ * - Animation management (particles, transitions, effects)
+ * - Performance optimization and memory management
+ * - Theme and visual styling
+ * - Audio feedback and haptic responses
+ * - FPS management and performance monitoring
+ * - Node pooling and texture caching
+ * 
+ * MAJOR DEPENDENCIES:
+ * - GameState.swift: Source of truth for game data and logic
+ * - TrayNode.swift: Visual representation of the block tray
+ * - Block.swift: Block data model and properties
+ * - NodePool.swift: Object pooling for performance optimization
+ * - ThemeManager.swift: Visual theming and styling
+ * - AudioManager.swift: Sound effects and audio feedback
+ * - FPSManager.swift: Performance monitoring and FPS control
+ * - MemorySystem.swift: Memory management and cleanup
+ * - GameConstants.swift: Game configuration constants
+ * 
+ * CORE COMPONENTS:
+ * - gridNode: Container for all grid-based visual elements
+ * - trayNode: Visual representation of the block tray
+ * - blockNodes: Array of all visual block representations
+ * - particleEmitter: Visual effects and animations
+ * - scoreLabel/levelLabel: UI elements for game information
+ * 
+ * PERFORMANCE FEATURES:
+ * - Object pooling via NodePool.shared
+ * - Texture caching and optimization
+ * - Memory cleanup every 30 seconds
+ * - Touch throttling for smooth interactions
+ * - Background animation management
+ * - Particle emitter limiting
+ * 
+ * INTERACTION MODEL:
+ * - Drag-and-drop block placement
+ * - Touch throttling for responsive UI
+ * - Debounced placement to prevent rapid-fire actions
+ * - Visual feedback for valid/invalid placements
+ * - Haptic feedback for successful actions
+ * 
+ * MEMORY MANAGEMENT:
+ * - Automatic cleanup of unused nodes
+ * - Texture cache size limiting
+ * - Particle emitter lifecycle management
+ * - Background animation pausing during heavy operations
+ * - Memory warning handling and response
+ * 
+ * THEME INTEGRATION:
+ * - Dynamic theme switching
+ * - Color scheme adaptation
+ * - Visual style updates based on user preferences
+ * - Background animation theming
+ * 
+ * ARCHITECTURE ROLE:
+ * This class acts as the "View" layer in the MVVM architecture, specifically
+ * handling the SpriteKit rendering and user interaction. It observes GameState
+ * changes and updates the visual representation accordingly.
+ * 
+ * THREADING CONSIDERATIONS:
+ * - All visual updates must occur on the main thread
+ * - Background operations use async/await for memory management
+ * - Touch handling is optimized for responsiveness
+ * 
+ * INTEGRATION POINTS:
+ * - GameView.swift: SwiftUI wrapper that hosts this scene
+ * - GameState.swift: Data source and logic controller
+ * - Various manager classes for specialized functionality
+ */
+
 import SpriteKit
 import GameplayKit
 import AudioToolbox

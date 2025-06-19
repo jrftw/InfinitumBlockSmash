@@ -1,3 +1,117 @@
+/*
+ * ContentView.swift
+ * 
+ * MAIN NAVIGATION AND MENU INTERFACE
+ * 
+ * This is the primary navigation view that serves as the main menu and entry point
+ * for the Infinitum Block Smash game. It handles user authentication, game mode
+ * selection, and navigation to various app features and settings.
+ * 
+ * KEY RESPONSIBILITIES:
+ * - Main menu interface and navigation
+ * - User authentication state management
+ * - Game mode selection and routing
+ * - Saved game management and resumption
+ * - User statistics and leaderboard access
+ * - Settings and configuration access
+ * - Store and premium feature access
+ * - Announcements and notifications display
+ * - User profile and information management
+ * - Advertisement integration for non-premium users
+ * 
+ * MAJOR DEPENDENCIES:
+ * - AuthView.swift: User authentication interface
+ * - GameView.swift: Main game interface
+ * - GameModeSelectionView.swift: Game mode selection
+ * - LeaderboardView.swift: Leaderboard display
+ * - StatsView.swift: Statistics and analytics
+ * - SettingsView.swift: App settings and configuration
+ * - StoreView.swift: In-app purchase interface
+ * - AnnouncementsView.swift: App announcements
+ * - ChangeInformationView.swift: User profile editing
+ * - BannerAdView.swift: Advertisement display
+ * - RatingPromptView.swift: App rating prompts
+ * - ReferralPromptView.swift: Referral system
+ * 
+ * NAVIGATION FEATURES:
+ * - Conditional navigation based on authentication
+ * - Saved game detection and resumption
+ * - Game mode selection routing
+ * - Modal presentation for various features
+ * - Deep linking support for specific features
+ * - Navigation state management
+ * 
+ * USER INTERFACE COMPONENTS:
+ * - App branding and logo display
+ * - Menu button system with icons
+ * - User statistics display
+ * - Online player count indicators
+ * - Advertisement banner for non-premium users
+ * - Rating and referral prompts
+ * - Loading states and transitions
+ * 
+ * AUTHENTICATION INTEGRATION:
+ * - User login/logout state management
+ * - Guest user support
+ * - Authentication flow coordination
+ * - User data synchronization
+ * - Cross-device authentication
+ * 
+ * GAME STATE MANAGEMENT:
+ * - Saved game detection and loading
+ * - Game progress synchronization
+ * - Cloud data loading and caching
+ * - Game state persistence
+ * - Progress restoration
+ * 
+ * PREMIUM FEATURE INTEGRATION:
+ * - Top player advertisement exemption
+ * - Premium feature access control
+ * - Subscription status checking
+ * - Store access and purchase flow
+ * - Premium content unlocking
+ * 
+ * PERFORMANCE FEATURES:
+ * - Lazy loading of heavy components
+ * - Efficient state management
+ * - Background data synchronization
+ * - Memory-efficient navigation
+ * - Optimized advertisement loading
+ * 
+ * USER EXPERIENCE:
+ * - Intuitive navigation flow
+ * - Clear visual hierarchy
+ * - Responsive interface design
+ * - Accessibility support
+ * - Smooth transitions and animations
+ * 
+ * ANALYTICS AND TRACKING:
+ * - User engagement metrics
+ * - Feature usage tracking
+ * - Navigation flow analysis
+ * - User retention monitoring
+ * - Performance analytics
+ * 
+ * ARCHITECTURE ROLE:
+ * This view acts as the main coordinator for user navigation and app flow,
+ * providing a central hub for accessing all major app features while
+ * managing authentication and user state.
+ * 
+ * THREADING CONSIDERATIONS:
+ * - UI updates on main thread
+ * - Background data loading
+ * - Async/await for network operations
+ * - State management with Combine
+ * 
+ * INTEGRATION POINTS:
+ * - Authentication system
+ * - Game state management
+ * - Advertisement system
+ * - Analytics and tracking
+ * - Push notifications
+ * - In-app purchases
+ */
+
 import SwiftUI
 import GoogleMobileAds
 import FirebaseAuth

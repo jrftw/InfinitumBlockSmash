@@ -1,3 +1,124 @@
+/*
+ * FPSManager.swift
+ * 
+ * PERFORMANCE OPTIMIZATION AND FRAME RATE MANAGEMENT
+ * 
+ * This service manages frame rate settings, performance monitoring, and device-specific
+ * optimization for the Infinitum Block Smash game. It provides intelligent FPS control
+ * based on device capabilities, thermal conditions, and user preferences.
+ * 
+ * KEY RESPONSIBILITIES:
+ * - Frame rate target management and control
+ * - Device capability detection and optimization
+ * - Real-time FPS monitoring and tracking
+ * - Performance-based FPS adjustment
+ * - Thermal throttling detection and response
+ * - Memory pressure monitoring
+ * - Device simulation support for testing
+ * - Battery optimization and power management
+ * - Performance analytics and reporting
+ * - Adaptive performance scaling
+ * 
+ * MAJOR DEPENDENCIES:
+ * - DeviceSimulator.swift: Device simulation and testing
+ * - GameScene.swift: SpriteKit scene performance
+ * - GameState.swift: Game performance state
+ * - SettingsView.swift: FPS configuration interface
+ * - PerformanceMonitor.swift: System performance tracking
+ * - UIKit: Device capability detection
+ * - SpriteKit: Game rendering performance
+ * 
+ * FPS OPTIONS:
+ * - 30 FPS: Standard performance mode
+ * - 60 FPS: Smooth gameplay mode
+ * - 120 FPS: High refresh rate mode (ProMotion)
+ * - Unlimited: Maximum device refresh rate
+ * - Adaptive: Dynamic FPS based on conditions
+ * 
+ * DEVICE CAPABILITIES:
+ * - Maximum refresh rate detection
+ * - ProMotion display support
+ * - Device performance classification
+ * - Memory capacity assessment
+ * - Thermal management capabilities
+ * - Battery optimization features
+ * 
+ * PERFORMANCE MONITORING:
+ * - Real-time FPS tracking
+ * - Frame time analysis
+ * - Performance degradation detection
+ * - Thermal throttling monitoring
+ * - Memory pressure assessment
+ * - Battery level consideration
+ * 
+ * ADAPTIVE OPTIMIZATION:
+ * - Dynamic FPS adjustment
+ * - Thermal throttling response
+ * - Memory pressure handling
+ * - Battery optimization
+ * - Performance scaling
+ * - Quality vs performance balance
+ * 
+ * DEVICE SIMULATION:
+ * - Simulated device capabilities
+ * - Performance testing support
+ * - Low-end device simulation
+ * - Thermal throttling simulation
+ * - Memory pressure simulation
+ * - Cross-device testing
+ * 
+ * BATTERY OPTIMIZATION:
+ * - Power consumption monitoring
+ * - Battery level awareness
+ * - Low power mode detection
+ * - Adaptive performance scaling
+ * - Energy-efficient rendering
+ * - Background performance management
+ * 
+ * THERMAL MANAGEMENT:
+ * - Thermal state monitoring
+ * - Throttling detection
+ * - Performance degradation response
+ * - Cooling optimization
+ * - Thermal warning systems
+ * - Proactive performance adjustment
+ * 
+ * MEMORY MANAGEMENT:
+ * - Memory pressure monitoring
+ * - Memory usage optimization
+ * - Cache management
+ * - Resource cleanup
+ * - Memory warning response
+ * - Efficient resource allocation
+ * 
+ * USER EXPERIENCE:
+ * - Smooth gameplay at all FPS levels
+ * - Consistent performance across devices
+ * - Battery life optimization
+ * - Thermal management transparency
+ * - Performance customization options
+ * - Adaptive quality settings
+ * 
+ * ARCHITECTURE ROLE:
+ * This service acts as the performance optimization coordinator,
+ * ensuring smooth gameplay across all device types while managing
+ * system resources efficiently.
+ * 
+ * THREADING CONSIDERATIONS:
+ * - Real-time performance monitoring
+ * - Background optimization tasks
+ * - Thread-safe FPS management
+ * - Efficient notification handling
+ * 
+ * INTEGRATION POINTS:
+ * - Game rendering system
+ * - Device capability detection
+ * - Performance monitoring
+ * - Settings management
+ * - Analytics and tracking
+ * - System resource management
+ */
+
 import Foundation
 import UIKit
 import SpriteKit

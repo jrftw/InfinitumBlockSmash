@@ -2,6 +2,149 @@ import Foundation
 import FirebaseFirestore
 import FirebaseAuth
 
+/*
+ * BackupService.swift
+ * 
+ * USER DATA BACKUP AND RESTORATION SERVICE
+ * 
+ * This service manages automated backup and restoration of user data for the Infinitum
+ * Block Smash game. It provides scheduled backups, data recovery, and backup management
+ * to ensure user data safety and cross-device synchronization.
+ * 
+ * KEY RESPONSIBILITIES:
+ * - Automated user data backup scheduling
+ * - Comprehensive data backup (profile, progress, achievements, settings)
+ * - Backup restoration and recovery
+ * - Backup cleanup and management
+ * - Cross-device data synchronization
+ * - Backup status tracking and monitoring
+ * - Data integrity validation
+ * - Backup frequency management
+ * - Error handling and recovery
+ * - Backup storage optimization
+ * 
+ * MAJOR DEPENDENCIES:
+ * - FirebaseFirestore: Cloud data storage and backup
+ * - FirebaseAuth: User authentication and identification
+ * - GameState.swift: Game progress data source
+ * - AchievementsManager.swift: Achievement data source
+ * - UserDefaults: Local settings backup
+ * - DispatchQueue: Background backup processing
+ * 
+ * BACKUP FEATURES:
+ * - Daily Automated Backups: 24-hour backup schedule
+ * - Comprehensive Data Coverage: All user data types
+ * - Backup Status Tracking: Progress and completion monitoring
+ * - Automatic Cleanup: Old backup removal (7-day retention)
+ * - Cross-Device Sync: Cloud-based backup storage
+ * - Manual Backup Trigger: On-demand backup creation
+ * 
+ * DATA TYPES BACKED UP:
+ * - User Profile: Account information and preferences
+ * - Game Progress: Current game state and statistics
+ * - Achievements: Achievement progress and unlocks
+ * - Settings: User preferences and configurations
+ * - Statistics: Game analytics and performance data
+ * - Customization: Theme and visual preferences
+ * 
+ * BACKUP SCHEDULING:
+ * - 24-hour backup frequency
+ * - Background processing
+ * - Network-aware scheduling
+ * - Battery optimization
+ * - User activity consideration
+ * 
+ * RESTORATION FEATURES:
+ * - Complete data restoration
+ * - Selective data recovery
+ * - Backup validation
+ * - Conflict resolution
+ * - Progress tracking
+ * - Error recovery
+ * 
+ * STORAGE MANAGEMENT:
+ * - 7-day backup retention
+ * - Automatic cleanup
+ * - Storage optimization
+ * - Compression support
+ * - Backup size monitoring
+ * 
+ * ERROR HANDLING:
+ * - Network connectivity issues
+ * - Authentication failures
+ * - Data corruption detection
+ * - Backup failure recovery
+ * - Restoration error handling
+ * - Timeout management
+ * 
+ * PERFORMANCE FEATURES:
+ * - Background processing
+ * - Incremental backups
+ * - Efficient data transfer
+ * - Memory optimization
+ * - Network bandwidth management
+ * 
+ * SECURITY FEATURES:
+ * - User authentication verification
+ * - Data encryption
+ * - Secure backup storage
+ * - Access control
+ * - Privacy compliance
+ * 
+ * INTEGRATION POINTS:
+ * - Firebase backend services
+ * - User authentication system
+ * - Game state management
+ * - Achievement system
+ * - Settings management
+ * - Analytics and tracking
+ * 
+ * ARCHITECTURE ROLE:
+ * This service acts as the data safety and recovery coordinator,
+ * ensuring user data persistence and cross-device synchronization
+ * while maintaining performance and security.
+ * 
+ * THREADING CONSIDERATIONS:
+ * - Background backup processing
+ * - Thread-safe data operations
+ * - Concurrent backup management
+ * - Safe restoration operations
+ * 
+ * PERFORMANCE CONSIDERATIONS:
+ * - Efficient data serialization
+ * - Optimized backup scheduling
+ * - Network bandwidth management
+ * - Storage space optimization
+ * 
+ * REVIEW NOTES:
+ * - Verify Firebase Firestore backup configuration and permissions
+ * - Check backup scheduling and frequency settings
+ * - Test backup data completeness and accuracy
+ * - Validate backup restoration functionality
+ * - Check backup cleanup and retention policies
+ * - Test backup performance and network usage
+ * - Verify backup data encryption and security
+ * - Check backup error handling and recovery
+ * - Test backup scheduling during app background/foreground
+ * - Validate backup data integrity and corruption detection
+ * - Check backup storage optimization and compression
+ * - Test backup restoration conflict resolution
+ * - Verify backup authentication and access control
+ * - Check backup network connectivity error handling
+ * - Test backup performance on low-end devices
+ * - Validate backup data privacy compliance
+ * - Check backup scheduling battery optimization
+ * - Test backup restoration timeout handling
+ * - Verify backup data validation and verification
+ * - Check backup storage quota management
+ * - Test backup cross-device synchronization
+ * - Validate backup data format compatibility
+ * - Check backup restoration progress tracking
+ * - Test backup network interruption recovery
+ * - Verify backup data age-appropriateness and filtering
+ * - Check backup integration with user consent and privacy
+ */
+
 class BackupService {
     private let db = Firestore.firestore()
     private let backupQueue = DispatchQueue(label: "com.infinitum.backup", qos: .background)

@@ -1,3 +1,110 @@
+/*
+ * Block.swift
+ * 
+ * CORE GAME BLOCK DATA MODEL AND SHAPE SYSTEM
+ * 
+ * This file defines the fundamental data structures for the Infinitum Block Smash game,
+ * including block properties, colors, shapes, and the complete shape system that
+ * determines gameplay mechanics and visual representation.
+ * 
+ * KEY RESPONSIBILITIES:
+ * - Block data structure definition and management
+ * - Color system with gradients and visual effects
+ * - Shape system with complexity levels and progression
+ * - Block placement and positioning logic
+ * - Shape availability based on game level
+ * - Visual rendering properties and styling
+ * - Game balance and difficulty progression
+ * - Performance optimization for shape calculations
+ * 
+ * MAJOR DEPENDENCIES:
+ * - GameState.swift: Block state management and game logic
+ * - GameScene.swift: Visual rendering and block display
+ * - BlockShapeView.swift: Shape-specific visual components
+ * - AdaptiveDifficultyManager.swift: Dynamic difficulty adjustment
+ * - GameConstants.swift: Game configuration constants
+ * - SwiftUI: Color and visual property definitions
+ * 
+ * CORE DATA STRUCTURES:
+ * - Block: Main block entity with color, shape, and position
+ * - BlockColor: Color enumeration with gradient definitions
+ * - BlockShape: Shape enumeration with cell layouts and properties
+ * 
+ * COLOR SYSTEM:
+ * - 8 distinct colors (red, blue, green, yellow, purple, orange, pink, cyan)
+ * - Gradient definitions for visual depth
+ * - Shadow colors for 3D effects
+ * - Color randomization for variety
+ * - Accessibility considerations
+ * 
+ * SHAPE SYSTEM:
+ * - 33 unique block shapes with varying complexity
+ * - Level-based shape progression
+ * - Cell-based layout definitions
+ * - Complexity scoring for difficulty
+ * - Shape categorization (basic, advanced, expert)
+ * 
+ * SHAPE CATEGORIES:
+ * - Basic Shapes: Simple geometric forms (bars, squares, L-shapes)
+ * - Advanced Shapes: Complex patterns (T-shapes, Z-shapes, crosses)
+ * - Expert Shapes: Intricate designs (stars, diamonds, hexagons)
+ * - Special Shapes: Unique patterns (spirals, zigzags)
+ * 
+ * LEVEL PROGRESSION:
+ * - Shapes unlock progressively with level advancement
+ * - Complexity increases with player skill
+ * - Adaptive difficulty integration
+ * - Balance considerations for fair gameplay
+ * - Performance optimization for higher levels
+ * 
+ * PERFORMANCE FEATURES:
+ * - Inline functions for critical calculations
+ * - Efficient cell layout definitions
+ * - Optimized shape filtering and selection
+ * - Memory-efficient data structures
+ * - Fast shape complexity calculations
+ * 
+ * GAMEPLAY INTEGRATION:
+ * - Shape placement validation
+ * - Line clearing detection
+ * - Scoring system integration
+ * - Achievement tracking
+ * - Tutorial system support
+ * 
+ * VISUAL RENDERING:
+ * - Gradient color definitions
+ * - Shadow and lighting effects
+ * - Shape-specific visual properties
+ * - Animation support
+ * - Theme integration
+ * 
+ * BALANCE AND DIFFICULTY:
+ * - Shape complexity scoring
+ * - Level-based availability
+ * - Adaptive difficulty adjustment
+ * - Player skill progression
+ * - Fair gameplay mechanics
+ * 
+ * ARCHITECTURE ROLE:
+ * This file serves as the foundation for the game's block system,
+ * providing the data structures and logic that drive the core
+ * gameplay mechanics and visual presentation.
+ * 
+ * THREADING CONSIDERATIONS:
+ * - Immutable data structures for thread safety
+ * - Efficient copying for state management
+ * - Optimized calculations for performance
+ * - Memory-efficient design patterns
+ * 
+ * INTEGRATION POINTS:
+ * - Game state management
+ * - Visual rendering system
+ * - Difficulty adjustment
+ * - Achievement system
+ * - Analytics and tracking
+ * - Tutorial and help systems
+ */
+
 import Foundation
 import SwiftUI
 

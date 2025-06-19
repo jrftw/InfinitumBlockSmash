@@ -1,3 +1,113 @@
+/*
+ * AdManager.swift
+ * 
+ * ADVERTISEMENT MANAGEMENT AND MONETIZATION SERVICE
+ * 
+ * This service manages all advertisement-related operations including ad loading,
+ * display, frequency control, and monetization optimization. It handles multiple
+ * ad types with fallback mechanisms and user experience considerations.
+ * 
+ * KEY RESPONSIBILITIES:
+ * - Advertisement loading and preloading
+ * - Ad display timing and frequency control
+ * - Multiple ad type management (banner, interstitial, rewarded)
+ * - Fallback ad mechanisms for reliability
+ * - Network connectivity monitoring
+ * - Ad performance tracking and optimization
+ * - User experience optimization
+ * - Subscription-based ad removal
+ * - Top player ad exemption
+ * - Ad error handling and recovery
+ * 
+ * MAJOR DEPENDENCIES:
+ * - GoogleMobileAds: Google AdMob SDK
+ * - SubscriptionManager.swift: Premium user ad removal
+ * - LeaderboardService.swift: Top player status checking
+ * - GameState.swift: Game context for ad timing
+ * - Network monitoring for connectivity
+ * - StoreKit: Subscription status checking
+ * 
+ * AD TYPES MANAGED:
+ * - Banner Ads: Persistent bottom banner advertisements
+ * - Interstitial Ads: Full-screen ads between game sessions
+ * - Rewarded Interstitial Ads: Optional ads with rewards
+ * - Fallback Ads: Backup ads for reliability
+ * 
+ * AD CONFIGURATION:
+ * - Ad unit IDs for different ad types
+ * - Frequency control parameters
+ * - Loading timeouts and retry logic
+ * - Network availability monitoring
+ * - Performance optimization settings
+ * 
+ * FREQUENCY CONTROL:
+ * - Minimum time between ads (3 minutes)
+ * - Maximum ads per game session (8)
+ * - Top player exemption (no ads for top 3)
+ * - Subscription-based ad removal
+ * - User experience optimization
+ * 
+ * NETWORK FEATURES:
+ * - Network connectivity monitoring
+ * - Automatic ad preloading on network restore
+ * - Offline state handling
+ * - Connection quality optimization
+ * - Retry logic for network failures
+ * 
+ * PERFORMANCE OPTIMIZATIONS:
+ * - Parallel ad preloading
+ * - Exponential backoff for retries
+ * - Memory-efficient ad management
+ * - Background ad refresh
+ * - Cached ad content
+ * 
+ * ERROR HANDLING:
+ * - Comprehensive error types
+ * - Automatic retry mechanisms
+ * - Fallback ad systems
+ * - User-friendly error messages
+ * - Graceful degradation
+ * 
+ * USER EXPERIENCE:
+ * - Non-intrusive ad placement
+ * - Smooth ad transitions
+ * - Loading indicators
+ * - Ad dismissal handling
+ * - Reward system integration
+ * 
+ * MONETIZATION FEATURES:
+ * - Multiple ad format support
+ * - Revenue optimization
+ * - User segmentation
+ * - Performance analytics
+ * - A/B testing support
+ * 
+ * SECURITY FEATURES:
+ * - Ad content validation
+ * - Safe ad loading
+ * - User privacy protection
+ * - Content filtering
+ * - Fraud prevention
+ * 
+ * ARCHITECTURE ROLE:
+ * This service acts as the central coordinator for all advertisement-related
+ * operations, providing a clean interface for ad management while optimizing
+ * for both user experience and monetization.
+ * 
+ * THREADING MODEL:
+ * - @MainActor ensures UI updates on main thread
+ * - Background operations for ad loading
+ * - Async/await for network operations
+ * - Timer-based periodic operations
+ * 
+ * INTEGRATION POINTS:
+ * - GameView for ad display
+ * - GameState for ad timing
+ * - Subscription system for premium users
+ * - Analytics for performance tracking
+ * - Network monitoring for connectivity
+ */
+
 import GoogleMobileAds
 import SwiftUI
 import StoreKit
