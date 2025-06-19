@@ -1,3 +1,13 @@
+/*
+ * FILE: GameMove.swift
+ * PURPOSE: Defines game move data structures and undo/redo functionality
+ * DEPENDENCIES:
+ *    - Block.swift (for block definitions)
+ *    - GameState.swift (for game state integration)
+ * AUTHOR: @jrftw
+ * LAST UPDATED: 6/19/2025
+ */
+
 import Foundation
 import SwiftUI
 

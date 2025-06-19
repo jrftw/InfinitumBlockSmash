@@ -42,10 +42,26 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		79704DCB2DF23297008520BB /* Exceptions for "Infinitum Block Smash" folder in "Infinitum Block Smash" target */ = {
+		79579A282E04D1DA000F89E6 /* Exceptions for "Infinitum Block Smash" folder in "Infinitum Block Smash" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				Info.plist,
+				App/Info.plist,
+				"Config/app-ads.txt",
+				Config/database.rules.json,
+				Config/firebase.json,
+				Config/firestore.rules,
+				Config/realtime.rules.json,
+				Config/storage.rules,
+				Documentation/bugs.json,
+				Documentation/DEBUG_SYSTEM_README.md,
+				Documentation/DEVICE_SIMULATION_README.md,
+				Documentation/MEMORY_OPTIMIZATION_SUMMARY.md,
+				Documentation/PROJECT_STRUCTURE_SUMMARY.md,
+				"Services/functions/package 2.json",
+				Services/functions/package.json,
+				"Services/functions/tsconfig 2.json",
+				Services/functions/tsconfig.json,
+				Utilities/replace_prints.py,
 			);
 			target = 79C3911B2DECF0A000016986 /* Infinitum Block Smash */;
 		};
@@ -55,7 +71,7 @@
 		79C3911E2DECF0A000016986 /* Infinitum Block Smash */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				79704DCB2DF23297008520BB /* Exceptions for "Infinitum Block Smash" folder in "Infinitum Block Smash" target */,
+				79579A282E04D1DA000F89E6 /* Exceptions for "Infinitum Block Smash" folder in "Infinitum Block Smash" target */,
 			);
 			path = "Infinitum Block Smash";
 			sourceTree = "<group>";
@@ -374,13 +390,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "Infinitum Block Smash/Infinitum Block Smash.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "Infinitum Block Smash/Config/Infinitum Block Smash.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = AD7SJSPX55;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = "Infinitum Block Smash/Info.plist";
+				INFOPLIST_FILE = "Infinitum Block Smash/App/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Infinitum Block Smash";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -409,13 +425,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "Infinitum Block Smash/Infinitum Block Smash.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "Infinitum Block Smash/Config/Infinitum Block Smash.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = AD7SJSPX55;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = "Infinitum Block Smash/Info.plist";
+				INFOPLIST_FILE = "Infinitum Block Smash/App/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Infinitum Block Smash";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

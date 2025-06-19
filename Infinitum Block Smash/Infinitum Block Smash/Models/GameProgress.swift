@@ -1,5 +1,17 @@
+/*
+ * FILE: GameProgress.swift
+ * PURPOSE: Defines game progress data structure for persistence and cloud sync
+ * DEPENDENCIES:
+ *    - Block.swift (for block definitions)
+ *    - GameDataVersion.swift (for version management)
+ *    - GameConstants.swift (for grid size)
+ * AUTHOR: @jrftw
+ * LAST UPDATED: 6/19/2025
+ */
+
 import Foundation
 
+// MARK: - GameProgress
 struct GameProgress: Codable {
     let version: Int
     let score: Int

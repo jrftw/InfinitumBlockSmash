@@ -1,5 +1,14 @@
+/*
+ * FILE: GameDataVersion.swift
+ * PURPOSE: Manages game data versioning and migration
+ * DEPENDENCIES: None
+ * AUTHOR: @jrftw
+ * LAST UPDATED: 6/19/2025
+ */
+
 import Foundation
 
+// MARK: - GameDataVersion
 struct GameDataVersion {
     static let currentVersion = 1
     

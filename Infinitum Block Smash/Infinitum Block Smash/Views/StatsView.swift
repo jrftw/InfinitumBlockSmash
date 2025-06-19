@@ -1,5 +1,57 @@
+/******************************************************
+ * FILE: StatsView.swift
+ * MARK: Game Statistics Display View
+ * CREATED: 12/19/2024 by @jrftw
+ ******************************************************/
+
+/*
+ * PURPOSE:
+ * Displays comprehensive game statistics and player progress in a visually appealing
+ * card-based interface with interactive elements and achievement tracking.
+ *
+ * KEY RESPONSIBILITIES:
+ * - Display game statistics in organized card layout
+ * - Show achievement progress and player skill metrics
+ * - Provide interactive information tooltips
+ * - Format and present play time and score data
+ * - Handle achievement card interactions
+ * - Display skill level calculations and bonuses
+ *
+ * MAJOR DEPENDENCIES:
+ * - GameState.swift: Provides all game statistics and data
+ * - AchievementsManager.swift: Achievement data and progress tracking
+ * - InfoView.swift: Tooltip display for statistics explanations
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - SwiftUI: Core UI framework for view construction and layout
+ *
+ * ARCHITECTURE ROLE:
+ * Presentation layer view that displays game statistics and player progress
+ * data in an organized, user-friendly interface.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - Requires GameState to be properly initialized with statistics
+ * - Achievement data must be loaded before display
+ * - Skill calculations depend on current game state values
+ */
+
+/******************************************************
+ * REVIEW NOTES:
+ * - Verify all statistics calculations are accurate
+ * - Check achievement progress display accuracy
+ * - Test skill level calculation logic
+ * - Ensure proper formatting for all time and score displays
+ *
+ * FUTURE IDEAS / SUGGESTIONS:
+ * - Add export functionality for statistics
+ * - Include trend analysis and progress charts
+ * - Add comparison with previous sessions
+ * - Include social sharing of achievements
+ ******************************************************/
+
 import SwiftUI
 
+// MARK: - Main Stats View
 struct StatsView: View {
     @ObservedObject var gameState: GameState
     @State private var showingInfoFor: InfoItem? = nil
@@ -178,6 +230,7 @@ struct StatsView: View {
         }
     }
     
+    // MARK: - Helper Methods
     private func formatPlayTime(_ startTime: Date?) -> String {
         let totalSeconds = Int(gameState.totalPlayTime)
         let hours = totalSeconds / 3600
@@ -191,6 +244,7 @@ struct StatsView: View {
     }
 }
 
+// MARK: - Stat Card Component
 struct StatCard: View {
     let title: String
     let value: String
