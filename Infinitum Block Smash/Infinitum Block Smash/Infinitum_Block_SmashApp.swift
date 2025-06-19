@@ -89,8 +89,11 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
         _ = FirebaseManager.shared
         print("[Firebase] FirebaseManager initialized")
         
-        // Enable force logout
-        ForceLogout.shared.isForceLogoutEnabled = true
+        // Only enable force logout for specific version migrations
+        if ForceLogout.shared.shouldEnableForceLogout() {
+            ForceLogout.shared.isForceLogoutEnabled = true
+            print("[Firebase] Force logout enabled for version migration")
+        }
         
         // Configure In-App Messaging
         configureInAppMessaging()
