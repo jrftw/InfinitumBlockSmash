@@ -1,3 +1,55 @@
+/******************************************************
+ * FILE: LoginView.swift
+ * MARK: User Login Interface
+ * CREATED: 6/19/2025 by @jrftw
+ ******************************************************/
+
+/*
+ * PURPOSE:
+ * Provides a simple login interface for user authentication, allowing
+ * users to sign in with email and password credentials.
+ *
+ * KEY RESPONSIBILITIES:
+ * - Display login form with email and password fields
+ * - Handle user authentication with Firebase
+ * - Provide error handling and user feedback
+ * - Support navigation to sign-up flow
+ * - Manage authentication state
+ * - Display app branding and visual elements
+ *
+ * MAJOR DEPENDENCIES:
+ * - FirebaseAuth: Core authentication services
+ * - SwiftUI: Core UI framework for interface
+ * - SignUpView.swift: Navigation to registration flow
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - SwiftUI: Modern declarative UI framework
+ * - FirebaseAuth: Firebase authentication services
+ *
+ * ARCHITECTURE ROLE:
+ * Acts as a simple authentication interface that provides
+ * basic login functionality with email and password.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - Authentication must be handled securely
+ * - Error messages must be user-friendly
+ * - Form validation must occur before submission
+ * - Navigation to sign-up must be seamless
+ */
+
+/******************************************************
+ * REVIEW NOTES:
+ * - Verify Firebase authentication integration
+ * - Check error handling for all authentication scenarios
+ * - Test form validation and user feedback
+ * - Validate navigation to sign-up flow
+ *
+ * FUTURE IDEAS / SUGGESTIONS:
+ * - Add biometric authentication support
+ * - Implement "Remember Me" functionality
+ * - Add social login options
+ ******************************************************/
+
 import SwiftUI
 import FirebaseAuth
 

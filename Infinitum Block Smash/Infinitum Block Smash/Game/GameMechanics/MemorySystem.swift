@@ -1,18 +1,12 @@
-import Foundation
-import UIKit
-import SpriteKit
-import MachO
-import Combine
-
 /*
  * MemorySystem.swift
- * 
+ *
  * ADVANCED MEMORY MANAGEMENT AND MONITORING SYSTEM
- * 
+ *
  * This service provides comprehensive memory management, monitoring, and optimization
  * for the Infinitum Block Smash game. It includes device simulation support, dynamic
  * thresholds, and intelligent memory cleanup strategies.
- * 
+ *
  * KEY RESPONSIBILITIES:
  * - Real-time memory usage monitoring
  * - Dynamic memory threshold management
@@ -24,7 +18,7 @@ import Combine
  * - Performance monitoring and logging
  * - Memory warning handling
  * - Device-specific memory optimization
- * 
+ *
  * MAJOR DEPENDENCIES:
  * - UIKit: Memory warning notifications
  * - SpriteKit: Game rendering memory management
@@ -33,7 +27,7 @@ import Combine
  * - DeviceSimulator.swift: Device simulation support
  * - NotificationCenter: System notifications
  * - DispatchSource: Memory pressure monitoring
- * 
+ *
  * MEMORY MONITORING:
  * - Real-time memory usage tracking
  * - Dynamic threshold calculation
@@ -41,7 +35,7 @@ import Combine
  * - Device-specific constraints
  * - Performance impact monitoring
  * - Memory trend analysis
- * 
+ *
  * DEVICE SIMULATION:
  * - Simulated memory constraints
  * - Low-end device simulation
@@ -49,7 +43,7 @@ import Combine
  * - Memory limit simulation
  * - Device-specific optimization
  * - Performance testing support
- * 
+ *
  * MEMORY THRESHOLDS:
  * - Warning threshold (25-30% usage)
  * - Critical threshold (35-45% usage)
@@ -57,7 +51,7 @@ import Combine
  * - Device-specific adjustments
  * - Dynamic threshold calculation
  * - Adaptive memory management
- * 
+ *
  * CLEANUP STRATEGIES:
  * - Normal cleanup: Standard memory optimization
  * - Aggressive cleanup: Critical memory pressure response
@@ -65,7 +59,7 @@ import Combine
  * - Texture cleanup: SpriteKit texture management
  * - Background cleanup: Periodic maintenance
  * - Emergency cleanup: Extreme memory pressure
- * 
+ *
  * CACHE MANAGEMENT:
  * - Dynamic cache size limits
  * - Cache hit/miss tracking
@@ -73,7 +67,7 @@ import Combine
  * - Cache cleanup strategies
  * - Performance optimization
  * - Device-specific limits
- * 
+ *
  * PERFORMANCE FEATURES:
  * - Efficient memory monitoring
  * - Background cleanup operations
@@ -81,7 +75,7 @@ import Combine
  * - Performance impact minimization
  * - Real-time status updates
  * - Optimized cleanup timing
- * 
+ *
  * MEMORY PRESSURE HANDLING:
  * - System memory pressure detection
  * - Automatic cleanup triggers
@@ -89,7 +83,7 @@ import Combine
  * - Memory warning response
  * - Emergency memory recovery
  * - Performance degradation prevention
- * 
+ *
  * DEVICE OPTIMIZATION:
  * - Low-end device support
  * - High-end device optimization
@@ -97,7 +91,7 @@ import Combine
  * - Memory constraint simulation
  * - Performance testing
  * - Cross-device compatibility
- * 
+ *
  * MONITORING FEATURES:
  * - Real-time memory tracking
  * - Status change detection
@@ -105,7 +99,7 @@ import Combine
  * - Memory usage statistics
  * - Cleanup effectiveness tracking
  * - Device simulation logging
- * 
+ *
  * INTEGRATION POINTS:
  * - GameScene for texture management
  * - CacheManager for cache optimization
@@ -113,30 +107,30 @@ import Combine
  * - Performance monitoring systems
  * - Crash reporting system
  * - Analytics tracking
- * 
+ *
  * ARCHITECTURE ROLE:
  * This service acts as the central memory management coordinator,
  * providing intelligent memory optimization while maintaining
  * performance and device compatibility.
- * 
+ *
  * THREADING CONSIDERATIONS:
  * - @MainActor for UI updates
  * - Background cleanup operations
  * - Thread-safe memory monitoring
  * - Safe pressure handling
- * 
+ *
  * PERFORMANCE CONSIDERATIONS:
  * - Minimal monitoring overhead
  * - Efficient cleanup strategies
  * - Background processing
  * - Memory-efficient operations
- * 
+ *
  * DEVICE COMPATIBILITY:
  * - Cross-device optimization
  * - Low-end device support
  * - High-end device utilization
  * - Device simulation testing
- * 
+ *
  * REVIEW NOTES:
  * - Verify memory monitoring accuracy and performance impact
  * - Check device simulation memory constraint accuracy
@@ -169,6 +163,12 @@ import Combine
  * - Check memory cleanup effectiveness on low-end devices
  * - Test memory monitoring during rapid UI updates
  */
+
+import Foundation
+import UIKit
+import SpriteKit
+import MachO
+import Combine
 
 // MARK: - Supporting Types
 public enum MemoryStatus {

@@ -1,3 +1,57 @@
+/******************************************************
+ * FILE: SignUpView.swift
+ * MARK: User Registration Interface
+ * CREATED: 6/19/2025 by @jrftw
+ ******************************************************/
+
+/*
+ * PURPOSE:
+ * Provides a user registration interface for creating new accounts,
+ * with comprehensive form validation and referral code support.
+ *
+ * KEY RESPONSIBILITIES:
+ * - Display user registration form with validation
+ * - Handle account creation with Firebase Auth
+ * - Validate username availability and appropriateness
+ * - Process referral codes for new users
+ * - Provide comprehensive error handling
+ * - Manage loading states and user feedback
+ * - Support form validation and user guidance
+ *
+ * MAJOR DEPENDENCIES:
+ * - FirebaseAuth: Core authentication services
+ * - SwiftUI: Core UI framework for interface
+ * - ProfanityFilter.swift: Username content validation
+ * - ReferralManager.swift: Referral code processing
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - SwiftUI: Modern declarative UI framework
+ * - FirebaseAuth: Firebase authentication services
+ *
+ * ARCHITECTURE ROLE:
+ * Acts as the user registration interface that handles
+ * new account creation with comprehensive validation.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - Form validation must occur before account creation
+ * - Username validation must check for inappropriate content
+ * - Referral code processing must be optional and error-safe
+ * - Authentication state must be properly managed
+ */
+
+/******************************************************
+ * REVIEW NOTES:
+ * - Verify Firebase account creation integration
+ * - Check username validation and profanity filtering
+ * - Test referral code processing and error handling
+ * - Validate form validation logic and user feedback
+ *
+ * FUTURE IDEAS / SUGGESTIONS:
+ * - Add email verification flow
+ * - Implement username availability checking
+ * - Add password strength indicators
+ ******************************************************/
+
 import SwiftUI
 import FirebaseAuth
 

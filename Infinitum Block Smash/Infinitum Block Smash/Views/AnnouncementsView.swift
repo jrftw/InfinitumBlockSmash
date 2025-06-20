@@ -1,3 +1,53 @@
+/******************************************************
+ * FILE: AnnouncementsView.swift
+ * MARK: Announcements and Bugs Display View
+ * CREATED: 6/19/2025 by @jrftw
+ ******************************************************/
+
+/*
+ * PURPOSE:
+ * Displays app announcements and known bugs to users, providing a centralized
+ * location for important updates and issue notifications.
+ *
+ * KEY RESPONSIBILITIES:
+ * - Display app announcements from remote service
+ * - Show known bugs and issues
+ * - Handle tab switching between announcements and bugs
+ * - Provide error handling and loading states
+ * - Manage announcement data fetching
+ *
+ * MAJOR DEPENDENCIES:
+ * - AnnouncementsService.swift: Fetches announcement data from Firebase
+ * - BugsView.swift: Displays known bugs in separate tab
+ * - SwiftUI: Core UI framework for view rendering
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - SwiftUI: Main UI framework for view structure and navigation
+ * - Foundation: Core framework for data handling
+ *
+ * ARCHITECTURE ROLE:
+ * Presentation layer that combines announcements and bugs display
+ * with tab-based navigation and error handling.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - Announcements are fetched on view appearance
+ * - Tab switching preserves state between announcements and bugs
+ * - Error states provide retry functionality
+ */
+
+/******************************************************
+ * REVIEW NOTES:
+ * - Announcement data is fetched from remote service
+ * - Error handling provides user-friendly feedback
+ * - Tab navigation improves user experience
+ *
+ * FUTURE IDEAS / SUGGESTIONS:
+ * - Add announcement categories and filtering
+ * - Implement push notifications for new announcements
+ * - Add announcement search functionality
+ * - Implement announcement read/unread tracking
+ ******************************************************/
+
 import SwiftUI
 
 struct AnnouncementsView: View {

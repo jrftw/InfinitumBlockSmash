@@ -1,3 +1,49 @@
+/******************************************************
+ * FILE: MoreAppsView.swift
+ * MARK: More Apps Display View
+ * CREATED: 6/19/2025 by @jrftw
+ ******************************************************/
+
+/*
+ * PURPOSE:
+ * Displays a list of other apps by the same developer, providing users with
+ * easy access to discover and download additional applications.
+ *
+ * KEY RESPONSIBILITIES:
+ * - Display list of developer's other apps
+ * - Provide app descriptions and download links
+ * - Handle app store navigation
+ * - Present app information in organized format
+ *
+ * MAJOR DEPENDENCIES:
+ * - SwiftUI: Core UI framework for view rendering
+ * - UIKit: App store URL handling via UIApplication
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - SwiftUI: Main UI framework for view structure
+ * - UIKit: App store navigation functionality
+ *
+ * ARCHITECTURE ROLE:
+ * Simple presentation layer that showcases other apps by the developer
+ * and provides direct links to the App Store for easy discovery.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - App links are hardcoded and require manual updates
+ * - URL validation ensures safe app store navigation
+ */
+
+/******************************************************
+ * REVIEW NOTES:
+ * - App links need manual maintenance for new releases
+ * - Consider implementing remote configuration for app list
+ *
+ * FUTURE IDEAS / SUGGESTIONS:
+ * - Add app icons and screenshots
+ * - Implement app rating display
+ * - Add app category filtering
+ * - Remote configuration for app list management
+ ******************************************************/
+
 import SwiftUI
 
 struct MoreAppsView: View {

@@ -1,7 +1,3 @@
-import Foundation
-import FirebaseFirestore
-import FirebaseAuth
-
 /*
  * BackupService.swift
  * 
@@ -144,6 +140,10 @@ import FirebaseAuth
  * - Verify backup data age-appropriateness and filtering
  * - Check backup integration with user consent and privacy
  */
+
+import Foundation
+import FirebaseFirestore
+import FirebaseAuth
 
 class BackupService {
     private let db = Firestore.firestore()

@@ -1,3 +1,51 @@
+/******************************************************
+ * FILE: ClassicTimedRulesView.swift
+ * MARK: Classic Timed Game Rules Display
+ * CREATED: 6/19/2025 by @jrftw
+ ******************************************************/
+
+/*
+ * PURPOSE:
+ * Displays the rules and gameplay instructions for the Classic Timed game mode,
+ * providing users with comprehensive information about scoring, time limits, and strategies.
+ *
+ * KEY RESPONSIBILITIES:
+ * - Present game rules in organized sections
+ * - Display scoring system and point values
+ * - Explain time limit mechanics and bonuses
+ * - Provide gameplay tips and strategies
+ * - Handle view dismissal and navigation
+ *
+ * MAJOR DEPENDENCIES:
+ * - SwiftUI: Core UI framework for view rendering
+ * - No external service dependencies - static content
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - SwiftUI: Main UI framework for view structure and navigation
+ *
+ * ARCHITECTURE ROLE:
+ * Static presentation layer that provides game rules and instructions
+ * to users in an organized, readable format.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - Rules content is hardcoded and requires manual updates
+ * - View dismissal handled through environment dismiss action
+ * - Content is organized in logical sections for easy reading
+ */
+
+/******************************************************
+ * REVIEW NOTES:
+ * - Rules content needs manual maintenance for game updates
+ * - Consider implementing remote configuration for rule updates
+ * - Scoring system is clearly explained for user understanding
+ *
+ * FUTURE IDEAS / SUGGESTIONS:
+ * - Add interactive rule examples
+ * - Implement rule search functionality
+ * - Add rule bookmarking for quick reference
+ * - Remote configuration for rule content management
+ ******************************************************/
+
 import SwiftUI
 
 struct ClassicTimedRulesView: View {

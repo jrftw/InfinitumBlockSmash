@@ -1,3 +1,57 @@
+/******************************************************
+ * FILE: AchievementsView.swift
+ * MARK: Achievement Display and Management Interface
+ * CREATED: 6/19/2025 by @jrftw
+ ******************************************************/
+
+/*
+ * PURPOSE:
+ * Provides a comprehensive interface for displaying and managing user achievements,
+ * including categorization, progress tracking, and leaderboard integration.
+ *
+ * KEY RESPONSIBILITIES:
+ * - Display all user achievements with progress tracking
+ * - Provide achievement categorization and filtering
+ * - Show total achievement points and statistics
+ * - Integrate with achievement leaderboard
+ * - Support localization for all text elements
+ * - Display achievement progress and completion status
+ * - Handle achievement notification display
+ *
+ * MAJOR DEPENDENCIES:
+ * - AchievementsManager.swift: Achievement data and management
+ * - AchievementLeaderboardView.swift: Leaderboard integration
+ * - SwiftUI: Core UI framework for interface
+ * - Combine: Reactive programming for data binding
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - SwiftUI: Modern declarative UI framework
+ * - Combine: Reactive programming framework
+ *
+ * ARCHITECTURE ROLE:
+ * Acts as the primary achievement display interface that provides
+ * users with comprehensive achievement tracking and management.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - Achievement data must be loaded before display
+ * - Category filtering must be responsive and efficient
+ * - Progress calculations must be accurate
+ * - Localization must be properly implemented
+ */
+
+/******************************************************
+ * REVIEW NOTES:
+ * - Verify achievement data loading and display
+ * - Check category filtering functionality
+ * - Test progress calculation accuracy
+ * - Validate localization implementation
+ *
+ * FUTURE IDEAS / SUGGESTIONS:
+ * - Add achievement search functionality
+ * - Implement achievement sharing features
+ * - Add achievement completion celebrations
+ ******************************************************/
+
 // AchievementsView.swift
 
 import SwiftUI
