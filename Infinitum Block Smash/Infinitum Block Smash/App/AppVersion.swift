@@ -87,8 +87,14 @@ struct AppVersion {
     static let changelog: [String: [String]] = [
         
         "1.0.7 (Build 1)": [
-            "Major Performance overhaul & optimizations",
-            "Bug Fixes and Improvements"
+            "Fixed crashing and freezing issues on certain devices",
+            "Fixed game saving and resuming issues",
+            "Resolved issues with the scoring system",
+            "General bug fixes and performance enhancements for a smoother, more reliable experience",
+            "Improved memory efficiency to boost gameplay performance",
+            "Added preview placement adjustment & toggle",
+            "Added more detailed feedback for level completion and game over screens",
+            "Expanded 'Stats for Nerds' with additional insights"
         ],
         
         "1.0.6 (Build 1)": [

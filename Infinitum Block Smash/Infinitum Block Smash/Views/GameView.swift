@@ -527,9 +527,19 @@ struct GameView: View {
                 .accessibilityHint(achievement.description)
             }
             
-            LevelCompleteOverlay(isPresented: gameState.levelComplete, score: gameState.score, level: gameState.level) {
-                gameState.confirmLevelCompletion()
-            }
+            LevelCompleteOverlay(
+                isPresented: gameState.levelComplete, 
+                score: gameState.score, 
+                level: gameState.level,
+                onContinue: {
+                    gameState.confirmLevelCompletion()
+                },
+                isPerfectLevel: gameState.isPerfectLevel,
+                linesCleared: gameState.linesCleared,
+                blocksPlaced: gameState.blocksPlaced,
+                currentChain: gameState.currentChain,
+                breakdown: gameState.getCurrentLevelBreakdown()
+            )
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Level \(gameState.level) Complete! Score: \(gameState.score)")
             
@@ -546,7 +556,10 @@ struct GameView: View {
                 onContinue: {
                     gameState.continueGame()
                 },
-                canContinue: !gameState.hasUsedContinueAd
+                canContinue: !gameState.hasUsedContinueAd,
+                isTimedMode: UserDefaults.standard.bool(forKey: "isTimedMode"),
+                timeRemaining: 0, // Classic mode doesn't use time
+                breakdown: gameState.getGameBreakdown()
             )
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Game Over. Final Score: \(gameState.score), Level: \(gameState.level)")

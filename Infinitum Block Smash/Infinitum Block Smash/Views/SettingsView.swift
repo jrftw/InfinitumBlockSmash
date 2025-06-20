@@ -265,8 +265,11 @@ private struct GameSettingsSection: View {
 private struct GameplaySettingsSection: View {
     @Binding var placementPrecision: Double
     @Binding var blockDragOffset: Double
+    @Binding var previewHeightOffset: Double
+    @Binding var previewEnabled: Bool
     @Binding var showingPlacementPrecisionInfo: Bool
     @Binding var showingBlockDragInfo: Bool
+    @Binding var showingPreviewHeightInfo: Bool
     
     var body: some View {
         Section(header: Text(NSLocalizedString("Gameplay Settings", comment: "Gameplay settings section header"))) {
@@ -278,6 +281,12 @@ private struct GameplaySettingsSection: View {
             BlockDragView(
                 blockDragOffset: $blockDragOffset,
                 showingInfo: $showingBlockDragInfo
+            )
+            
+            PreviewHeightView(
+                previewHeightOffset: $previewHeightOffset,
+                previewEnabled: $previewEnabled,
+                showingInfo: $showingPreviewHeightInfo
             )
         }
     }
@@ -352,6 +361,52 @@ private struct BlockDragView: View {
                 }
                 .font(.caption)
                 .buttonStyle(PlainButtonStyle())
+            }
+        }
+    }
+}
+
+private struct PreviewHeightView: View {
+    @Binding var previewHeightOffset: Double
+    @Binding var previewEnabled: Bool
+    @Binding var showingInfo: Bool
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(NSLocalizedString("Preview Position", comment: "Preview position label"))
+                Button(action: { showingInfo = true }) {
+                    Image(systemName: "info.circle")
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(PlainButtonStyle())
+                Spacer()
+                if previewEnabled {
+                    Text("\(Int(previewHeightOffset * 100))%")
+                        .foregroundColor(.secondary)
+                }
+                Toggle("", isOn: $previewEnabled)
+                    .labelsHidden()
+            }
+            
+            if previewEnabled {
+                HStack {
+                    Image(systemName: "arrow.up.arrow.down")
+                    Slider(value: $previewHeightOffset, in: -1.0...2.0, step: 1.0)
+                    Image(systemName: "arrow.up.arrow.down.fill")
+                }
+                
+                HStack {
+                    Text(NSLocalizedString("Adjust preview height above/below placement position", comment: "Preview height description"))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Button(NSLocalizedString("Reset", comment: "Reset button label")) {
+                        previewHeightOffset = 0.0
+                    }
+                    .font(.caption)
+                    .buttonStyle(PlainButtonStyle())
+                }
             }
         }
     }
@@ -948,6 +1003,8 @@ struct SettingsView: View {
     @AppStorage("allowDataSharing") private var allowDataSharing = true
     @AppStorage("placementPrecision") private var placementPrecision: Double = 0.15
     @AppStorage("blockDragOffset") private var blockDragOffset: Double = 0.4
+    @AppStorage("previewHeightOffset") private var previewHeightOffset: Double = 0.0
+    @AppStorage("previewEnabled") private var previewEnabled: Bool = true
     @Environment(\.presentationMode) var presentationMode
     @State private var showingResetConfirmation = false
     @State private var showingChangelog = false
@@ -955,6 +1012,7 @@ struct SettingsView: View {
     @State private var showingFeatureMail = false
     @State private var showingPlacementPrecisionInfo = false
     @State private var showingBlockDragInfo = false
+    @State private var showingPreviewHeightInfo = false
     @State private var showingTestFlightAlert = false
     @State private var showingStore = false
     @AppStorage("forceUpdateEnabled") private var forceUpdateEnabled = false
@@ -1007,8 +1065,11 @@ struct SettingsView: View {
                         GameplaySettingsSection(
                             placementPrecision: $placementPrecision,
                             blockDragOffset: $blockDragOffset,
+                            previewHeightOffset: $previewHeightOffset,
+                            previewEnabled: $previewEnabled,
                             showingPlacementPrecisionInfo: $showingPlacementPrecisionInfo,
-                            showingBlockDragInfo: $showingBlockDragInfo
+                            showingBlockDragInfo: $showingBlockDragInfo,
+                            showingPreviewHeightInfo: $showingPreviewHeightInfo
                         )
                     }
                     .onAppear { loadSection("gameplaySettings") }
@@ -1149,6 +1210,11 @@ struct SettingsView: View {
                 Button("OK", role: .cancel) { }
             } message: {
                 Text("Controls how high above your finger the block appears while dragging. Higher values make it easier to see where you're placing the block, while lower values keep it closer to your finger.")
+            }
+            .alert("Preview Position", isPresented: $showingPreviewHeightInfo) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("Controls the vertical position of the preview that shows where your block will be placed. You can adjust it to appear above or below the actual placement position. Disable this feature to hide the preview entirely.")
             }
             .sheet(isPresented: $showingFeedbackMail) {
                 MailView(isShowing: $showingFeedbackMail, recipient: "support@infinitumlive.com", subject: "Infinitum Block Smash Feedback")

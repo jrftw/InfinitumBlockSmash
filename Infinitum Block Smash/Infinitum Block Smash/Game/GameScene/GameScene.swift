@@ -101,7 +101,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var particleEmitter: SKEmitterNode?
     private var glowNode: SKNode?
     private var activeParticleEmitters: [SKEmitterNode] = [] // Track active particle emitters
-    private let maxParticleEmitters = 5 // Limit number of active particle emitters
+    private let maxParticleEmitters = 3 // Reduced from 5 to prevent memory buildup
     // MARK: - Properties
     private var blockNodes: [SKNode] = []
     private var scoreLabel: SKLabelNode?
@@ -113,7 +113,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var hintHighlight: SKNode?
     // Add memory management properties
     private var lastMemoryCleanup: TimeInterval = 0
-    private let memoryCleanupInterval: TimeInterval = MemoryConfig.getIntervals().memoryCleanup
+    private let memoryCleanupInterval: TimeInterval = MemoryConfig.getIntervals().memoryCleanup * 2 // Double the interval to reduce overhead
     private var cachedNodes: [String: SKNode] = [:]
     // Add theme observation property
     private var themeObserver: NSObjectProtocol?
@@ -122,7 +122,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // MARK: - Texture Management
     private var activeTextures: Set<SKTexture> = []
     private var gradientTextureCache: [String: SKTexture] = [:] // Cache gradient textures by color
-    private let maxGradientCacheSize = 20 // Limit gradient cache size
+    private let maxGradientCacheSize = 10 // Reduced from 20 to prevent memory buildup
     
     func getCachedGradientTexture(for color: BlockColor) -> SKTexture? {
         let key = color.rawValue
@@ -132,11 +132,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     func cacheGradientTexture(_ texture: SKTexture, for color: BlockColor) {
         let key = color.rawValue
         
-        // Limit cache size
+        // Limit cache size with LRU eviction
         if gradientTextureCache.count >= maxGradientCacheSize {
-            // Remove oldest entry
-            let oldestKey = gradientTextureCache.keys.first!
-            gradientTextureCache.removeValue(forKey: oldestKey)
+            // Remove oldest entry (first key in dictionary)
+            if let oldestKey = gradientTextureCache.keys.first {
+                gradientTextureCache.removeValue(forKey: oldestKey)
+            }
         }
         
         gradientTextureCache[key] = texture
@@ -184,6 +185,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         self.gameState = gameState
         super.init(size: size)
         Logger.shared.debug("GameScene init(size:) called", category: .debugGameScene)
+        
+        // Track for memory leaks
+        #if DEBUG
+        MemoryLeakDetector.shared.trackGameScene(self)
+        MemoryLeakDetector.shared.trackGameState(gameState)
+        #endif
+        
         setupScene()
     }
     required init?(coder aDecoder: NSCoder) {
@@ -261,6 +269,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     deinit {
         Logger.shared.debug("GameScene deinit called", category: .debugGameScene)
+        
+        // Stop memory leak tracking
+        #if DEBUG
+        MemoryLeakDetector.shared.stopTracking(self, type: "GameScene")
+        #endif
+        
         // Cleanup
         gridNode?.children.forEach { cleanupNode($0) }
         trayNode?.children.forEach { cleanupNode($0) }
@@ -732,6 +746,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             lastGridPosition = gridPoint
             isHeavyOperationActive = true
             
+            // VALIDATION: Check placement validity BEFORE any visual updates
+            let canPlace = gameState.canPlaceBlock(draggingBlock, at: gridPoint)
+            print("[DEBUG] Drag validation for \(draggingBlock.shape)-\(draggingBlock.color) at (\(gridPoint.x), \(gridPoint.y)): \(canPlace)")
+            
             // Reuse existing preview node instead of creating new one
             if let existingPreview = previewNode {
                 // Update existing preview instead of recreating
@@ -775,7 +793,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
             
             // Update drag node alpha based on placement validity
-            dragNode.alpha = gameState.canPlaceBlock(draggingBlock, at: gridPoint) ? 0.7 : 1.0
+            dragNode.alpha = canPlace ? 0.7 : 1.0
             
             isHeavyOperationActive = false
         }
@@ -785,6 +803,19 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func setupPreviewNode(_ preview: SKNode, for block: Block, at gridPoint: CGPoint) {
         // Clear any existing children
         preview.removeAllChildren()
+        
+        // Check if preview is enabled
+        let previewEnabled = UserDefaults.standard.bool(forKey: "previewEnabled")
+        if !previewEnabled {
+            preview.alpha = 0.0
+            return
+        }
+        
+        // Check placement validity BEFORE creating preview
+        guard gameState.canPlaceBlock(block, at: gridPoint) else {
+            preview.alpha = 0.0
+            return
+        }
         
         // Create preview for each cell in the shape
         for (dx, dy) in block.shape.cells {
@@ -802,26 +833,69 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             preview.addChild(cellNode)
         }
         
-        // Position the preview at the grid point
+        // Position the preview at the grid point with height offset
         let totalWidth = CGFloat(GameConstants.gridSize) * GameConstants.blockSize
         let totalHeight = CGFloat(GameConstants.gridSize) * GameConstants.blockSize
+        let previewHeightOffset = UserDefaults.standard.double(forKey: "previewHeightOffset")
+        
+        // Snap the offset to grid spaces to ensure perfect alignment
+        let gridAlignedOffset = round(previewHeightOffset) * GameConstants.blockSize
+        
         preview.position = CGPoint(
             x: -totalWidth / 2 + CGFloat(gridPoint.x) * GameConstants.blockSize + GameConstants.blockSize / 2,
-            y: -totalHeight / 2 + CGFloat(gridPoint.y) * GameConstants.blockSize + GameConstants.blockSize / 2
+            y: -totalHeight / 2 + CGFloat(gridPoint.y) * GameConstants.blockSize + GameConstants.blockSize / 2 + gridAlignedOffset
         )
+        
+        // Show the preview since placement is valid
+        preview.alpha = 1.0
     }
     
     private func updatePreviewNode(_ preview: SKNode, for block: Block, at gridPoint: CGPoint) {
-        // Only update position if placement is valid
-        if gameState.canPlaceBlock(block, at: gridPoint) {
+        // Check if preview is enabled
+        let previewEnabled = UserDefaults.standard.bool(forKey: "previewEnabled")
+        if !previewEnabled {
+            preview.alpha = 0.0
+            return
+        }
+        
+        // Check placement validity first
+        let canPlace = gameState.canPlaceBlock(block, at: gridPoint)
+        
+        if canPlace {
+            // Clear existing children and recreate preview cells
+            preview.removeAllChildren()
+            
+            // Create preview for each cell in the shape
+            for (dx, dy) in block.shape.cells {
+                let cellNode = SKShapeNode(rectOf: CGSize(width: GameConstants.blockSize, height: GameConstants.blockSize))
+                cellNode.fillColor = SKColor.from(block.color.color)
+                cellNode.strokeColor = .clear
+                cellNode.alpha = 0.5
+                cellNode.name = "preview_cell"
+                
+                // Position each cell relative to the shape's anchor point
+                cellNode.position = CGPoint(
+                    x: CGFloat(dx) * GameConstants.blockSize,
+                    y: CGFloat(dy) * GameConstants.blockSize
+                )
+                preview.addChild(cellNode)
+            }
+            
+            // Update position with height offset
             let totalWidth = CGFloat(GameConstants.gridSize) * GameConstants.blockSize
             let totalHeight = CGFloat(GameConstants.gridSize) * GameConstants.blockSize
+            let previewHeightOffset = UserDefaults.standard.double(forKey: "previewHeightOffset")
+            
+            // Snap the offset to grid spaces to ensure perfect alignment
+            let gridAlignedOffset = round(previewHeightOffset) * GameConstants.blockSize
+            
             preview.position = CGPoint(
                 x: -totalWidth / 2 + CGFloat(gridPoint.x) * GameConstants.blockSize + GameConstants.blockSize / 2,
-                y: -totalHeight / 2 + CGFloat(gridPoint.y) * GameConstants.blockSize + GameConstants.blockSize / 2
+                y: -totalHeight / 2 + CGFloat(gridPoint.y) * GameConstants.blockSize + GameConstants.blockSize / 2 + gridAlignedOffset
             )
             preview.alpha = 1.0
         } else {
+            // Hide preview for invalid placement
             preview.alpha = 0.0
         }
     }
@@ -1134,6 +1208,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let positionsToAnimate = Array(positions.prefix(remainingSlots))
         for pos in positionsToAnimate {
             let particles = NodePool.shared.getParticleEmitter()
+            
+            // Track for memory leaks
+            #if DEBUG
+            MemoryLeakDetector.shared.trackParticleEmitter(particles)
+            #endif
+            
             particles.position = CGPoint(
                 x: CGFloat(pos.x) * GameConstants.blockSize - CGFloat(GameConstants.gridSize) * GameConstants.blockSize/2,
                 y: CGFloat(pos.y) * GameConstants.blockSize - CGFloat(GameConstants.gridSize) * GameConstants.blockSize/2
@@ -1146,6 +1226,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             let remove = SKAction.run { [weak self] in
                 particles.removeFromParent()
                 self?.activeParticleEmitters.removeAll { $0 === particles }
+                
+                // Stop memory leak tracking
+                #if DEBUG
+                MemoryLeakDetector.shared.stopTracking(particles, type: "SKEmitterNode")
+                #endif
+                
                 NodePool.shared.returnParticleEmitter(particles)
             }
             particles.run(SKAction.sequence([wait, remove]))

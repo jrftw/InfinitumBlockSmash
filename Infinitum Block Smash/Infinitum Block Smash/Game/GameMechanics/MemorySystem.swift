@@ -210,7 +210,7 @@ final class MemorySystem {
     
     // MARK: — Timing
     private var lastCleanupDate = Date.distantPast
-    private let minimumInterval: TimeInterval = 30.0 // Increased from 10.0 to 30.0 seconds
+    private let minimumInterval: TimeInterval = 60.0 // Increased from 30.0 to 60.0 seconds to reduce overhead
     private let monitoringInterval: TimeInterval = MemoryConfig.getIntervals().memoryCheck
     
     // MARK: — Memory Pressure Source
@@ -392,7 +392,7 @@ final class MemorySystem {
         let startTime = Date()
         let initialMemory = getMemoryUsage()
         
-        // Use autoreleasepool more conservatively
+        // Single autoreleasepool for all cleanup operations to reduce overhead
         autoreleasepool {
             log("[MemorySystem] Clearing caches")
             clearAllCaches()
@@ -408,32 +408,16 @@ final class MemorySystem {
             
             log("[MemorySystem] Clearing memory cache")
             memoryCache.removeAllObjects()
-        }
-        
-        // Clear SpriteKit textures in separate autoreleasepool
-        autoreleasepool {
-            log("[MemorySystem] Clearing SpriteKit textures")
-            Task {
-                await SKTexture.preload([])
-                await SKTextureAtlas.preloadTextureAtlases([])
-            }
-        }
-        
-        // Clear temporary data in separate autoreleasepool
-        autoreleasepool {
+            
             log("[MemorySystem] Clearing temporary data")
             clearTemporaryData()
         }
         
-        // Additional cleanup for low-end devices (less aggressive)
-        if isLowEnd {
-            log("[MemorySystem] Performing additional cleanup for low-end device")
-            autoreleasepool {
-                // Force garbage collection once instead of multiple times
-                clearAllCaches()
-                memoryCache.removeAllObjects()
-                clearTemporaryData()
-            }
+        // Clear SpriteKit textures in separate operation
+        log("[MemorySystem] Clearing SpriteKit textures")
+        Task {
+            await SKTexture.preload([])
+            await SKTextureAtlas.preloadTextureAtlases([])
         }
         
         let endTime = Date()
@@ -446,7 +430,7 @@ final class MemorySystem {
         log("[MemorySystem] Final memory usage: \(String(format: "%.1f", finalMemory.used))MB / \(String(format: "%.1f", finalMemory.total))MB")
         
         // Only perform emergency cleanup if still critical and significant time has passed
-        if checkMemoryStatus() == .critical && Date().timeIntervalSince(startTime) > 60.0 {
+        if checkMemoryStatus() == .critical && Date().timeIntervalSince(startTime) > 120.0 {
             log("[MemorySystem] Memory still critical after cleanup, performing emergency cleanup")
             await performEmergencyCleanup()
         }

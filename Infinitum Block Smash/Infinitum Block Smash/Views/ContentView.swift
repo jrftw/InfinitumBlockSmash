@@ -212,14 +212,31 @@ struct ContentView: View {
                                 gameState.deleteSavedGame()
                             }) {
                                 handleMainMenuInteraction()
-                                showingGameView = true
+                                // Load the saved game when Resume is clicked
+                                Task {
+                                    do {
+                                        try await gameState.loadSavedGame()
+                                        Logger.shared.log("Successfully loaded saved game", category: .gameState, level: .info)
+                                        showingGameView = true
+                                    } catch {
+                                        Logger.shared.log("Error loading saved game: \(error.localizedDescription)", category: .gameState, level: .error)
+                                        // If loading fails, start a fresh game
+                                        gameState.resetGame()
+                                        showingGameView = true
+                                    }
+                                }
                             }
                         }
                         
                         // Play Button (replaces Game Modes)
                         MenuButton(title: "Play", icon: "gamecontroller.fill") {
                             handleMainMenuInteraction()
-                            showingGameModeSelection = true
+                            // Check if there's a saved game and ask for confirmation
+                            if gameState.hasSavedGame() {
+                                showingNewGameConfirmation = true
+                            } else {
+                                showingGameModeSelection = true
+                            }
                         }
                         
                         MenuButton(title: "Leaderboard", icon: "trophy.fill") {
@@ -345,18 +362,6 @@ struct ContentView: View {
                 await AdManager.shared.showInactivityAd()
             }
             
-            // Load saved game if it exists
-            if gameState.hasSavedGame() {
-                Task {
-                    do {
-                        try await gameState.loadSavedGame()
-                        Logger.shared.log("Successfully loaded saved game", category: .gameState, level: .info)
-                    } catch {
-                        Logger.shared.log("Error loading saved game: \(error.localizedDescription)", category: .gameState, level: .error)
-                    }
-                }
-            }
-            
             setupOnlineUsersTracking()
             setupDailyPlayersTracking()
             updateTotalPlayersCount()
@@ -407,14 +412,11 @@ struct ContentView: View {
         .sheet(isPresented: $showingDebugManager) {
             DebugManagerView()
         }
-        .sheet(isPresented: $showingNewGameConfirmation) {
-            // ... existing code ...
-        }
         .alert("Start New Game?", isPresented: $showingNewGameConfirmation) {
             Button("No", role: .cancel) { }
             Button("Yes", role: .destructive) {
                 gameState.resetGame()
-                showingGameView = true
+                showingGameModeSelection = true
             }
         } message: {
             Text("This will delete your saved game and start a new one. Are you sure?")
@@ -432,12 +434,14 @@ struct ContentView: View {
                 onClassic: {
                     UserDefaults.standard.set(false, forKey: "isTimedMode")
                     showingGameModeSelection = false
+                    // Ensure we start with a fresh game
                     gameState.resetGame()
                     showingGameView = true
                 },
                 onClassicTimed: {
                     UserDefaults.standard.set(true, forKey: "isTimedMode")
                     showingGameModeSelection = false
+                    // ClassicTimedGameView creates its own GameState, so no need to reset here
                     showingClassicTimedView = true
                 }
             )

@@ -57,6 +57,7 @@
 
 import SwiftUI
 import UIKit
+import Foundation
 
 struct LevelCompleteOverlay: View {
     let isPresented: Bool
@@ -64,113 +65,201 @@ struct LevelCompleteOverlay: View {
     let level: Int
     let onContinue: () -> Void
     
+    // Add new properties for level completion summary
+    let isPerfectLevel: Bool
+    let linesCleared: Int
+    let blocksPlaced: Int
+    let currentChain: Int
+    
+    // Add breakdown parameter for scoring details
+    let breakdown: ScoringBreakdown?
+    
     @State private var showConfetti = false
     @State private var scale: CGFloat = 0.8
     @State private var opacity: Double = 0
+    @State private var showingBreakdown = false
+    
+    // Computed property to generate level completion summary
+    private var levelSummary: String {
+        var reasons: [String] = []
+        
+        if isPerfectLevel {
+            reasons.append("Perfect clear!")
+        }
+        
+        if linesCleared > 0 {
+            if linesCleared == 1 {
+                reasons.append("1 line cleared")
+            } else {
+                reasons.append("\(linesCleared) lines cleared")
+            }
+        }
+        
+        if currentChain > 0 {
+            if currentChain == 1 {
+                reasons.append("1 combo")
+            } else {
+                reasons.append("\(currentChain) combo")
+            }
+        }
+        
+        if blocksPlaced > 0 {
+            reasons.append("\(blocksPlaced) blocks placed")
+        }
+        
+        // If no specific reasons, just mention the score
+        if reasons.isEmpty {
+            reasons.append("Score target reached")
+        }
+        
+        return reasons.joined(separator: " • ")
+    }
     
     var body: some View {
         if isPresented {
             Color.black.opacity(0.7)
                 .ignoresSafeArea()
                 .overlay(
-                    VStack(spacing: 24) {
-                        // Level Complete Text with Animation
-                        Text("Level Complete!")
-                            .font(.system(size: 36, weight: .bold))
-                            .foregroundColor(.white)
-                            .shadow(radius: 2)
-                            .scaleEffect(scale)
-                            .opacity(opacity)
-                        
-                        // Score and Level Container
-                        VStack(spacing: 16) {
-                            HStack(spacing: 20) {
-                                // Score Display
-                                VStack(spacing: 8) {
-                                    Text("Score")
-                                        .font(.headline)
+                    VStack {
+                        Spacer()
+                        VStack(spacing: 24) {
+                            // Level Complete Text with Animation
+                            Text("Level Complete!")
+                                .font(.system(size: 36, weight: .bold))
+                                .foregroundColor(.white)
+                                .shadow(radius: 2)
+                                .scaleEffect(scale)
+                                .opacity(opacity)
+                            
+                            // Level Completion Summary
+                            VStack(spacing: 8) {
+                                HStack {
+                                    Text("Why you won:")
+                                        .font(.subheadline)
                                         .foregroundColor(.white.opacity(0.8))
-                                    if #available(iOS 16.0, *) {
-                                        Text("\(score)")
-                                            .font(.system(size: 32, weight: .bold, design: .rounded))
-                                            .foregroundColor(.white)
-                                            .contentTransition(.numericText())
-                                    } else {
-                                        Text("\(score)")
-                                            .font(.system(size: 32, weight: .bold, design: .rounded))
-                                            .foregroundColor(.white)
+                                    
+                                    Spacer()
+                                    
+                                    // Info icon for scoring breakdown
+                                    if breakdown != nil {
+                                        Button(action: {
+                                            // Show scoring breakdown
+                                            showingBreakdown = true
+                                        }) {
+                                            Image(systemName: "info.circle")
+                                                .foregroundColor(.white.opacity(0.7))
+                                                .font(.system(size: 16))
+                                        }
                                     }
                                 }
-                                .padding()
-                                .background(Color.blue.opacity(0.2))
-                                .cornerRadius(16)
                                 
-                                // Level Display
-                                VStack(spacing: 8) {
-                                    Text("Level")
-                                        .font(.headline)
-                                        .foregroundColor(.white.opacity(0.8))
-                                    if #available(iOS 16.0, *) {
-                                        Text("\(level)")
-                                            .font(.system(size: 32, weight: .bold, design: .rounded))
-                                            .foregroundColor(.yellow)
-                                            .contentTransition(.numericText())
-                                    } else {
-                                        Text("\(level)")
-                                            .font(.system(size: 32, weight: .bold, design: .rounded))
-                                            .foregroundColor(.yellow)
+                                Text(levelSummary)
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(.white)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Color.white.opacity(0.1))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                            )
+                                    )
+                            }
+                            
+                            // Score and Level Container
+                            VStack(spacing: 16) {
+                                HStack(spacing: 20) {
+                                    // Score Display
+                                    VStack(spacing: 8) {
+                                        Text("Score")
+                                            .font(.headline)
+                                            .foregroundColor(.white.opacity(0.8))
+                                        if #available(iOS 16.0, *) {
+                                            Text("\(score)")
+                                                .font(.system(size: 32, weight: .bold, design: .rounded))
+                                                .foregroundColor(.white)
+                                                .contentTransition(.numericText())
+                                        } else {
+                                            Text("\(score)")
+                                                .font(.system(size: 32, weight: .bold, design: .rounded))
+                                                .foregroundColor(.white)
+                                        }
                                     }
+                                    .padding()
+                                    .background(Color.blue.opacity(0.2))
+                                    .cornerRadius(16)
+                                    
+                                    // Level Display
+                                    VStack(spacing: 8) {
+                                        Text("Level")
+                                            .font(.headline)
+                                            .foregroundColor(.white.opacity(0.8))
+                                        if #available(iOS 16.0, *) {
+                                            Text("\(level)")
+                                                .font(.system(size: 32, weight: .bold, design: .rounded))
+                                                .foregroundColor(.yellow)
+                                                .contentTransition(.numericText())
+                                        } else {
+                                            Text("\(level)")
+                                                .font(.system(size: 32, weight: .bold, design: .rounded))
+                                                .foregroundColor(.yellow)
+                                        }
+                                    }
+                                    .padding()
+                                    .background(Color.yellow.opacity(0.2))
+                                    .cornerRadius(16)
                                 }
-                                .padding()
-                                .background(Color.yellow.opacity(0.2))
-                                .cornerRadius(16)
                             }
-                        }
-                        
-                        // Continue Button with Animation
-                        Button(action: {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                scale = 0.95
-                            }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            
+                            // Continue Button with Animation
+                            Button(action: {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                    scale = 1.0
+                                    scale = 0.95
                                 }
-                                onContinue()
-                            }
-                        }) {
-                            HStack {
-                                Text("Continue")
-                                    .font(.headline)
-                                Image(systemName: "arrow.right.circle.fill")
-                                    .imageScale(.large)
-                            }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 40)
-                            .padding(.vertical, 16)
-                            .background(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [Color.blue, Color.blue.opacity(0.8)]),
-                                    startPoint: .leading,
-                                    endPoint: .trailing
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        scale = 1.0
+                                    }
+                                    onContinue()
+                                }
+                            }) {
+                                HStack {
+                                    Text("Continue")
+                                        .font(.headline)
+                                    Image(systemName: "arrow.right.circle.fill")
+                                        .imageScale(.large)
+                                }
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 40)
+                                .padding(.vertical, 16)
+                                .background(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [Color.blue, Color.blue.opacity(0.8)]),
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
                                 )
-                            )
-                            .cornerRadius(16)
-                            .shadow(color: Color.blue.opacity(0.3), radius: 8, x: 0, y: 4)
+                                .cornerRadius(16)
+                                .shadow(color: Color.blue.opacity(0.3), radius: 8, x: 0, y: 4)
+                            }
+                            .scaleEffect(scale)
+                            .buttonStyle(ScaleButtonStyle())
                         }
-                        .scaleEffect(scale)
-                        .buttonStyle(ScaleButtonStyle())
+                        .padding(32)
+                        .background(
+                            BlurView(style: .systemUltraThinMaterialDark)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 24)
+                                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                )
+                        )
+                        .cornerRadius(24)
+                        .padding(40)
+                        Spacer()
                     }
-                    .padding(32)
-                    .background(
-                        BlurView(style: .systemUltraThinMaterialDark)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 24)
-                                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                            )
-                    )
-                    .cornerRadius(24)
-                    .padding(40)
                     .onAppear {
                         withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                             scale = 1.0
@@ -185,7 +274,26 @@ struct LevelCompleteOverlay: View {
                 )
                 .transition(.opacity.combined(with: .scale))
                 .animation(.easeInOut(duration: 0.3), value: isPresented)
+                .alert("Scoring Breakdown", isPresented: $showingBreakdown) {
+                    Button("OK", role: .cancel) { }
+                } message: {
+                    if let breakdown = breakdown {
+                        Text(createBreakdownMessage(breakdown))
+                    } else {
+                        Text("No scoring breakdown available")
+                    }
+                }
         }
+    }
+    
+    private func createBreakdownMessage(_ breakdown: ScoringBreakdown) -> String {
+        var message = "Total Score: \(breakdown.totalScore)\n\n"
+        
+        for entry in breakdown.breakdown {
+            message += "• \(entry.description): +\(entry.points) points\n"
+        }
+        
+        return message
     }
 }
 
@@ -196,4 +304,4 @@ struct ScaleButtonStyle: ButtonStyle {
             .scaleEffect(configuration.isPressed ? 0.95 : 1)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
     }
-} 
+}

@@ -266,6 +266,10 @@ final class GameState: ObservableObject {
     private var successfulShapePlacements: Int = 0
     private var totalShapePlacements: Int = 0
     
+    // Add scoring breakdown tracking
+    private var scoringBreakdown: [ScoringBreakdown.ScoreEntry] = []
+    private var currentLevelBreakdown: [ScoringBreakdown.ScoreEntry] = []
+    
     // Add debounce properties
     private var lastGameOverCheck: TimeInterval = 0
     private let gameOverCheckDebounce: TimeInterval = 0.5 // Half second debounce
@@ -379,7 +383,7 @@ final class GameState: ObservableObject {
         print("[DEBUG] Setting up initial game - Level will be set to 1")
         grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
         tray.removeAll(keepingCapacity: true)
-        refillTray()
+        refillTray(skipGameStateCheck: true)
         level = 1
         print("[DEBUG] Initial game setup complete - Level: \(level), Tray count: \(tray.count)")
         score = 0
@@ -408,7 +412,7 @@ final class GameState: ObservableObject {
         if tray.count != 3 {
             print("[ERROR] Tray not properly filled after setup (\(tray.count)/3), refilling...")
             tray = []
-            refillTray()
+            refillTray(skipGameStateCheck: true)
         }
     }
     
@@ -599,7 +603,7 @@ final class GameState: ObservableObject {
         return Block(color: color, shape: shape)
     }
     
-    func refillTray() {
+    func refillTray(skipGameStateCheck: Bool = false) {
         print("[DEBUG] Refilling tray - current count: \(tray.count), target: \(requiredShapesToFit)")
         
         // Only add new blocks if we have less than requiredShapesToFit
@@ -625,8 +629,10 @@ final class GameState: ObservableObject {
             print("[DEBUG] Tray corrected - final count: \(tray.count)")
         }
         
-        // Check for game over after refilling
-        checkGameState()
+        // Check for game over after refilling (skip during initialization)
+        if !skipGameStateCheck {
+            checkGameState()
+        }
         
         // Schedule debounced update instead of immediate update
         scheduleUpdate()
@@ -845,14 +851,26 @@ final class GameState: ObservableObject {
                 hasAnyTouches = true
                 totalTouchingPoints += touchingCount
                 // Add base points for each touch
-                addScore(touchingCount * 10, at: CGPoint(x: CGFloat(x) * GameConstants.blockSize, y: CGFloat(y) * GameConstants.blockSize))
+                addScoreWithBreakdown(
+                    touchingCount * 10,
+                    type: ScoringBreakdown.ScoreType.touchingBlocks,
+                    description: "\(touchingCount) touching blocks",
+                    count: touchingCount,
+                    at: CGPoint(x: CGFloat(x) * GameConstants.blockSize, y: CGFloat(y) * GameConstants.blockSize)
+                )
             }
         }
         
         // Multiple touches bonus
         if hasAnyTouches && totalTouchingPoints >= 3 {
             let bonusPoints = totalTouchingPoints * 2
-            addScore(bonusPoints, at: CGPoint(x: frameSize.width/2, y: frameSize.height/2))
+            addScoreWithBreakdown(
+                bonusPoints,
+                type: ScoringBreakdown.ScoreType.multipleTouches,
+                description: "Multiple touches bonus (\(totalTouchingPoints) total touches)",
+                count: totalTouchingPoints,
+                at: CGPoint(x: frameSize.width/2, y: frameSize.height/2)
+            )
             #if DEBUG
             print("[Bonus] Multiple touches! +\(bonusPoints) bonus points!")
             #endif
@@ -1050,11 +1068,23 @@ final class GameState: ObservableObject {
                 clearedPositions.append((i, -1))  // -1 indicates entire row
                 linesClearedThisTurn += 1
                 Logger.shared.log("Row \(i) is full and will be cleared", category: .lineClear, level: .info)
-                addScore(100, at: CGPoint(x: frameSize.width/2, y: CGFloat(i) * GameConstants.blockSize))
+                addScoreWithBreakdown(
+                    100,
+                    type: ScoringBreakdown.ScoreType.lineClear,
+                    description: "Row \(i) cleared",
+                    count: 1,
+                    at: CGPoint(x: frameSize.width/2, y: CGFloat(i) * GameConstants.blockSize)
+                )
                 
                 // Check for same color bonus (200 points if all blocks are the same color)
                 if rowColors[i].count == 1 {
-                    addScore(200, at: CGPoint(x: frameSize.width/2, y: CGFloat(i) * GameConstants.blockSize))
+                    addScoreWithBreakdown(
+                        200,
+                        type: ScoringBreakdown.ScoreType.sameColorBonus,
+                        description: "Same color row bonus",
+                        count: 1,
+                        at: CGPoint(x: frameSize.width/2, y: CGFloat(i) * GameConstants.blockSize)
+                    )
                     Logger.shared.log("Same color row bonus! +200 points", category: .lineClear, level: .info)
                 }
             }
@@ -1063,11 +1093,23 @@ final class GameState: ObservableObject {
                 clearedPositions.append((-1, i))  // -1 indicates entire column
                 linesClearedThisTurn += 1
                 Logger.shared.log("Column \(i) is full and will be cleared", category: .lineClear, level: .info)
-                addScore(100, at: CGPoint(x: CGFloat(i) * GameConstants.blockSize, y: frameSize.height/2))
+                addScoreWithBreakdown(
+                    100,
+                    type: ScoringBreakdown.ScoreType.lineClear,
+                    description: "Column \(i) cleared",
+                    count: 1,
+                    at: CGPoint(x: CGFloat(i) * GameConstants.blockSize, y: frameSize.height/2)
+                )
                 
                 // Check for same color bonus (200 points if all blocks are the same color)
                 if columnColors[i].count == 1 {
-                    addScore(200, at: CGPoint(x: CGFloat(i) * GameConstants.blockSize, y: frameSize.height/2))
+                    addScoreWithBreakdown(
+                        200,
+                        type: ScoringBreakdown.ScoreType.sameColorBonus,
+                        description: "Same color column bonus",
+                        count: 1,
+                        at: CGPoint(x: CGFloat(i) * GameConstants.blockSize, y: frameSize.height/2)
+                    )
                     Logger.shared.log("Same color column bonus! +200 points", category: .lineClear, level: .info)
                 }
             }
@@ -1102,14 +1144,26 @@ final class GameState: ObservableObject {
         // Check for X pattern (10+ blocks in X formation)
         let xPatternScore = checkXPattern()
         if xPatternScore > 0 {
-            addScore(xPatternScore, at: CGPoint(x: frameSize.width/2, y: frameSize.height/2))
+            addScoreWithBreakdown(
+                xPatternScore,
+                type: ScoringBreakdown.ScoreType.xPattern,
+                description: "X pattern formed",
+                count: 1,
+                at: CGPoint(x: frameSize.width/2, y: frameSize.height/2)
+            )
             Logger.shared.log("X pattern found! +\(xPatternScore) points", category: .lineClear, level: .info)
         }
         
         // Check for perfect level (grid completely empty)
         if isGridEmpty() && isPerfectLevel {
             let perfectBonus = 1000
-            addScore(perfectBonus, at: CGPoint(x: frameSize.width/2, y: frameSize.height/2))
+            addScoreWithBreakdown(
+                perfectBonus,
+                type: ScoringBreakdown.ScoreType.perfectLevel,
+                description: "Perfect level bonus",
+                count: 1,
+                at: CGPoint(x: frameSize.width/2, y: frameSize.height/2)
+            )
             print("[Perfect] Perfect level! +\(perfectBonus) bonus points!")
             achievementsManager.updateAchievement(id: "perfect_level", value: 1)
             perfectLevels += 1
@@ -1240,6 +1294,12 @@ final class GameState: ObservableObject {
         if temporaryScore >= requiredScore && !levelComplete {
             handleLevelComplete()
         }
+    }
+    
+    // Add a new method for tracking specific score types
+    func addScoreWithBreakdown(_ points: Int, type: ScoringBreakdown.ScoreType, description: String, count: Int = 1, at position: CGPoint? = nil) {
+        addScoreEntry(type, points: points, description: description, count: count)
+        addScore(points, at: position)
     }
     
     // Add this struct at the top of the file
@@ -1827,14 +1887,14 @@ final class GameState: ObservableObject {
                     // For new games or invalid saved trays, ensure tray is properly initialized
                     print("[DEBUG] Initializing fresh tray (new game or invalid saved tray)")
                     self.tray = []
-                    self.refillTray()
+                    self.refillTray(skipGameStateCheck: true)
                 }
                 
                 // SAFETY CHECK: Ensure tray always has the correct number of blocks
                 if self.tray.count != 3 {
                     print("[DEBUG] Tray has incorrect number of blocks (\(self.tray.count)), refilling...")
                     self.tray = []
-                    self.refillTray()
+                    self.refillTray(skipGameStateCheck: true)
                 }
                 
                 // Restore game state flags
@@ -3318,7 +3378,7 @@ final class GameState: ObservableObject {
         if tray.count != 3 {
             print("[DEBUG] Tray has \(tray.count) blocks, refilling to 3")
             tray = []
-            refillTray()
+            refillTray(skipGameStateCheck: true)
         }
         
         // Check if grid is empty
@@ -3346,5 +3406,35 @@ final class GameState: ObservableObject {
         
         // Notify delegate of any changes
         delegate?.gameStateDidUpdate()
+    }
+    
+    // MARK: - Scoring Breakdown Methods
+    
+    private func addScoreEntry(_ type: ScoringBreakdown.ScoreType, points: Int, description: String, count: Int = 1) {
+        let entry = ScoringBreakdown.ScoreEntry(type: type, points: points, description: description, count: count)
+        currentLevelBreakdown.append(entry)
+        scoringBreakdown.append(entry)
+    }
+    
+    func getCurrentLevelBreakdown() -> ScoringBreakdown {
+        return ScoringBreakdown(
+            totalScore: temporaryScore,
+            breakdown: currentLevelBreakdown,
+            level: level,
+            timestamp: Date()
+        )
+    }
+    
+    func getGameBreakdown() -> ScoringBreakdown {
+        return ScoringBreakdown(
+            totalScore: score,
+            breakdown: scoringBreakdown,
+            level: level,
+            timestamp: Date()
+        )
+    }
+    
+    private func resetLevelBreakdown() {
+        currentLevelBreakdown.removeAll()
     }
 }

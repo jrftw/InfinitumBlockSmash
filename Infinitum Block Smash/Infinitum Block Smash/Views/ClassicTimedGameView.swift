@@ -85,6 +85,10 @@ struct ClassicTimedGameView: View {
         }
         .onAppear {
             UserDefaults.standard.set(true, forKey: "isTimedMode")
+            
+            // Ensure we start with a completely fresh game
+            gameState.resetGame()
+            
             Task {
                 await timedState.startNewLevel()
             }
@@ -235,10 +239,20 @@ struct ClassicTimedGameView: View {
                 .accessibilityHint(achievement.description)
             }
             
-            LevelCompleteOverlay(isPresented: gameState.levelComplete, score: gameState.score, level: gameState.level) {
-                gameState.confirmLevelCompletion()
-                timedState.resumeAfterLevelComplete()
-            }
+            LevelCompleteOverlay(
+                isPresented: gameState.levelComplete, 
+                score: gameState.score, 
+                level: gameState.level,
+                onContinue: {
+                    gameState.confirmLevelCompletion()
+                    timedState.resumeAfterLevelComplete()
+                },
+                isPerfectLevel: gameState.isPerfectLevel,
+                linesCleared: gameState.linesCleared,
+                blocksPlaced: gameState.blocksPlaced,
+                currentChain: gameState.currentChain,
+                breakdown: gameState.getCurrentLevelBreakdown()
+            )
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Level \(gameState.level) Complete! Score: \(gameState.score)")
             
@@ -260,7 +274,10 @@ struct ClassicTimedGameView: View {
                         await timedState.handleTimeUp()
                     }
                 },
-                canContinue: !gameState.hasUsedContinueAd
+                canContinue: !gameState.hasUsedContinueAd,
+                isTimedMode: true,
+                timeRemaining: timedState.timeRemaining,
+                breakdown: gameState.getGameBreakdown()
             )
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Game Over. Final Score: \(gameState.score), Level: \(gameState.level)")

@@ -24,34 +24,34 @@ struct MemoryConfig {
     struct Intervals {
         // High-end devices (iPhone 12 Pro and newer, iPad Pro)
         static let highEndDevice = DeviceIntervals(
-            memoryCheck: 30.0,      // Check every 30 seconds (increased from 10)
-            memoryCleanup: 300.0,   // Cleanup every 5 minutes (increased from 3)
-            cacheCleanup: 1200.0,   // Cache cleanup every 20 minutes (increased from 15)
-            statsLogging: 600.0     // Log stats every 10 minutes (increased from 5)
+            memoryCheck: 60.0,      // Check every 60 seconds (increased from 30)
+            memoryCleanup: 600.0,   // Cleanup every 10 minutes (increased from 5)
+            cacheCleanup: 1800.0,   // Cache cleanup every 30 minutes (increased from 20)
+            statsLogging: 1200.0    // Log stats every 20 minutes (increased from 10)
         )
         
         // Mid-range devices (iPhone 11, iPhone SE, iPad Air)
         static let midRangeDevice = DeviceIntervals(
-            memoryCheck: 45.0,      // Check every 45 seconds (increased from 15)
-            memoryCleanup: 420.0,   // Cleanup every 7 minutes (increased from 5)
-            cacheCleanup: 900.0,    // Cache cleanup every 15 minutes (increased from 10)
-            statsLogging: 300.0     // Log stats every 5 minutes (increased from 3)
+            memoryCheck: 90.0,      // Check every 90 seconds (increased from 45)
+            memoryCleanup: 900.0,   // Cleanup every 15 minutes (increased from 7)
+            cacheCleanup: 1800.0,   // Cache cleanup every 30 minutes (increased from 15)
+            statsLogging: 900.0     // Log stats every 15 minutes (increased from 5)
         )
         
         // Low-end devices (iPhone 8, older iPads)
         static let lowEndDevice = DeviceIntervals(
-            memoryCheck: 60.0,      // Check every 60 seconds (increased from 20)
-            memoryCleanup: 600.0,   // Cleanup every 10 minutes (increased from 7)
-            cacheCleanup: 1200.0,   // Cache cleanup every 20 minutes (increased from 15)
-            statsLogging: 600.0     // Log stats every 10 minutes (increased from 5)
+            memoryCheck: 120.0,     // Check every 120 seconds (increased from 60)
+            memoryCleanup: 1200.0,  // Cleanup every 20 minutes (increased from 10)
+            cacheCleanup: 2400.0,   // Cache cleanup every 40 minutes (increased from 20)
+            statsLogging: 1200.0    // Log stats every 20 minutes (increased from 10)
         )
         
         // Simulator settings (for testing)
         static let simulator = DeviceIntervals(
-            memoryCheck: 15.0,      // More frequent for testing (increased from 5)
-            memoryCleanup: 180.0,   // Cleanup every 3 minutes (increased from 2)
-            cacheCleanup: 600.0,    // Cache cleanup every 10 minutes (increased from 5)
-            statsLogging: 120.0     // Log stats every 2 minutes (increased from 1)
+            memoryCheck: 30.0,      // More frequent for testing (increased from 15)
+            memoryCleanup: 300.0,   // Cleanup every 5 minutes (increased from 3)
+            cacheCleanup: 900.0,    // Cache cleanup every 15 minutes (increased from 10)
+            statsLogging: 300.0     // Log stats every 5 minutes (increased from 2)
         )
     }
     
@@ -59,31 +59,31 @@ struct MemoryConfig {
     
     /// Memory usage thresholds for different actions
     struct Thresholds {
-        // Less aggressive thresholds to prevent app killing
-        static let warningLevel: Double = 0.6      // 60% memory usage (reduced from 70%)
-        static let criticalLevel: Double = 0.75    // 75% memory usage (reduced from 85%)
-        static let extremeLevel: Double = 0.85     // 85% memory usage (reduced from 95%)
+        // More conservative thresholds to prevent app killing
+        static let warningLevel: Double = 0.5      // 50% memory usage (reduced from 60%)
+        static let criticalLevel: Double = 0.65    // 65% memory usage (reduced from 75%)
+        static let extremeLevel: Double = 0.75     // 75% memory usage (reduced from 85%)
     }
     
     // MARK: - Cache Limits
     
     /// Cache size limits based on device type
     static let highEndDeviceCacheLimits = CacheLimits(
-        memoryCacheSize: 30 * 1024 * 1024,  // 30MB (reduced from 50MB)
-        diskCacheSize: 60 * 1024 * 1024,   // 60MB (reduced from 100MB)
-        maxCacheEntries: 150
+        memoryCacheSize: 20 * 1024 * 1024,  // 20MB (reduced from 30MB)
+        diskCacheSize: 40 * 1024 * 1024,   // 40MB (reduced from 60MB)
+        maxCacheEntries: 100
     )
     
     static let midRangeDeviceCacheLimits = CacheLimits(
-        memoryCacheSize: 15 * 1024 * 1024,  // 15MB (reduced from 25MB)
-        diskCacheSize: 30 * 1024 * 1024,    // 30MB (reduced from 50MB)
-        maxCacheEntries: 75
+        memoryCacheSize: 10 * 1024 * 1024,  // 10MB (reduced from 15MB)
+        diskCacheSize: 20 * 1024 * 1024,    // 20MB (reduced from 30MB)
+        maxCacheEntries: 50
     )
     
     static let lowEndDeviceCacheLimits = CacheLimits(
-        memoryCacheSize: 8 * 1024 * 1024,   // 8MB (reduced from 15MB)
-        diskCacheSize: 15 * 1024 * 1024,    // 15MB (reduced from 25MB)
-        maxCacheEntries: 30
+        memoryCacheSize: 5 * 1024 * 1024,   // 5MB (reduced from 8MB)
+        diskCacheSize: 10 * 1024 * 1024,    // 10MB (reduced from 15MB)
+        maxCacheEntries: 20
     )
     
     // MARK: - Performance Settings
