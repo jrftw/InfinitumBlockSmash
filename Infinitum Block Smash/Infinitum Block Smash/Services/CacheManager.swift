@@ -172,7 +172,9 @@ final class CacheManager {
         memoryCache.countLimit = cacheLimits.maxCacheEntries
         memoryCache.totalCostLimit = cacheLimits.memoryCacheSize
         
-        let cachesDirectory = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        guard let cachesDirectory = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first else {
+            fatalError("Unable to access caches directory")
+        }
         cacheDirectory = cachesDirectory.appendingPathComponent("GameCache")
         try? fileManager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
         
@@ -346,8 +348,11 @@ final class CacheManager {
         let dest = UnsafeMutablePointer<UInt8>.allocate(capacity: destSize)
         defer { dest.deallocate() }
         
-        let compressedSize = data.withUnsafeBytes {
-            compression_encode_buffer(dest, destSize, $0.baseAddress!.assumingMemoryBound(to: UInt8.self), srcSize, nil, COMPRESSION_ZLIB)
+        let compressedSize = try data.withUnsafeBytes { bytes in
+            guard let baseAddress = bytes.baseAddress else {
+                throw NSError(domain: "CacheManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid data buffer"])
+            }
+            return compression_encode_buffer(dest, destSize, baseAddress.assumingMemoryBound(to: UInt8.self), srcSize, nil, COMPRESSION_ZLIB)
         }
         
         guard compressedSize > 0 else {
@@ -363,8 +368,11 @@ final class CacheManager {
         let dest = UnsafeMutablePointer<UInt8>.allocate(capacity: destSize)
         defer { dest.deallocate() }
         
-        let decompressedSize = data.withUnsafeBytes {
-            compression_decode_buffer(dest, destSize, $0.baseAddress!.assumingMemoryBound(to: UInt8.self), srcSize, nil, COMPRESSION_ZLIB)
+        let decompressedSize = try data.withUnsafeBytes { bytes in
+            guard let baseAddress = bytes.baseAddress else {
+                throw NSError(domain: "CacheManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid data buffer"])
+            }
+            return compression_decode_buffer(dest, destSize, baseAddress.assumingMemoryBound(to: UInt8.self), srcSize, nil, COMPRESSION_ZLIB)
         }
         
         guard decompressedSize > 0 else {

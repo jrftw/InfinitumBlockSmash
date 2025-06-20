@@ -180,20 +180,30 @@ struct AnnouncementCard: View {
                 .fixedSize(horizontal: false, vertical: true)
             
             if let link = announcement.link {
-                Link(destination: URL(string: link)!) {
-                    HStack {
-                        Text("Learn More")
-                            .font(.subheadline)
-                            .foregroundColor(.white)
-                        
-                        Image(systemName: "arrow.right")
-                            .font(.subheadline)
-                            .foregroundColor(.white)
+                if let url = URL(string: link) {
+                    Link(destination: url) {
+                        HStack {
+                            Text("Learn More")
+                                .font(.subheadline)
+                                .foregroundColor(.white)
+                            
+                            Image(systemName: "arrow.right")
+                                .font(.subheadline)
+                                .foregroundColor(.white)
+                        }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 16)
+                        .background(Color.white.opacity(0.2))
+                        .cornerRadius(8)
                     }
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 16)
-                    .background(Color.white.opacity(0.2))
-                    .cornerRadius(8)
+                } else {
+                    Text("Invalid Link")
+                        .font(.subheadline)
+                        .foregroundColor(.red)
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 16)
+                        .background(Color.white.opacity(0.2))
+                        .cornerRadius(8)
                 }
             }
         }

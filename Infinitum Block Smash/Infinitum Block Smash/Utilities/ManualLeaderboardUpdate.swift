@@ -45,7 +45,7 @@ class ManualLeaderboardUpdate {
     // Add function to get current user data
     private func getCurrentUserData() throws -> (userId: String, username: String) {
         guard let userId = Auth.auth().currentUser?.uid else {
-            print("[ManualUpdate] ❌ No authenticated user found")
+            Logger.shared.log("No authenticated user found", category: .firebaseAuth, level: .error)
             throw LeaderboardError.notAuthenticated
         }
         
@@ -57,10 +57,14 @@ class ManualLeaderboardUpdate {
     
     // Updated function to handle all leaderboard types with force update for daily
     func updateAllLeaderboardsWithData(finalScore: Int, finalLevel: Int, totalTime: Double, shouldWrite: Bool = true) async throws {
+        #if DEBUG
         print("[ManualUpdate] 🏆 Handling all leaderboard updates")
+        #endif
         
         guard shouldWrite else {
+            #if DEBUG
             print("[ManualUpdate] ⏭️ Skipping write - shouldWrite is false")
+            #endif
             return
         }
         
@@ -115,9 +119,13 @@ class ManualLeaderboardUpdate {
                     
                     if !currentDoc.exists {
                         // Create new leaderboard entry
+                        #if DEBUG
                         print("[ManualUpdate] 📝 Creating new \(period) entry for \(collection)")
+                        #endif
                         try await docRef.setData(data)
+                        #if DEBUG
                         print("[ManualUpdate] ✅ Created new \(period) entry for \(collection)")
+                        #endif
                     } else {
                         // Update existing entry if score is better
                         let currentData = currentDoc.data()
@@ -129,9 +137,13 @@ class ManualLeaderboardUpdate {
                                          finalScore > currentScore
                         
                         if shouldUpdate {
+                            #if DEBUG
                             print("[ManualUpdate] 📝 Updating existing \(period) entry for \(collection)")
+                            #endif
                             try await docRef.setData(data, merge: true)
+                            #if DEBUG
                             print("[ManualUpdate] ✅ Updated existing \(period) entry for \(collection)")
+                            #endif
                             
                             // Track analytics only for significant score improvements
                             #if DEBUG
@@ -155,7 +167,9 @@ class ManualLeaderboardUpdate {
                             }
                             #endif
                         } else {
+                            #if DEBUG
                             print("[ManualUpdate] ⏭️ Skipping update - current score is better")
+                            #endif
                             
                             // Track skipped updates in debug mode only
                             #if DEBUG
@@ -173,13 +187,15 @@ class ManualLeaderboardUpdate {
                     LeaderboardCache.shared.invalidateCache(period: period)
                     
                 } catch {
-                    print("[ManualUpdate] ❌ Error updating \(collection)/\(period): \(error.localizedDescription)")
+                    Logger.shared.log("Error updating \(collection)/\(period): \(error.localizedDescription)", category: .firebaseFirestore, level: .error)
                     throw error
                 }
             }
         }
         
+        #if DEBUG
         print("[ManualUpdate] ✅ Completed all leaderboard updates")
+        #endif
     }
     
     // New function to handle game end updates
@@ -590,9 +606,13 @@ class ManualLeaderboardUpdate {
                     
                     if !currentDoc.exists {
                         // Create new leaderboard entry
+                        #if DEBUG
                         print("[ManualUpdate] 📝 Creating new \(period) entry for \(collection)")
+                        #endif
                         try await docRef.setData(data)
+                        #if DEBUG
                         print("[ManualUpdate] ✅ Created new \(period) entry for \(collection)")
+                        #endif
                     } else {
                         // Update existing entry if score is better
                         let currentData = currentDoc.data()
@@ -604,9 +624,13 @@ class ManualLeaderboardUpdate {
                                          finalScore > currentScore
                         
                         if shouldUpdate {
+                            #if DEBUG
                             print("[ManualUpdate] 📝 Updating existing \(period) entry for \(collection)")
+                            #endif
                             try await docRef.setData(data, merge: true)
+                            #if DEBUG
                             print("[ManualUpdate] ✅ Updated existing \(period) entry for \(collection)")
+                            #endif
                             
                             // Track analytics only for significant score improvements
                             #if DEBUG
@@ -630,7 +654,9 @@ class ManualLeaderboardUpdate {
                             }
                             #endif
                         } else {
+                            #if DEBUG
                             print("[ManualUpdate] ⏭️ Skipping update - current score is better")
+                            #endif
                             
                             // Track skipped updates in debug mode only
                             #if DEBUG
@@ -648,13 +674,15 @@ class ManualLeaderboardUpdate {
                     LeaderboardCache.shared.invalidateCache(period: period)
                     
                 } catch {
-                    print("[ManualUpdate] ❌ Error updating \(collection)/\(period): \(error.localizedDescription)")
+                    Logger.shared.log("Error updating \(collection)/\(period): \(error.localizedDescription)", category: .firebaseFirestore, level: .error)
                     throw error
                 }
             }
         }
         
+        #if DEBUG
         print("[ManualUpdate] ✅ Completed all leaderboard updates")
+        #endif
     }
     
     // Add function to regenerate deleted entries

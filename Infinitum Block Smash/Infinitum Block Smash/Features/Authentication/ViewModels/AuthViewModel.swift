@@ -253,6 +253,7 @@ class AuthViewModel: ObservableObject {
                     self.isLoading = false
                     
                     if let error = error {
+                        Logger.shared.log("Failed to save user data: \(error.localizedDescription)", category: .firebaseFirestore, level: .error)
                         self.errorMessage = "Failed to save user data: \(error.localizedDescription)"
                         return
                     }

@@ -319,30 +319,39 @@ extension GameScene: GameStateDelegate {
     // MARK: - Hard Grid Clearing
     
     private func hardClearGridContainer() {
+        #if DEBUG
         print("[DEBUG] HARD CLEAR: Removing all children from grid container")
         print("[DEBUG] Grid children before hard clear: \(gridNode.children.count)")
+        #endif
         
         // Remove all children except essential static nodes
         for child in gridNode.children {
             if let name = child.name {
                 // Preserve only essential static nodes (grid lines, background)
                 if name.contains("gridLine") || name.contains("gridTile") || name.contains("background") {
+                    #if DEBUG
                     print("[DEBUG] Preserving static node: \(name)")
+                    #endif
                     continue
                 } else {
+                    #if DEBUG
                     print("[DEBUG] Removing node: \(name)")
+                    #endif
                     child.removeAllActions()
                     child.removeAllChildren()
                     child.removeFromParent()
                 }
             } else {
+                #if DEBUG
                 print("[DEBUG] Removing unnamed node")
+                #endif
                 child.removeAllActions()
                 child.removeAllChildren()
                 child.removeFromParent()
             }
         }
         
+        #if DEBUG
         print("[DEBUG] Grid children after hard clear: \(gridNode.children.count)")
         
         // Validate that only essential static nodes remain
@@ -352,6 +361,7 @@ extension GameScene: GameStateDelegate {
         // Ensure placedBlockNodes tracking is also cleared
         placedBlockNodes.removeAll()
         print("[DEBUG] Placed block nodes tracking cleared: \(placedBlockNodes.count) nodes")
+        #endif
     }
     
     // MARK: - Grid State Validation
@@ -359,7 +369,9 @@ extension GameScene: GameStateDelegate {
     private func validateGridStateConsistency() {
         guard let gameState = gameState else { return }
         
+        #if DEBUG
         print("[DEBUG] Validating grid state consistency")
+        #endif
         
         let gridSize = GameConstants.gridSize
         var visualBlockCount = 0
@@ -381,10 +393,12 @@ extension GameScene: GameStateDelegate {
             }
         }
         
+        #if DEBUG
         print("[DEBUG] Visual blocks: \(visualBlockCount), Data blocks: \(dataBlockCount)")
+        #endif
         
         if visualBlockCount != dataBlockCount {
-            print("[ERROR] Grid state mismatch! Visual: \(visualBlockCount), Data: \(dataBlockCount)")
+            Logger.shared.log("Grid state mismatch! Visual: \(visualBlockCount), Data: \(dataBlockCount)", category: .debugGameScene, level: .error)
             
             // Log details of the mismatch
             for row in 0..<gridSize {
@@ -392,7 +406,7 @@ extension GameScene: GameStateDelegate {
                     if gameState.grid[row][col] != nil {
                         let key = "\(row),\(col)"
                         if placedBlockNodes[key] == nil {
-                            print("[ERROR] Data has block at (\(row), \(col)) but no visual node")
+                            Logger.shared.log("Data has block at (\(row), \(col)) but no visual node", category: .debugGameScene, level: .error)
                         }
                     }
                 }
@@ -406,13 +420,15 @@ extension GameScene: GameStateDelegate {
                        let col = Int(components[1]),
                        row >= 0 && row < gridSize && col >= 0 && col < gridSize {
                         if gameState.grid[row][col] == nil {
-                            print("[ERROR] Visual node at (\(row), \(col)) but no data")
+                            Logger.shared.log("Visual node at (\(row), \(col)) but no data", category: .debugGameScene, level: .error)
                         }
                     }
                 }
             }
         } else {
+            #if DEBUG
             print("[DEBUG] Grid state consistency validated successfully")
+            #endif
         }
     }
 }

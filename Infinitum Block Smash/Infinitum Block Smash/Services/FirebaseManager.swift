@@ -131,9 +131,13 @@ final class NetworkMonitor: ObservableObject {
                 self?.connectionType = path.availableInterfaces.first?.type ?? .other
                 
                 if path.status == .satisfied {
+                    #if DEBUG
                     print("[NetworkMonitor] Connected via \(self?.connectionType.description ?? "unknown")")
+                    #endif
                 } else {
+                    #if DEBUG
                     print("[NetworkMonitor] Not connected. Status: \(path.status)")
+                    #endif
                 }
             }
         }
@@ -249,21 +253,45 @@ class FirebaseManager: ObservableObject {
         // Keep RTDB synced
         rtdb.keepSynced(true)
         
+        #if DEBUG
         print("[FirebaseManager] Initializing...")
+        #endif
         setupAuthStateListener()
         
         if auth.currentUser == nil {
+            #if DEBUG
             print("[FirebaseManager] No user signed in, attempting anonymous sign in...")
+            #endif
             Task {
                 do {
                     try await signInAnonymously()
+                    #if DEBUG
                     print("[FirebaseManager] Anonymous sign in successful")
+                    #endif
                 } catch {
-                    print("[FirebaseManager] Error signing in anonymously: \(error)")
+                    Logger.shared.log("Error signing in anonymously: \(error.localizedDescription)", category: .firebaseAuth, level: .error)
+                    
+                    // Handle specific Firebase Auth errors
+                    if let nsError = error as NSError? {
+                        switch nsError.code {
+                        case AuthErrorCode.networkError.rawValue:
+                            throw FirebaseError.networkError
+                        case AuthErrorCode.invalidCredential.rawValue:
+                            throw FirebaseError.invalidCredential
+                        case AuthErrorCode.operationNotAllowed.rawValue:
+                            throw FirebaseError.permissionDenied
+                        default:
+                            throw error
+                        }
+                    } else {
+                        throw error
+                    }
                 }
             }
         } else if let userId = auth.currentUser?.uid {
+            #if DEBUG
             print("[FirebaseManager] User already signed in: \(userId)")
+            #endif
             Task {
                 await loadUserData(userId: userId)
             }
@@ -292,43 +320,33 @@ class FirebaseManager: ObservableObject {
     
     private func updateLastActive() async {
         guard let userId = currentUser?.uid else {
+            #if DEBUG
             print("[FirebaseManager] Cannot update lastActive: No current user")
+            #endif
             return
         }
+        
+        #if DEBUG
+        print("[FirebaseManager] Updating lastActive for current user: \(userId)")
+        #endif
+        
         do {
-            print("[FirebaseManager] Updating lastActive for current user: \(userId)")
-            
-            // Update Firestore
+            // Update lastActive in Firestore
             try await db.collection("users").document(userId).updateData([
                 "lastActive": FieldValue.serverTimestamp()
             ])
             
-            // Update RTDB for real-time presence
-            try await rtdb.child("online_users").child(userId).setValue(true)
+            // Update presence in RTDB
+            try await rtdb.child("users").child(userId).child("presence").setValue([
+                "online": true,
+                "lastSeen": ServerValue.timestamp()
+            ])
             
-            // Update daily stats
-            let calendar = Calendar.current
-            let lastResetSnapshot = try await rtdb.child("daily_stats").child("last_reset").getData()
-            
-            if let lastResetTimestamp = lastResetSnapshot.value as? TimeInterval {
-                let lastResetDate = Date(timeIntervalSince1970: lastResetTimestamp)
-                if !calendar.isDate(lastResetDate, inSameDayAs: Date()) {
-                    // Reset the count for the new day
-                    try await resetDailyPlayersCount()
-                } else {
-                    // Increment the daily players count
-                    let currentCount = try await rtdb.child("daily_stats").child("players_today").getData()
-                    if let count = currentCount.value as? Int {
-                        try await rtdb.child("daily_stats").child("players_today").setValue(count + 1)
-                    } else {
-                        try await rtdb.child("daily_stats").child("players_today").setValue(1)
-                    }
-                }
-            }
-            
+            #if DEBUG
             print("[FirebaseManager] Successfully updated lastActive and presence for current user")
+            #endif
         } catch {
-            print("[FirebaseManager] Error updating lastActive: \(error)")
+            Logger.shared.log("Error updating lastActive: \(error.localizedDescription)", category: .firebaseManager, level: .error)
         }
     }
     
@@ -336,61 +354,80 @@ class FirebaseManager: ObservableObject {
     
     private func setupAuthStateListener() {
         authStateListener = auth.addStateDidChangeListener { [weak self] _, user in
-            Task { @MainActor in
+            DispatchQueue.main.async {
                 self?.isAuthenticated = user != nil
                 self?.currentUser = user
+                
                 if let user = user {
+                    #if DEBUG
                     print("[FirebaseManager] User authenticated with ID: \(user.uid)")
-                    // Wait a short moment to ensure auth is fully processed
-                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
-                    await self?.loadUserData(userId: user.uid)
-                } else {
-                    print("[FirebaseManager] No user authenticated")
-                    // Try to sign in anonymously if no user is present
-                    do {
-                        try await self?.signInAnonymously()
-                    } catch {
-                        print("[FirebaseManager] Error signing in anonymously: \(error)")
+                    #endif
+                    Task {
+                        await self?.loadUserData(userId: user.uid)
                     }
+                } else {
+                    #if DEBUG
+                    print("[FirebaseManager] No user authenticated")
+                    #endif
                 }
             }
         }
     }
     
-    func signInAnonymously() async throws {
+    private func signInAnonymously() async throws {
         do {
+            #if DEBUG
             print("[FirebaseManager] Starting anonymous sign in...")
-            let result = try await auth.signInAnonymously()
-            isGuest = true
-            print("[FirebaseManager] Anonymous sign in successful for user: \(result.user.uid)")
+            #endif
             
-            // Create or update user document with proper timestamps and username
+            let result = try await auth.signInAnonymously()
+            let user = result.user
+            
+            #if DEBUG
+            print("[FirebaseManager] Anonymous sign in successful for user: \(user.uid)")
+            #endif
+            
+            // Create or update user document
             let userData: [String: Any] = [
                 "deviceId": generateDeviceId(),
                 "referralCode": generateReferralCode(),
                 "createdAt": FieldValue.serverTimestamp(),
-                "lastLogin": FieldValue.serverTimestamp(),
                 "lastActive": FieldValue.serverTimestamp(),
-                "userId": result.user.uid,
-                "username": "Guest_\(result.user.uid.prefix(6))" // Add a unique guest username
+                "userId": user.uid,
+                "version": 1
             ]
             
+            #if DEBUG
             print("[FirebaseManager] Creating/updating user document...")
-            try await db.collection("users").document(result.user.uid).setData(userData, merge: true)
+            #endif
+            
+            try await db.collection("users").document(user.uid).setData(userData, merge: true)
+            
+            #if DEBUG
             print("[FirebaseManager] User document created/updated successfully")
+            #endif
             
-            // Update the user's profile with username
-            let changeRequest = result.user.createProfileChangeRequest()
-            changeRequest.displayName = userData["username"] as? String
-            try await changeRequest.commitChanges()
+            // Update local state
+            await MainActor.run {
+                self.currentUser = user
+                self.isAuthenticated = true
+                self.isGuest = true
+            }
             
-            // Wait a short moment to ensure document is created
-            try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+        } catch let error as NSError {
+            Logger.shared.log("Error in signInAnonymously: \(error.localizedDescription)", category: .firebaseAuth, level: .error)
             
-            await loadUserData(userId: result.user.uid)
-        } catch {
-            print("[FirebaseManager] Error in signInAnonymously: \(error)")
-            throw error
+            // Handle specific Firebase Auth errors
+            switch error.code {
+            case AuthErrorCode.networkError.rawValue:
+                throw FirebaseError.networkError
+            case AuthErrorCode.invalidCredential.rawValue:
+                throw FirebaseError.invalidCredential
+            case AuthErrorCode.operationNotAllowed.rawValue:
+                throw FirebaseError.permissionDenied
+            default:
+                throw error
+            }
         }
     }
     
@@ -501,12 +538,18 @@ class FirebaseManager: ObservableObject {
     
     private func loadUserData(userId: String) async {
         do {
+            #if DEBUG
             print("[FirebaseManager] Loading user data for ID: \(userId)")
+            #endif
+            
             let docRef = db.collection("users").document(userId)
             let document = try await docRef.getDocument()
             
             if let data = document.data() {
+                #if DEBUG
                 print("[FirebaseManager] User data loaded successfully")
+                #endif
+                
                 await MainActor.run {
                     self.username = data["username"] as? String
                     self.referralCode = data["referralCode"] as? String
@@ -520,7 +563,10 @@ class FirebaseManager: ObservableObject {
                     try await migrateUserData(userId: userId)
                 }
             } else {
+                #if DEBUG
                 print("[FirebaseManager] No user document found, creating new one...")
+                #endif
+                
                 // Create new user document if it doesn't exist
                 let newUserData: [String: Any] = [
                     "deviceId": generateDeviceId(),
@@ -530,14 +576,30 @@ class FirebaseManager: ObservableObject {
                     "userId": userId,
                     "version": 1
                 ]
+                
                 try await docRef.setData(newUserData)
+                
+                #if DEBUG
                 print("[FirebaseManager] New user document created")
+                #endif
                 
                 // Load the newly created data
                 await loadUserData(userId: userId)
             }
-        } catch {
-            print("[FirebaseManager] Error loading user data: \(error.localizedDescription)")
+        } catch let error as NSError {
+            Logger.shared.log("Error loading user data: \(error.localizedDescription)", category: .firebaseFirestore, level: .error)
+            
+            // Handle specific Firestore errors
+            switch error.code {
+            case FirestoreErrorCode.notFound.rawValue:
+                Logger.shared.log("User document not found", category: .firebaseFirestore, level: .warning)
+            case FirestoreErrorCode.permissionDenied.rawValue:
+                Logger.shared.log("Permission denied accessing user data", category: .firebaseFirestore, level: .error)
+            case FirestoreErrorCode.unavailable.rawValue:
+                Logger.shared.log("Firestore service unavailable", category: .firebaseFirestore, level: .error)
+            default:
+                Logger.shared.log("Unknown error loading user data: \(error.localizedDescription)", category: .firebaseFirestore, level: .error)
+            }
         }
     }
     
@@ -613,7 +675,7 @@ class FirebaseManager: ObservableObject {
             lastSyncDate = Date()
         } catch {
             syncError = error.localizedDescription
-            print("Error syncing user data: \(error)")
+            Logger.shared.log("Error syncing user data: \(error.localizedDescription)", category: .firebaseManager, level: .error)
         }
         
         isSyncing = false
@@ -649,7 +711,7 @@ class FirebaseManager: ObservableObject {
                 UserDefaults.standard.synchronize()
             }
         } catch {
-            print("Error loading synced data: \(error)")
+            Logger.shared.log("Error loading synced data: \(error.localizedDescription)", category: .firebaseManager, level: .error)
         }
     }
     
@@ -963,7 +1025,7 @@ class FirebaseManager: ObservableObject {
                     shouldUpdate = score > currentScore
                 case .timed:
                     // For timed leaderboard, update if time is better (lower) or score is higher
-                    shouldUpdate = (time != nil && (currentTime == nil || time! < currentTime!)) || score > currentScore
+                    shouldUpdate = (time != nil && (currentTime == nil || (time! < currentTime!))) || score > currentScore
                 case .score:
                     // For classic leaderboard, update if score is higher
                     shouldUpdate = score > currentScore
@@ -1082,7 +1144,7 @@ class FirebaseManager: ObservableObject {
                 let currentScore = snapshot.data()?["score"] as? Int ?? 0
                 let currentTime = snapshot.data()?["time"] as? TimeInterval
 
-                let shouldUpdate = (time != nil && (currentTime == nil || time! < currentTime!)) || score > currentScore
+                let shouldUpdate = (time != nil && (currentTime == nil || (time! < currentTime!))) || score > currentScore
 
                 if !shouldUpdate {
                     print("[Firebase] ⏭️ Skipping \(period) update - Score not better (Current: \(currentScore), New: \(score))")
@@ -1260,7 +1322,13 @@ class FirebaseManager: ObservableObject {
     private func generateReferralCode() -> String {
         // Generate a 6-character alphanumeric code
         let letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-        return String((0..<6).map { _ in letters.randomElement()! })
+        return String((0..<6).map { _ in 
+            guard let randomElement = letters.randomElement() else {
+                // Fallback to 'A' if randomElement fails (shouldn't happen with non-empty string)
+                return "A"
+            }
+            return randomElement
+        })
     }
     
     // MARK: - Helper Methods
@@ -1387,10 +1455,24 @@ class FirebaseManager: ObservableObject {
                 try await rtdbRef.setValue(progressData)
             }
             
+            #if DEBUG
             print("[Firebase] Game progress saved for user: \(userId)")
-        } catch {
-            print("[Firebase] Error saving game progress: \(error)")
-            throw error
+            #endif
+            
+        } catch let error as NSError {
+            Logger.shared.log("Error saving game progress: \(error.localizedDescription)", category: .firebaseFirestore, level: .error)
+            
+            // Handle specific Firebase errors
+            switch error.code {
+            case FirestoreErrorCode.permissionDenied.rawValue:
+                throw FirebaseError.permissionDenied
+            case FirestoreErrorCode.unavailable.rawValue:
+                throw FirebaseError.networkError
+            case FirestoreErrorCode.resourceExhausted.rawValue:
+                throw FirebaseError.retryLimitExceeded
+            default:
+                throw FirebaseError.updateFailed(error)
+            }
         }
     }
     
@@ -1669,13 +1751,13 @@ class FirebaseManager: ObservableObject {
     
     // Add method to check sync status
     func checkSyncStatus() async -> Bool {
-        guard currentUser?.uid != nil else { return false }
+        guard let currentUserId = currentUser?.uid else { return false }
         
         do {
-            let doc = try await db.collection("users").document(currentUser!.uid).collection("progress").document("data").getDocument()
+            let doc = try await db.collection("users").document(currentUserId).collection("progress").document("data").getDocument()
             return doc.exists
         } catch {
-            print("[FirebaseManager] Error checking sync status: \(error)")
+            Logger.shared.log("Error checking sync status: \(error.localizedDescription)", category: .firebaseFirestore, level: .error)
             return false
         }
     }
@@ -1921,8 +2003,10 @@ class FirebaseManager: ObservableObject {
         let emailTimestamp = emailData["createdAt"] as? Timestamp
         let createdAt: Timestamp = {
             if let gcDate = gameCenterTimestamp?.dateValue(),
-               let emailDate = emailTimestamp?.dateValue() {
-                return gcDate.compare(emailDate) == .orderedAscending ? gameCenterTimestamp! : emailTimestamp!
+               let emailDate = emailTimestamp?.dateValue(),
+               let gcTimestamp = gameCenterTimestamp,
+               let emailTimestamp = emailTimestamp {
+                return gcDate.compare(emailDate) == .orderedAscending ? gcTimestamp : emailTimestamp
             }
             return gameCenterTimestamp ?? emailTimestamp ?? Timestamp()
         }()

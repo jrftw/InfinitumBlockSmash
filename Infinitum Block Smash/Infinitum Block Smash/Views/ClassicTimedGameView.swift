@@ -63,7 +63,7 @@ struct ClassicTimedGameView: View {
                                                 dismiss()
                                             }
                                         } catch {
-                                            print("[PauseMenu] Error saving progress: \(error.localizedDescription)")
+                                            Logger.shared.log("Error saving progress: \(error.localizedDescription)", category: .firebaseManager, level: .error)
                                             isPaused = false
                                         }
                                         showingSaveWarning = false
@@ -281,7 +281,7 @@ struct ClassicTimedGameView: View {
                                 dismiss()
                             }
                         } catch {
-                            print("[PauseMenu] Error saving progress: \(error.localizedDescription)")
+                            Logger.shared.log("Error saving progress: \(error.localizedDescription)", category: .firebaseManager, level: .error)
                             isPaused = false
                         }
                     }

@@ -36,7 +36,10 @@ class VersionCheckService {
         }
         
         // Get the TestFlight version info
-        let testFlightURL = URL(string: "https://itunes.apple.com/lookup?bundleId=\(Bundle.main.bundleIdentifier ?? "")&platform=ios&t=\(Date().timeIntervalSince1970)")!
+        guard let testFlightURL = URL(string: "https://itunes.apple.com/lookup?bundleId=\(Bundle.main.bundleIdentifier ?? "")&platform=ios&t=\(Date().timeIntervalSince1970)") else {
+            Logger.shared.log("Failed to create TestFlight URL", category: .systemNetwork, level: .error)
+            return
+        }
         
         URLSession.shared.dataTask(with: testFlightURL) { data, response, error in
             guard let data = data,
@@ -66,7 +69,10 @@ class VersionCheckService {
         }
         
         // Get the App Store version
-        let appStoreURL = URL(string: "https://itunes.apple.com/lookup?bundleId=\(Bundle.main.bundleIdentifier ?? "")")!
+        guard let appStoreURL = URL(string: "https://itunes.apple.com/lookup?bundleId=\(Bundle.main.bundleIdentifier ?? "")") else {
+            Logger.shared.log("Failed to create App Store URL", category: .systemNetwork, level: .error)
+            return
+        }
         
         URLSession.shared.dataTask(with: appStoreURL) { data, response, error in
             guard let data = data,
@@ -90,8 +96,12 @@ class VersionCheckService {
     
     private func showUpdatePrompt(isTestFlight: Bool) {
         // Create a blocking window for the update prompt
-        let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene
-        let updateWindow = UIWindow(windowScene: windowScene!)
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene else {
+            Logger.shared.log("No window scene available for update prompt", category: .general, level: .error)
+            return
+        }
+        
+        let updateWindow = UIWindow(windowScene: windowScene)
         updateWindow.windowLevel = .alert + 1
         
         // Create the update view
