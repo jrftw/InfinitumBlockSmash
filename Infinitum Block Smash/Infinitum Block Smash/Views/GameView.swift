@@ -396,9 +396,14 @@ struct GameView: View {
         VStack(spacing: 0) {
             GameTopBar(showingSettings: $showingSettings, showingAchievements: $showingAchievements, isPaused: $isPaused, gameState: gameState)
             scoreLevelBar
-            if showStatsOverlay && (showFPS || showMemory) {
+            
+            // Stats overlay positioned at the top with proper spacing
+            if showStatsOverlay {
                 StatsOverlayView(gameState: gameState)
+                    .padding(.top, 8)
+                    .padding(.bottom, 4)
             }
+            
             Spacer()
         }
     }
@@ -821,37 +826,89 @@ struct GameView: View {
 private struct StatsOverlayView: View {
     @ObservedObject var gameState: GameState
     @StateObject private var performanceMonitor = PerformanceMonitor.shared
+    @StateObject private var networkMetrics = NetworkMetricsManager.shared
     @AppStorage("showFPS") private var showFPS = false
     @AppStorage("showMemory") private var showMemory = false
-    @AppStorage("showAdvancedStats") private var showAdvancedStats = false
+    @AppStorage("showFrame") private var showFrame = false
+    @AppStorage("showCPU") private var showCPU = false
+    @AppStorage("showNetwork") private var showNetwork = false
+    @AppStorage("showInput") private var showInput = false
+    @AppStorage("showResolution") private var showResolution = false
+    @AppStorage("showPing") private var showPing = false
+    @AppStorage("showBitrate") private var showBitrate = false
+    @AppStorage("showJitter") private var showJitter = false
+    @AppStorage("showDecode") private var showDecode = false
+    @AppStorage("showPacketLoss") private var showPacketLoss = false
+    
+    private var hasAnyStatsEnabled: Bool {
+        showFPS || showMemory || showFrame || showCPU || showNetwork || showInput || showResolution || showPing || showBitrate || showJitter || showDecode || showPacketLoss
+    }
     
     var body: some View {
         VStack(spacing: 4) {
-            if showFPS || showMemory || showAdvancedStats {
-                HStack(spacing: 8) {
-                    // First Column
-                    VStack(alignment: .leading, spacing: 4) {
-                        if showFPS {
-                            StatText("FPS: \(Int(performanceMonitor.currentFPS))")
-                        }
-                        if showMemory {
-                            StatText("Memory: \(String(format: "%.1f", performanceMonitor.memoryUsage))MB")
-                        }
-                    }
-                    
-                    // Second Column
-                    if showAdvancedStats {
-                        VStack(alignment: .leading, spacing: 4) {
-                            StatText("Frame: \(String(format: "%.1f", performanceMonitor.frameTime))ms")
-                            StatText("CPU: \(String(format: "%.1f", performanceMonitor.cpuUsage))%")
+            if hasAnyStatsEnabled {
+                VStack(spacing: 4) {
+                    // Performance Metrics Row
+                    if showFPS || showMemory || showFrame {
+                        HStack(spacing: 8) {
+                            if showFPS {
+                                StatText("FPS: \(Int(performanceMonitor.currentFPS))")
+                            }
+                            if showMemory {
+                                StatText("Memory: \(String(format: "%.1f", performanceMonitor.memoryUsage))MB")
+                            }
+                            if showFrame {
+                                StatText("Frame: \(String(format: "%.1f", performanceMonitor.frameTime))ms")
+                            }
                         }
                     }
                     
-                    // Third Column
-                    if showAdvancedStats {
-                        VStack(alignment: .leading, spacing: 4) {
-                            StatText("Network: \(String(format: "%.1f", performanceMonitor.networkLatency))ms")
-                            StatText("Input: \(String(format: "%.1f", performanceMonitor.inputLatency))ms")
+                    // Advanced Stats Row
+                    if showCPU || showNetwork || showInput {
+                        HStack(spacing: 8) {
+                            if showCPU {
+                                StatText("CPU: \(String(format: "%.1f", performanceMonitor.cpuUsage))%")
+                            }
+                            if showNetwork {
+                                StatText("Network: \(String(format: "%.1f", performanceMonitor.networkLatency))ms")
+                            }
+                            if showInput {
+                                StatText("Input: \(String(format: "%.1f", performanceMonitor.inputLatency))ms")
+                            }
+                        }
+                    }
+                    
+                    // Display Metrics Row
+                    if showResolution {
+                        HStack(spacing: 8) {
+                            StatText("Res: \(networkMetrics.resolution)")
+                        }
+                    }
+                    
+                    // Network Metrics Row
+                    if showPing || showBitrate || showJitter {
+                        HStack(spacing: 8) {
+                            if showPing {
+                                StatText("Ping: \(String(format: "%.0f", networkMetrics.ping))ms")
+                            }
+                            if showBitrate {
+                                StatText("Bitrate: \(String(format: "%.1f", networkMetrics.bitrate))Mbps")
+                            }
+                            if showJitter {
+                                StatText("Jitter: \(String(format: "%.1f", networkMetrics.jitter))ms")
+                            }
+                        }
+                    }
+                    
+                    // Additional Network Metrics Row
+                    if showDecode || showPacketLoss {
+                        HStack(spacing: 8) {
+                            if showDecode {
+                                StatText("Decode: \(String(format: "%.1f", networkMetrics.decodeTime))ms")
+                            }
+                            if showPacketLoss {
+                                StatText("Loss: \(String(format: "%.1f", networkMetrics.packetLoss))%")
+                            }
                         }
                     }
                 }
@@ -861,8 +918,8 @@ private struct StatsOverlayView: View {
                 .cornerRadius(4)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .center)
         .padding(.horizontal, 16)
-        .padding(.top, 4)
         .allowsHitTesting(false)
     }
 }

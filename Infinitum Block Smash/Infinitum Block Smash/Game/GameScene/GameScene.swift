@@ -1221,8 +1221,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     // MARK: - Memory Management
     private func setupMemoryManagement() async {
-        // Start periodic memory monitoring
-        Timer.scheduledTimer(withTimeInterval: memoryCheckInterval, repeats: true) { [weak self] _ in
+        // Start periodic memory monitoring with reduced frequency
+        Timer.scheduledTimer(withTimeInterval: MemoryConfig.getIntervals().memoryCheck * 2, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 await self?.checkAndCleanupMemory()
             }
@@ -1282,19 +1282,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             hintHighlight = nil
         }
         
-        // Clear any remaining temporary nodes in the scene
-        children.forEach { node in
-            if node.name?.hasPrefix("temp_") == true {
-                cleanupNode(node)
-            }
-        }
-        
         // Clear gradient texture cache
         gradientTextureCache.removeAll()
-        
-        // Clear any remaining textures from memory
-        await SKTexture.preload([])
-        await SKTextureAtlas.preloadTextureAtlases([])
         
         // Clear node pools
         NodePool.shared.clearAllPools()
@@ -1302,12 +1291,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Notify GameState
         await gameState.handleCriticalMemory()
         
-        // Force garbage collection
-        autoreleasepool {
-            // Clear any remaining references
-            gridNode?.children.forEach { cleanupNode($0) }
-            trayNode?.children.forEach { cleanupNode($0) }
-        }
+        // Clear textures in separate operation to reduce memory pressure
+        await clearAllTextures()
     }
     private func performNormalCleanup() {
         Logger.shared.debug("[Memory] Performing normal cleanup", category: .debugGameScene)

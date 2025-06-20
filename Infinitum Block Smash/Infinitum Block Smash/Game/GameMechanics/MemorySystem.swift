@@ -210,7 +210,7 @@ final class MemorySystem {
     
     // MARK: — Timing
     private var lastCleanupDate = Date.distantPast
-    private let minimumInterval: TimeInterval = 10.0 // Increased from 2.0 to 10.0 seconds
+    private let minimumInterval: TimeInterval = 30.0 // Increased from 10.0 to 30.0 seconds
     private let monitoringInterval: TimeInterval = MemoryConfig.getIntervals().memoryCheck
     
     // MARK: — Memory Pressure Source
@@ -392,8 +392,9 @@ final class MemorySystem {
         let startTime = Date()
         let initialMemory = getMemoryUsage()
         
+        // Use autoreleasepool more conservatively
         autoreleasepool {
-            log("[MemorySystem] Clearing all caches")
+            log("[MemorySystem] Clearing caches")
             clearAllCaches()
             
             log("[MemorySystem] Clearing URL cache")
@@ -405,28 +406,32 @@ final class MemorySystem {
             log("[MemorySystem] Clearing node pools")
             NodePool.shared.clearAllPools()
             
+            log("[MemorySystem] Clearing memory cache")
+            memoryCache.removeAllObjects()
+        }
+        
+        // Clear SpriteKit textures in separate autoreleasepool
+        autoreleasepool {
             log("[MemorySystem] Clearing SpriteKit textures")
             Task {
                 await SKTexture.preload([])
                 await SKTextureAtlas.preloadTextureAtlases([])
             }
-            
-            log("[MemorySystem] Clearing memory cache")
-            memoryCache.removeAllObjects()
-            
+        }
+        
+        // Clear temporary data in separate autoreleasepool
+        autoreleasepool {
             log("[MemorySystem] Clearing temporary data")
             clearTemporaryData()
         }
         
-        // Additional cleanup for low-end devices
+        // Additional cleanup for low-end devices (less aggressive)
         if isLowEnd {
             log("[MemorySystem] Performing additional cleanup for low-end device")
             autoreleasepool {
-                // Force garbage collection
+                // Force garbage collection once instead of multiple times
                 clearAllCaches()
                 memoryCache.removeAllObjects()
-                
-                // Clear any remaining references
                 clearTemporaryData()
             }
         }
@@ -440,8 +445,8 @@ final class MemorySystem {
         log("[MemorySystem] Memory freed: \(String(format: "%.1f", memoryFreed))MB")
         log("[MemorySystem] Final memory usage: \(String(format: "%.1f", finalMemory.used))MB / \(String(format: "%.1f", finalMemory.total))MB")
         
-        // If still critical after cleanup, try one more time
-        if checkMemoryStatus() == .critical {
+        // Only perform emergency cleanup if still critical and significant time has passed
+        if checkMemoryStatus() == .critical && Date().timeIntervalSince(startTime) > 60.0 {
             log("[MemorySystem] Memory still critical after cleanup, performing emergency cleanup")
             await performEmergencyCleanup()
         }

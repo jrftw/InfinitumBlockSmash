@@ -425,13 +425,61 @@ private struct NotificationSettingsSection: View {
 private struct StatsForNerdsSection: View {
     @ObservedObject var gameState: GameState
     @StateObject private var fpsManager = FPSManager.shared
+    @StateObject private var networkMetrics = NetworkMetricsManager.shared
     @AppStorage("showStatsOverlay") private var showStatsOverlay = false
     @AppStorage("showFPS") private var showFPS = false
     @AppStorage("showMemory") private var showMemory = false
-    @AppStorage("showAdvancedStats") private var showAdvancedStats = false
+    @AppStorage("showFrame") private var showFrame = false
+    @AppStorage("showCPU") private var showCPU = false
+    @AppStorage("showNetwork") private var showNetwork = false
+    @AppStorage("showInput") private var showInput = false
+    @AppStorage("showResolution") private var showResolution = false
+    @AppStorage("showPing") private var showPing = false
+    @AppStorage("showBitrate") private var showBitrate = false
+    @AppStorage("showJitter") private var showJitter = false
+    @AppStorage("showDecode") private var showDecode = false
+    @AppStorage("showPacketLoss") private var showPacketLoss = false
     @AppStorage("username") private var username = ""
     @AppStorage("userID") private var userID = ""
     @AppStorage("isGuest") private var isGuest = false
+    
+    // Cached values for settings display (updated less frequently)
+    @State private var cachedMemoryUsage: Double = 0.0
+    @State private var cachedFrameTime: Double = 0.0
+    @State private var cachedCPUUsage: Double = 0.0
+    @State private var cachedInputLatency: Double = 0.0
+    @State private var cachedNetworkLatency: Double = 0.0
+    @State private var cachedPing: Double = 0.0
+    @State private var cachedBitrate: Double = 0.0
+    @State private var cachedJitter: Double = 0.0
+    @State private var cachedDecodeTime: Double = 0.0
+    @State private var cachedPacketLoss: Double = 0.0
+    @State private var cachedResolution: String = "Unknown"
+    
+    private var activeToggleCount: Int {
+        var count = 0
+        if showFPS { count += 1 }
+        if showMemory { count += 1 }
+        if showFrame { count += 1 }
+        if showCPU { count += 1 }
+        if showNetwork { count += 1 }
+        if showInput { count += 1 }
+        if showResolution { count += 1 }
+        if showPing { count += 1 }
+        if showBitrate { count += 1 }
+        if showJitter { count += 1 }
+        if showDecode { count += 1 }
+        if showPacketLoss { count += 1 }
+        return count
+    }
+    
+    private func canToggle(_ toggle: Binding<Bool>) -> Bool {
+        if toggle.wrappedValue {
+            return true // Can always turn off
+        } else {
+            return activeToggleCount < 4 // Can only turn on if under limit
+        }
+    }
     
     private func canWriteToLeaderboard() -> (canWrite: Bool, reason: String) {
         // Check if user is authenticated
@@ -482,37 +530,196 @@ private struct StatsForNerdsSection: View {
             Toggle("Show Stats Overlay", isOn: $showStatsOverlay)
             
             if showStatsOverlay {
-                Toggle("Show FPS", isOn: $showFPS)
-                Toggle("Show Memory Usage", isOn: $showMemory)
-                Toggle("Show Advanced Stats", isOn: $showAdvancedStats)
+                // Performance Metrics
+                Group {
+                    Toggle("Show FPS", isOn: $showFPS)
+                        .disabled(!canToggle($showFPS))
+                    
+                    Toggle("Show Memory Usage", isOn: $showMemory)
+                        .disabled(!canToggle($showMemory))
+                    
+                    Toggle("Show Frame Time", isOn: $showFrame)
+                        .disabled(!canToggle($showFrame))
+                    
+                    Toggle("Show CPU Usage", isOn: $showCPU)
+                        .disabled(!canToggle($showCPU))
+                    
+                    Toggle("Show Network Latency", isOn: $showNetwork)
+                        .disabled(!canToggle($showNetwork))
+                    
+                    Toggle("Show Input Latency", isOn: $showInput)
+                        .disabled(!canToggle($showInput))
+                }
                 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Current FPS: \(fpsManager.getDisplayFPS(for: fpsManager.targetFPS))")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                // Display Metrics
+                Group {
+                    Toggle("Show Resolution", isOn: $showResolution)
+                        .disabled(!canToggle($showResolution))
+                }
+                
+                // Network Metrics
+                Group {
+                    Toggle("Show Ping (ms)", isOn: $showPing)
+                        .disabled(!canToggle($showPing))
                     
-                    Text("Target FPS: \(fpsManager.getFPSDisplayName(for: fpsManager.targetFPS))")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    Toggle("Show Bitrate (Mbps)", isOn: $showBitrate)
+                        .disabled(!canToggle($showBitrate))
                     
-                    let (hits, misses) = MemorySystem.shared.getCacheStats()
-                    Text("Cache Stats: \(hits) hits, \(misses) misses")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    Toggle("Show Jitter (ms)", isOn: $showJitter)
+                        .disabled(!canToggle($showJitter))
                     
-                    let leaderboardStatus = canWriteToLeaderboard()
-                    Text("Leaderboard: \(leaderboardStatus.canWrite ? "Yes" : "No")")
+                    Toggle("Show Decode Time (ms)", isOn: $showDecode)
+                        .disabled(!canToggle($showDecode))
+                    
+                    Toggle("Show Packet Loss (%)", isOn: $showPacketLoss)
+                        .disabled(!canToggle($showPacketLoss))
+                }
+                
+                // Toggle count indicator
+                HStack {
+                    Text("Active toggles: \(activeToggleCount)/4")
                         .font(.caption)
-                        .foregroundColor(leaderboardStatus.canWrite ? .green : .red)
-                    if !leaderboardStatus.canWrite {
-                        Text("Reason: \(leaderboardStatus.reason)")
+                        .foregroundColor(activeToggleCount >= 4 ? .orange : .secondary)
+                    
+                    Spacer()
+                    
+                    if activeToggleCount >= 4 {
+                        Text("Max reached")
                             .font(.caption)
-                            .foregroundColor(.red)
+                            .foregroundColor(.orange)
+                    }
+                }
+                .padding(.vertical, 4)
+                
+                // Current values display
+                VStack(alignment: .leading, spacing: 8) {
+                    // Performance Metrics
+                    Group {
+                        Text("Current FPS: \(fpsManager.getDisplayFPS(for: fpsManager.targetFPS))")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Text("Target FPS: \(fpsManager.getFPSDisplayName(for: fpsManager.targetFPS))")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Text("Memory Usage: \(String(format: "%.1f", cachedMemoryUsage))MB")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Text("Frame Time: \(String(format: "%.1f", cachedFrameTime))ms")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Text("CPU Usage: \(String(format: "%.1f", cachedCPUUsage))%")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Text("Input Latency: \(String(format: "%.1f", cachedInputLatency))ms")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    // Display Metrics
+                    Group {
+                        Text("Resolution: \(cachedResolution)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    // Network Metrics
+                    Group {
+                        Text("Ping: \(String(format: "%.0f", cachedPing))ms")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Text("Bitrate: \(String(format: "%.1f", cachedBitrate))Mbps")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Text("Jitter: \(String(format: "%.1f", cachedJitter))ms")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Text("Decode Time: \(String(format: "%.1f", cachedDecodeTime))ms")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Text("Packet Loss: \(String(format: "%.1f", cachedPacketLoss))%")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Text("Network Latency: \(String(format: "%.1f", cachedNetworkLatency))ms")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    // System Stats
+                    Group {
+                        let (hits, misses) = MemorySystem.shared.getCacheStats()
+                        Text("Cache Stats: \(hits) hits, \(misses) misses")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        let leaderboardStatus = canWriteToLeaderboard()
+                        Text("Leaderboard: \(leaderboardStatus.canWrite ? "Yes" : "No")")
+                            .font(.caption)
+                            .foregroundColor(leaderboardStatus.canWrite ? .green : .red)
+                        if !leaderboardStatus.canWrite {
+                            Text("Reason: \(leaderboardStatus.reason)")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
+                        
+                        Text("Connection Type: \(NetworkMonitor.shared.connectionType.description)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Text("Device Model: \(DeviceSimulator.shared.getCurrentDeviceModel())")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Text("Memory Limit: \(String(format: "%.0f", DeviceSimulator.shared.getSimulatedMemoryLimit()))MB")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Text("Max FPS: \(DeviceSimulator.shared.getSimulatedMaxFPS())")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Text("CPU Cores: \(DeviceSimulator.shared.getSimulatedCPUCores())")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Text("Low-End Device: \(DeviceSimulator.shared.isLowEndDevice() ? "Yes" : "No")")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                 }
                 .padding(.vertical, 8)
+                .onAppear {
+                    updateCachedValues()
+                }
+                .onReceive(Timer.publish(every: 3.0, on: .main, in: .common).autoconnect()) { _ in
+                    updateCachedValues()
+                }
             }
         }
+    }
+    
+    private func updateCachedValues() {
+        // Update cached values less frequently to reduce UI lag
+        cachedMemoryUsage = PerformanceMonitor.shared.memoryUsage
+        cachedFrameTime = PerformanceMonitor.shared.frameTime
+        cachedCPUUsage = PerformanceMonitor.shared.cpuUsage
+        cachedInputLatency = PerformanceMonitor.shared.inputLatency
+        cachedNetworkLatency = PerformanceMonitor.shared.networkLatency
+        cachedPing = networkMetrics.ping
+        cachedBitrate = networkMetrics.bitrate
+        cachedJitter = networkMetrics.jitter
+        cachedDecodeTime = networkMetrics.decodeTime
+        cachedPacketLoss = networkMetrics.packetLoss
+        cachedResolution = networkMetrics.resolution
     }
 }
 
