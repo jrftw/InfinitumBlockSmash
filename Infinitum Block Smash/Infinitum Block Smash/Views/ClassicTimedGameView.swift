@@ -2,6 +2,7 @@ import SwiftUI
 import SpriteKit
 
 struct ClassicTimedGameView: View {
+    // MARK: - Properties
     @StateObject private var gameState = GameState()
     @StateObject private var timedState: ClassicTimedGameState
     @State private var showingSettings = false
@@ -14,12 +15,14 @@ struct ClassicTimedGameView: View {
     @AppStorage("showMemory") private var showMemory = false
     @State private var showingSaveWarning = false
     
+    // MARK: - Initializers
     init() {
         let gameState = GameState()
         _gameState = StateObject(wrappedValue: gameState)
         _timedState = StateObject(wrappedValue: ClassicTimedGameState(gameState: gameState))
     }
     
+    // MARK: - Public Methods
     var body: some View {
         ZStack {
             GameSceneProvider(gameState: gameState)
@@ -113,6 +116,7 @@ struct ClassicTimedGameView: View {
         }
     }
     
+    // MARK: - Private Methods
     private var mainGameView: some View {
         VStack(spacing: 0) {
             GameTopBar(showingSettings: $showingSettings, showingAchievements: $showingAchievements, isPaused: $isPaused, gameState: gameState)
@@ -304,6 +308,7 @@ struct ClassicTimedGameView: View {
     }
 }
 
+// MARK: - Helpers
 private struct StatsOverlayView: View {
     @ObservedObject var gameState: GameState
     @StateObject private var performanceMonitor = PerformanceMonitor.shared
