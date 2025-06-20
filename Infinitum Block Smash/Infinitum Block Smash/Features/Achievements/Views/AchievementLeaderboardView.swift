@@ -160,7 +160,7 @@ struct AchievementLeaderboardView: View {
             
             Spacer()
             
-            Text("Total users: \(totalUsers)")
+            Text(selectedPeriod == "alltime" ? "Total users: \(totalUsers)" : "Entries: \(totalUsers)")
                 .font(.caption)
                 .foregroundColor(.gray)
         }
@@ -284,13 +284,13 @@ struct AchievementLeaderboardView: View {
         
         Task {
             do {
-                print("[AchievementLeaderboardView] Fetching leaderboard entries from Firebase")
-                let entries = try await FirebaseManager.shared.getLeaderboardEntries(
+                print("[AchievementLeaderboardView] Fetching leaderboard entries from LeaderboardService")
+                let (entries, totalUsersCount) = try await LeaderboardService.shared.getLeaderboard(
                     type: .achievement,
                     period: selectedPeriod
                 )
                 
-                print("[AchievementLeaderboardView] Received \(entries.count) entries")
+                print("[AchievementLeaderboardView] Received \(entries.count) entries, total users: \(totalUsersCount)")
                 
                 if let userId = FirebaseManager.shared.currentUserId {
                     userPosition = entries.firstIndex(where: { $0.id == userId })
@@ -315,7 +315,7 @@ struct AchievementLeaderboardView: View {
                 }
                 
                 leaderboardData = entries
-                totalUsers = entries.count
+                totalUsers = totalUsersCount
                 lastUpdated = Date()
                 isOffline = false
                 print("[AchievementLeaderboardView] ✅ Successfully loaded achievement leaderboard data")
@@ -326,7 +326,16 @@ struct AchievementLeaderboardView: View {
                    let entries = try? JSONDecoder().decode([FirebaseManager.LeaderboardEntry].self, from: cachedData) {
                     print("[AchievementLeaderboardView] Using cached data with \(entries.count) entries")
                     leaderboardData = entries
-                    totalUsers = entries.count
+                    // For All Time, get total players count; for other periods, use entries count
+                    if selectedPeriod == "alltime" {
+                        do {
+                            totalUsers = try await FirebaseManager.shared.getTotalPlayersCount()
+                        } catch {
+                            totalUsers = entries.count
+                        }
+                    } else {
+                        totalUsers = entries.count
+                    }
                     isOffline = true
                 } else {
                     print("[AchievementLeaderboardView] ❌ No cached data available")

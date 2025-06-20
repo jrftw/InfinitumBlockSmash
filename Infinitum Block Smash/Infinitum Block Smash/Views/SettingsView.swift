@@ -749,6 +749,15 @@ private struct StatsForNerdsSection: View {
                         Text("Low-End Device: \(DeviceSimulator.shared.isLowEndDevice() ? "Yes" : "No")")
                             .font(.caption)
                             .foregroundColor(.secondary)
+                        
+                        // PerformanceMonitor debug info
+                        Text("Memory Monitor Active: \(PerformanceMonitor.shared.isMemoryMonitoringActive() ? "Yes" : "No")")
+                            .font(.caption)
+                            .foregroundColor(PerformanceMonitor.shared.isMemoryMonitoringActive() ? .green : .red)
+                        
+                        Text("Memory Update Interval: \(String(format: "%.0f", PerformanceMonitor.shared.getMemoryMonitoringInterval()))s")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                 }
                 .padding(.vertical, 8)

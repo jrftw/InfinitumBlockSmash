@@ -548,7 +548,7 @@ struct GameView: View {
                 score: gameState.score,
                 level: gameState.level,
                 onRetry: {
-                    gameState.resetGame()
+                    gameState.startNewGame()
                 },
                 onMainMenu: {
                     presentationMode.wrappedValue.dismiss()
@@ -572,7 +572,8 @@ struct GameView: View {
                 onSave: {
                     Task {
                         do {
-                            try await gameState.saveProgress()
+                            // Always save the current game state
+                            try await gameState.forceSaveGame()
                             isPaused = false
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                 presentationMode.wrappedValue.dismiss()
@@ -584,12 +585,8 @@ struct GameView: View {
                     }
                 },
                 onRestart: {
-                    gameState.resetGame()
+                    gameState.startNewGame()
                     isPaused = false
-                },
-                onHome: {
-                    gameState.resetGame()
-                    presentationMode.wrappedValue.dismiss()
                 },
                 onEndGame: {
                     if !UserDefaults.standard.bool(forKey: "isGuest") && gameState.score > 0 {
@@ -868,7 +865,7 @@ private struct StatsOverlayView: View {
                                 StatText("FPS: \(Int(performanceMonitor.currentFPS))")
                             }
                             if showMemory {
-                                StatText("Memory: \(String(format: "%.1f", performanceMonitor.memoryUsage))MB")
+                                StatText("Memory: \(String(format: "%.1f", performanceMonitor.getCurrentMemoryUsage()))MB")
                             }
                             if showFrame {
                                 StatText("Frame: \(String(format: "%.1f", performanceMonitor.frameTime))ms")

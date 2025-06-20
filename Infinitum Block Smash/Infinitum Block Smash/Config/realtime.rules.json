@@ -13,17 +13,7 @@
         },
         "progress": {
           ".read": "auth.uid === $uid",
-          ".write": "auth.uid === $uid",
-          "score": { ".validate": "newData.isNumber() && newData.val() >= 0" },
-          "level": { ".validate": "newData.isNumber() && newData.val() >= 1" },
-          "blocksPlaced": { ".validate": "newData.isNumber()" },
-          "linesCleared": { ".validate": "newData.isNumber()" },
-          "gamesCompleted": { ".validate": "newData.isNumber()" },
-          "perfectLevels": { ".validate": "newData.isNumber()" },
-          "totalPlayTime": { ".validate": "newData.isNumber()" },
-          "highScore": { ".validate": "newData.isNumber()" },
-          "highestLevel": { ".validate": "newData.isNumber()" },
-          "lastSaveTime": { ".validate": "newData.isNumber()" }
+          ".write": "auth.uid === $uid"
         },
         "achievements": {
           ".read": "auth.uid === $uid",
@@ -37,13 +27,7 @@
     "game_states": {
       "$uid": {
         ".read": "auth.uid === $uid",
-        ".write": "auth.uid === $uid",
-        "score": { ".validate": "newData.isNumber() && newData.val() >= 0" },
-        "level": { ".validate": "newData.isNumber() && newData.val() >= 1" },
-        "grid": { ".validate": "newData.exists()" },
-        "tray": { ".validate": "newData.exists()" },
-        "lastUpdate": { ".validate": "newData.isNumber()" },
-        "lastSaveTime": { ".validate": "newData.isNumber()" }
+        ".write": "auth.uid === $uid"
       },
       ".indexOn": ["lastSaveTime", "lastUpdate"]
     },
@@ -65,6 +49,60 @@
         ".validate": "newData.isNumber()"
       }
     },
+    "classic_leaderboard": {
+      "$period": {
+        "scores": {
+          "$uid": {
+            ".read": true,
+            ".write": "auth != null && auth.uid === $uid",
+            ".validate": "newData.hasChildren(['score', 'timestamp'])",
+            "score": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+            "timestamp": {
+              ".validate": "newData.isNumber() || newData.child('.sv').val() === 'timestamp'"
+            },
+            "username": { ".validate": "newData.isString()" },
+            "userId": { ".validate": "newData.isString() && newData.val() === auth.uid" }
+          }
+        },
+        ".indexOn": ["score", "timestamp"]
+      }
+    },
+    "classic_timed_leaderboard": {
+      "$period": {
+        "scores": {
+          "$uid": {
+            ".read": true,
+            ".write": "auth != null && auth.uid === $uid",
+            ".validate": "newData.hasChildren(['time', 'timestamp'])",
+            "time": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+            "timestamp": {
+              ".validate": "newData.isNumber() || newData.child('.sv').val() === 'timestamp'"
+            },
+            "username": { ".validate": "newData.isString()" },
+            "userId": { ".validate": "newData.isString() && newData.val() === auth.uid" }
+          }
+        },
+        ".indexOn": ["time", "timestamp"]
+      }
+    },
+    "achievement_leaderboard": {
+      "$period": {
+        "scores": {
+          "$uid": {
+            ".read": true,
+            ".write": "auth != null && auth.uid === $uid",
+            ".validate": "newData.hasChildren(['points', 'timestamp'])",
+            "points": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+            "timestamp": {
+              ".validate": "newData.isNumber() || newData.child('.sv').val() === 'timestamp'"
+            },
+            "username": { ".validate": "newData.isString()" },
+            "userId": { ".validate": "newData.isString() && newData.val() === auth.uid" }
+          }
+        },
+        ".indexOn": ["points", "timestamp"]
+      }
+    },
     "leaderboards": {
       "$type": {
         "$period": {
@@ -74,7 +112,9 @@
               ".write": "auth != null && auth.uid === $uid",
               ".validate": "newData.hasChildren(['score', 'timestamp'])",
               "score": { ".validate": "newData.isNumber() && newData.val() >= 0" },
-              "timestamp": { ".validate": "newData.isNumber()" },
+              "timestamp": {
+                ".validate": "newData.isNumber() || newData.child('.sv').val() === 'timestamp'"
+              },
               "username": { ".validate": "newData.isString()" },
               "userId": { ".validate": "newData.isString() && newData.val() === auth.uid" }
             }
@@ -88,6 +128,30 @@
         ".read": "auth.uid === $uid",
         ".write": "auth.uid === $uid"
       }
+    },
+    "devices": {
+      "$deviceId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "announcements": {
+      "$announcementId": {
+        ".read": true,
+        ".write": false
+      }
+    },
+    "bugs": {
+      "$bugId": {
+        ".read": true,
+        ".write": false
+      }
+    },
+    "security_logs": {
+      "$logId": {
+        ".read": false,
+        ".write": "auth != null"
+      }
     }
   }
-} 
+}

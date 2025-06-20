@@ -469,8 +469,10 @@ final class GameState: ObservableObject {
     // MARK: - Public Methods
     func resetGame() {
         print("[DEBUG] Resetting game - Level will be set to 1")
+        
         // Delete any saved game first
         deleteSavedGame()
+        
         #if DEBUG
         print("[Memory] Resetting game. Tray: \(tray.count), Grid blocks: \(grid.flatMap { $0 }.compactMap { $0 }.count)")
         #endif
@@ -489,7 +491,7 @@ final class GameState: ObservableObject {
         // Save current stats before resetting
         saveStatistics()
         
-        // Reset game state
+        // Reset ALL game state to fresh values
         score = 0
         temporaryScore = 0
         level = 1
@@ -521,6 +523,17 @@ final class GameState: ObservableObject {
         // Reset hint state
         hintManager.reset()
         
+        // Reset tracking properties
+        currentChain = 0
+        usedColors.removeAll()
+        usedShapes.removeAll()
+        totalTime = 0
+        gameStartTime = Date()
+        
+        // Reset scoring breakdown
+        scoringBreakdown.removeAll()
+        currentLevelBreakdown.removeAll()
+        
         // Set the seed for the new game
         setSeed(for: level)
         
@@ -531,21 +544,27 @@ final class GameState: ObservableObject {
         if tray.count != 3 {
             print("[ERROR] Tray not properly filled after reset (\(tray.count)/3), refilling...")
             tray = []
-            refillTray()
+            refillTray(skipGameStateCheck: true)
         }
         
-        print("[DEBUG] Reset complete - Level: \(level), Tray count: \(tray.count)")
+        // Validate that grid is properly cleared
+        for row in 0..<GameConstants.gridSize {
+            for col in 0..<GameConstants.gridSize {
+                if grid[row][col] != nil {
+                    print("[ERROR] Grid cell (\(row), \(col)) still contains \(grid[row][col]?.rawValue ?? "unknown") after reset!")
+                }
+            }
+        }
         
-        // Clear any saved game state from UserDefaults
-        userDefaults.removeObject(forKey: progressKey)
-        userDefaults.set(false, forKey: hasSavedGameKey)
-        userDefaults.synchronize()
-        
-        // Notify delegate
+        // Force immediate visual update to clear any block remnants
         delegate?.gameStateDidUpdate()
         
-        // Reset tracking properties
-        resetTrackingProperties()
+        // Additional cleanup to ensure no visual artifacts remain
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.delegate?.gameStateDidUpdate()
+        }
+        
+        print("[GameState] Game reset completed successfully - all state cleared")
     }
     
     func setSeed(for level: Int) {
@@ -1840,79 +1859,54 @@ final class GameState: ObservableObject {
     func hasSavedGame() -> Bool {
         let hasFlag = userDefaults.bool(forKey: hasSavedGameKey)
         let hasData = userDefaults.data(forKey: progressKey) != nil
-        return hasFlag && hasData
+        
+        // If we have both flag and data, validate the data
+        if hasFlag && hasData {
+            do {
+                let decoder = JSONDecoder()
+                let progress = try decoder.decode(GameProgress.self, from: userDefaults.data(forKey: progressKey)!)
+                
+                // Check if this is actually a valid game to resume (not a new game)
+                return !progress.isNewGame
+            } catch {
+                print("[GameState] Error decoding saved game: \(error.localizedDescription)")
+                // If we can't decode the data, clean up the invalid save
+                deleteSavedGame()
+                return false
+            }
+        }
+        
+        return false
+    }
+    
+    /// Checks if there's a saved game that can be resumed
+    func canResumeGame() -> Bool {
+        return hasSavedGame()
     }
     
     func loadSavedGame() async throws {
         do {
+            // First try to load from local storage
+            if let data = userDefaults.data(forKey: progressKey) {
+                let decoder = JSONDecoder()
+                let progress = try decoder.decode(GameProgress.self, from: data)
+                
+                // Update state on main thread
+                await MainActor.run {
+                    self.restoreGameState(from: progress)
+                }
+                
+                // Notify success
+                NotificationCenter.default.post(name: .gameStateLoaded, object: nil)
+                return
+            }
+            
+            // If no local save, try to load from Firebase
             let progress = try await FirebaseManager.shared.loadGameProgress()
             
             // Update state on main thread
             await MainActor.run {
-                // Check if this is a new game (no saved progress) or resuming an existing game
-                let isNewGame = progress.score == 0 && progress.blocksPlaced == 0 && progress.level == 1
-                
-                // Restore core game state
-                self.score = progress.score
-                // Always start at level 1 for new games, regardless of saved progress
-                if isNewGame {
-                    self.level = 1
-                    print("[DEBUG] New game detected - setting level to 1")
-                } else {
-                    self.level = progress.level
-                    print("[DEBUG] Resuming saved game - level: \(progress.level)")
-                }
-                self.blocksPlaced = progress.blocksPlaced
-                self.linesCleared = progress.linesCleared
-                self.gamesCompleted = progress.gamesCompleted
-                self.perfectLevels = progress.perfectLevels
-                self.totalPlayTime = progress.totalPlayTime
-                self.highScore = progress.highScore
-                self.highestLevel = progress.highestLevel
-                
-                // Convert serialized grid back to BlockColor array
-                self.grid = progress.grid.map { row in
-                    row.map { colorString in
-                        colorString == "nil" ? nil : BlockColor(rawValue: colorString)
-                    }
-                }
-                
-                // FIXED: Always ensure tray is properly initialized
-                // Check if saved tray is valid (has 3 blocks) and not empty
-                if !isNewGame && !progress.tray.isEmpty && progress.tray.count == 3 {
-                    // Use saved tray only if it's valid
-                    self.tray = progress.tray
-                    print("[DEBUG] Using saved tray with \(self.tray.count) blocks")
-                } else {
-                    // For new games or invalid saved trays, ensure tray is properly initialized
-                    print("[DEBUG] Initializing fresh tray (new game or invalid saved tray)")
-                    self.tray = []
-                    self.refillTray(skipGameStateCheck: true)
-                }
-                
-                // SAFETY CHECK: Ensure tray always has the correct number of blocks
-                if self.tray.count != 3 {
-                    print("[DEBUG] Tray has incorrect number of blocks (\(self.tray.count)), refilling...")
-                    self.tray = []
-                    self.refillTray(skipGameStateCheck: true)
-                }
-                
-                // Restore game state flags
-                self.isGameOver = false
-                self.isPaused = false
-                self.levelComplete = false
-                
-                // Load FPS from UserDefaults
-                if let data = self.userDefaults.data(forKey: self.progressKey),
-                   let progressData = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                   let savedFPS = progressData["targetFPS"] as? Int {
-                    self.targetFPS = savedFPS
-                    // Update the FPS in the game view
-                    self.delegate?.updateFPS(savedFPS)
-                }
-                
-                // Notify delegate of state update
-                self.delegate?.gameStateDidUpdate()
+                self.restoreGameState(from: progress)
             }
             
             // Notify success
@@ -1922,6 +1916,117 @@ final class GameState: ObservableObject {
             // Notify failure
             NotificationCenter.default.post(name: .gameStateLoadFailed, object: error)
             throw GameError.loadFailed(error)
+        }
+    }
+    
+    // NEW: Centralized method to restore game state from GameProgress
+    private func restoreGameState(from progress: GameProgress) {
+        print("[GameState] Restoring game state from saved progress")
+        print("[GameState] Progress details: score=\(progress.score), level=\(progress.level), blocksPlaced=\(progress.blocksPlaced)")
+        print("[GameState] Grid has blocks: \(progress.grid.flatMap { $0 }.contains { $0 != "nil" })")
+        print("[GameState] Tray count: \(progress.tray.count)")
+        
+        // Check if this is a new game (no saved progress) or resuming an existing game
+        let isNewGame = progress.isNewGame
+        print("[GameState] isNewGame: \(isNewGame)")
+        
+        if isNewGame {
+            print("[DEBUG] New game detected - starting fresh")
+            setupInitialGame()
+            return
+        }
+        
+        print("[DEBUG] Resuming saved game - level: \(progress.level)")
+        
+        // Restore core game state
+        score = progress.score
+        temporaryScore = progress.temporaryScore
+        level = progress.level
+        blocksPlaced = progress.blocksPlaced
+        linesCleared = progress.linesCleared
+        gamesCompleted = progress.gamesCompleted
+        perfectLevels = progress.perfectLevels
+        totalPlayTime = progress.totalPlayTime
+        highScore = progress.highScore
+        highestLevel = progress.highestLevel
+        currentChain = progress.currentChain
+        usedColors = progress.usedColorsSet
+        usedShapes = progress.usedShapesSet
+        isPerfectLevel = progress.isPerfectLevel
+        undoCount = progress.undoCount
+        adUndoCount = progress.adUndoCount
+        hasUsedContinueAd = progress.hasUsedContinueAd
+        levelsCompletedSinceLastAd = progress.levelsCompletedSinceLastAd
+        adsWatchedThisGame = progress.adsWatchedThisGame
+        isPaused = progress.isPaused
+        targetFPS = progress.targetFPS
+        gameStartTime = progress.gameStartTime
+        lastPlayDate = progress.lastPlayDate
+        consecutiveDays = progress.consecutiveDays
+        totalTime = progress.totalTime
+        
+        print("[GameState] Restored core state: score=\(score), level=\(level), blocksPlaced=\(blocksPlaced)")
+        
+        // Convert serialized grid back to BlockColor array
+        grid = progress.grid.map { row in
+            row.map { colorString in
+                colorString == "nil" ? nil : BlockColor(rawValue: colorString)
+            }
+        }
+        
+        print("[GameState] Restored grid with \(grid.flatMap { $0 }.compactMap { $0 }.count) blocks")
+        
+        // Restore tray - ensure it's valid
+        if !progress.tray.isEmpty && progress.tray.count == 3 {
+            tray = progress.tray
+            print("[DEBUG] Using saved tray with \(tray.count) blocks")
+        } else {
+            print("[DEBUG] Invalid saved tray, refilling...")
+            tray = []
+            refillTray(skipGameStateCheck: true)
+        }
+        
+        // SAFETY CHECK: Ensure tray always has the correct number of blocks
+        if tray.count != 3 {
+            print("[DEBUG] Tray has incorrect number of blocks (\(tray.count)), refilling...")
+            tray = []
+            refillTray(skipGameStateCheck: true)
+        }
+        
+        // Restore undo stack
+        undoStack.loadMoves(progress.undoStack)
+        canUndo = !undoStack.isEmpty
+        
+        // Restore game state flags
+        isGameOver = false
+        levelComplete = false
+        
+        // Restore game settings to UserDefaults
+        UserDefaults.standard.set(progress.previewEnabled, forKey: "previewEnabled")
+        UserDefaults.standard.set(progress.previewHeightOffset, forKey: "previewHeightOffset")
+        UserDefaults.standard.set(progress.isTimedMode, forKey: "isTimedMode")
+        UserDefaults.standard.set(progress.soundEnabled, forKey: "soundEnabled")
+        UserDefaults.standard.set(progress.hapticsEnabled, forKey: "hapticsEnabled")
+        UserDefaults.standard.set(progress.musicVolume, forKey: "musicVolume")
+        UserDefaults.standard.set(progress.sfxVolume, forKey: "sfxVolume")
+        UserDefaults.standard.set(progress.difficulty, forKey: "difficulty")
+        UserDefaults.standard.set(progress.theme, forKey: "theme")
+        UserDefaults.standard.set(progress.autoSave, forKey: "autoSave")
+        UserDefaults.standard.set(progress.placementPrecision, forKey: "placementPrecision")
+        UserDefaults.standard.set(progress.blockDragOffset, forKey: "blockDragOffset")
+        
+        // Update the FPS in the game view
+        delegate?.updateFPS(targetFPS)
+        
+        // Notify delegate of state update
+        delegate?.gameStateDidUpdate()
+        
+        print("[GameState] Game state restoration completed successfully")
+        print("[GameState] Final state: score=\(score), level=\(level), blocksPlaced=\(blocksPlaced), gridBlocks=\(grid.flatMap { $0 }.compactMap { $0 }.count)")
+        
+        // Validate the restored state
+        if !validateLoadedGameState() {
+            print("[GameState] WARNING: Restored game state validation failed, but continuing...")
         }
     }
     
@@ -2125,19 +2230,29 @@ final class GameState: ObservableObject {
     
     func saveProgress() async throws {
         do {
-            // Check if there's a saved game and show warning if needed
-            if userDefaults.bool(forKey: hasSavedGameKey) {
-                // Post notification to show warning
-                NotificationCenter.default.post(name: .showSaveGameWarning, object: nil)
-                return
-            }
-            
             // Convert grid to a format Firebase can handle
             let serializedGrid = grid.map { row in
                 row.map { color in
                     color?.rawValue ?? "nil"
                 }
             }
+            
+            // Get current UserDefaults values for settings
+            let previewEnabled = UserDefaults.standard.bool(forKey: "previewEnabled")
+            let previewHeightOffset = UserDefaults.standard.double(forKey: "previewHeightOffset")
+            let isTimedMode = UserDefaults.standard.bool(forKey: "isTimedMode")
+            let soundEnabled = UserDefaults.standard.bool(forKey: "soundEnabled")
+            let hapticsEnabled = UserDefaults.standard.bool(forKey: "hapticsEnabled")
+            let musicVolume = UserDefaults.standard.double(forKey: "musicVolume")
+            let sfxVolume = UserDefaults.standard.double(forKey: "sfxVolume")
+            let difficulty = UserDefaults.standard.string(forKey: "difficulty") ?? "normal"
+            let theme = UserDefaults.standard.string(forKey: "theme") ?? "auto"
+            let autoSave = UserDefaults.standard.bool(forKey: "autoSave")
+            let placementPrecision = UserDefaults.standard.double(forKey: "placementPrecision")
+            let blockDragOffset = UserDefaults.standard.double(forKey: "blockDragOffset")
+            
+            // Get undo stack (limit to last 5 moves for storage efficiency)
+            let undoStackMoves = Array(undoStack.allMoves.suffix(5))
             
             let progress = GameProgress(
                 score: score,
@@ -2150,7 +2265,38 @@ final class GameState: ObservableObject {
                 highScore: highScore,
                 highestLevel: highestLevel,
                 grid: serializedGrid,
-                tray: tray
+                tray: tray,
+                lastSaveTime: Date(),
+                // NEW: Additional game state
+                temporaryScore: temporaryScore,
+                currentChain: currentChain,
+                usedColors: usedColors,
+                usedShapes: usedShapes,
+                isPerfectLevel: isPerfectLevel,
+                undoCount: undoCount,
+                adUndoCount: adUndoCount,
+                hasUsedContinueAd: hasUsedContinueAd,
+                levelsCompletedSinceLastAd: levelsCompletedSinceLastAd,
+                adsWatchedThisGame: adsWatchedThisGame,
+                isPaused: isPaused,
+                targetFPS: targetFPS,
+                gameStartTime: gameStartTime,
+                lastPlayDate: lastPlayDate,
+                consecutiveDays: consecutiveDays,
+                totalTime: totalTime,
+                previewEnabled: previewEnabled,
+                previewHeightOffset: previewHeightOffset,
+                isTimedMode: isTimedMode,
+                soundEnabled: soundEnabled,
+                hapticsEnabled: hapticsEnabled,
+                musicVolume: musicVolume,
+                sfxVolume: sfxVolume,
+                difficulty: difficulty,
+                theme: theme,
+                autoSave: autoSave,
+                placementPrecision: placementPrecision,
+                blockDragOffset: blockDragOffset,
+                undoStack: undoStackMoves
             )
             
             // Try to save to Firebase, but continue with local save even if it fails
@@ -2163,27 +2309,8 @@ final class GameState: ObservableObject {
             
             // Update local storage on main actor
             try await MainActor.run {
-                let progressData: [String: Any] = [
-                    "score": progress.score,
-                    "level": progress.level,
-                    "blocksPlaced": progress.blocksPlaced,
-                    "linesCleared": progress.linesCleared,
-                    "gamesCompleted": progress.gamesCompleted,
-                    "perfectLevels": progress.perfectLevels,
-                    "totalPlayTime": progress.totalPlayTime,
-                    "highScore": progress.highScore,
-                    "highestLevel": progress.highestLevel,
-                    "targetFPS": targetFPS,
-                    "grid": serializedGrid,
-                    "tray": tray.map { block in
-                        [
-                            "color": block.color.rawValue,
-                            "shape": block.shape.rawValue
-                        ]
-                    },
-                    "isTimedMode": UserDefaults.standard.bool(forKey: "isTimedMode")
-                ]
-                let data = try JSONSerialization.data(withJSONObject: progressData)
+                let encoder = JSONEncoder()
+                let data = try encoder.encode(progress)
                 self.userDefaults.set(data, forKey: self.progressKey)
                 self.userDefaults.set(true, forKey: self.hasSavedGameKey)
                 self.userDefaults.synchronize()
@@ -2203,6 +2330,23 @@ final class GameState: ObservableObject {
         deleteSavedGame()
         // Then save new game
         try await saveProgress()
+    }
+    
+    /// Force save the current game state (overwrites any existing save)
+    func forceSaveGame() async throws {
+        print("[GameState] Force saving game...")
+        try await saveProgress()
+    }
+    
+    /// Save game with confirmation if there's an existing save
+    func saveGameWithConfirmation() async throws {
+        if hasSavedGame() {
+            // Show warning and let user decide
+            NotificationCenter.default.post(name: .showSaveGameWarning, object: nil)
+        } else {
+            // No existing save, proceed normally
+            try await saveProgress()
+        }
     }
 
     func deleteSavedGame() {
@@ -3436,5 +3580,273 @@ final class GameState: ObservableObject {
     
     private func resetLevelBreakdown() {
         currentLevelBreakdown.removeAll()
+    }
+    
+    // MARK: - New Game Management
+    
+    /// Starts a completely fresh new game, clearing all previous state
+    func startNewGame() {
+        print("[GameState] Starting new game - clearing all previous state")
+        
+        // Delete any existing saved game
+        deleteSavedGame()
+        
+        // Clear cloud state if user is logged in
+        if !UserDefaults.standard.bool(forKey: "isGuest") {
+            Task {
+                do {
+                    try await FirebaseManager.shared.clearGameProgress()
+                } catch {
+                    print("[GameState] Error clearing cloud game progress: \(error.localizedDescription)")
+                }
+            }
+        }
+        
+        // Reset to completely fresh state
+        resetGame()
+        
+        // Ensure we start at exactly level 1 with no previous data
+        level = 1
+        score = 0
+        temporaryScore = 0
+        isGameOver = false
+        isPaused = false
+        levelComplete = false
+        
+        // Clear grid completely
+        grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
+        
+        // Generate fresh tray
+        tray = []
+        refillTray(skipGameStateCheck: true)
+        
+        // Reset all game state flags
+        canUndo = false
+        adUndoCount = 3
+        showingAchievementNotification = false
+        currentAchievement = nil
+        isPerfectLevel = true
+        undoCount = 0
+        currentChain = 0
+        usedColors.removeAll()
+        usedShapes.removeAll()
+        totalTime = 0
+        gameStartTime = Date()
+        
+        // Clear undo stack
+        undoStack.clear()
+        
+        // Reset ad-related state
+        levelsCompletedSinceLastAd = 0
+        adsWatchedThisGame = 0
+        hasUsedContinueAd = false
+        
+        // Reset hint state
+        hintManager.reset()
+        
+        // Clear scoring breakdown
+        scoringBreakdown.removeAll()
+        currentLevelBreakdown.removeAll()
+        
+        // Set fresh seed for new game
+        setSeed(for: level)
+        
+        // Validate fresh state
+        validateNewGameState()
+        
+        // Notify delegate
+        delegate?.gameStateDidUpdate()
+        
+        print("[GameState] New game started successfully - all state reset to fresh")
+    }
+    
+    /// Validates that the new game state is properly initialized
+    private func validateNewGameState() {
+        // Validate level
+        guard level == 1 else {
+            print("[ERROR] New game level is not 1: \(level)")
+            level = 1
+            return
+        }
+        
+        // Validate score
+        guard score == 0 && temporaryScore == 0 else {
+            print("[ERROR] New game score is not 0: score=\(score), temp=\(temporaryScore)")
+            score = 0
+            temporaryScore = 0
+            return
+        }
+        
+        // Validate grid is empty
+        let gridBlockCount = grid.flatMap { $0 }.compactMap { $0 }.count
+        guard gridBlockCount == 0 else {
+            print("[ERROR] New game grid is not empty: \(gridBlockCount) blocks")
+            grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
+            return
+        }
+        
+        // Validate tray has 3 blocks
+        guard tray.count == 3 else {
+            print("[ERROR] New game tray does not have 3 blocks: \(tray.count)")
+            tray = []
+            refillTray(skipGameStateCheck: true)
+            return
+        }
+        
+        // Validate game state flags
+        guard !isGameOver && !isPaused && !levelComplete else {
+            print("[ERROR] New game state flags are incorrect")
+            isGameOver = false
+            isPaused = false
+            levelComplete = false
+            return
+        }
+        
+        print("[GameState] New game state validation passed")
+    }
+    
+    // MARK: - Save/Load Validation and Safety
+    
+    /// Validates that the current game state is consistent and ready for saving
+    private func validateGameStateForSave() -> Bool {
+        print("[GameState] Validating game state for save...")
+        
+        // Check grid consistency
+        let gridBlockCount = grid.flatMap { $0 }.compactMap { $0 }.count
+        if gridBlockCount < 0 {
+            print("[ERROR] Invalid grid block count: \(gridBlockCount)")
+            return false
+        }
+        
+        // Check tray consistency
+        if tray.count != 3 {
+            print("[ERROR] Invalid tray count: \(tray.count)")
+            return false
+        }
+        
+        // Check score consistency
+        if score < 0 || temporaryScore < 0 {
+            print("[ERROR] Invalid score values: score=\(score), temp=\(temporaryScore)")
+            return false
+        }
+        
+        // Check level consistency
+        if level < 1 {
+            print("[ERROR] Invalid level: \(level)")
+            return false
+        }
+        
+        // Check game state flags
+        if isGameOver && !isPaused {
+            print("[WARNING] Game is over but not paused - this might be intentional")
+        }
+        
+        print("[GameState] Game state validation passed")
+        return true
+    }
+    
+    /// Validates that loaded game state is consistent
+    private func validateLoadedGameState() -> Bool {
+        print("[GameState] Validating loaded game state...")
+        
+        // Check grid consistency
+        let gridBlockCount = grid.flatMap { $0 }.compactMap { $0 }.count
+        if gridBlockCount < 0 {
+            print("[ERROR] Invalid loaded grid block count: \(gridBlockCount)")
+            return false
+        }
+        
+        // Check tray consistency
+        if tray.count != 3 {
+            print("[ERROR] Invalid loaded tray count: \(tray.count)")
+            return false
+        }
+        
+        // Check score consistency
+        if score < 0 || temporaryScore < 0 {
+            print("[ERROR] Invalid loaded score values: score=\(score), temp=\(temporaryScore)")
+            return false
+        }
+        
+        // Check level consistency
+        if level < 1 {
+            print("[ERROR] Invalid loaded level: \(level)")
+            return false
+        }
+        
+        print("[GameState] Loaded game state validation passed")
+        return true
+    }
+    
+    /// Performs a comprehensive save with validation
+    func saveProgressWithValidation() async throws {
+        guard validateGameStateForSave() else {
+            throw GameError.saveFailed(NSError(domain: "GameState", code: -1, userInfo: [NSLocalizedDescriptionKey: "Game state validation failed"]))
+        }
+        
+        try await saveProgress()
+    }
+    
+    /// Performs a comprehensive load with validation
+    func loadSavedGameWithValidation() async throws {
+        try await loadSavedGame()
+        
+        guard validateLoadedGameState() else {
+            // If validation fails, reset to a safe state
+            print("[GameState] Loaded state validation failed, resetting to safe state")
+            startNewGame()
+            throw GameError.loadFailed(NSError(domain: "GameState", code: -1, userInfo: [NSLocalizedDescriptionKey: "Loaded game state validation failed"]))
+        }
+    }
+    
+    /// Checks if the current game state can be safely saved
+    func canSaveGame() -> Bool {
+        let gridBlockCount = grid.flatMap { $0 }.compactMap { $0 }.count
+        
+        print("[GameState] canSaveGame check:")
+        print("  - isGameOver: \(isGameOver)")
+        print("  - score: \(score)")
+        print("  - blocksPlaced: \(blocksPlaced)")
+        print("  - gridBlockCount: \(gridBlockCount)")
+        
+        // Don't save if game is over and no progress was made
+        if isGameOver && score == 0 && blocksPlaced == 0 {
+            print("[GameState] Skipping save - game over with no progress")
+            return false
+        }
+        
+        // Don't save if game hasn't started
+        if score == 0 && blocksPlaced == 0 && gridBlockCount == 0 {
+            print("[GameState] Skipping save - game hasn't started (no blocks placed)")
+            return false
+        }
+        
+        print("[GameState] Game state is suitable for saving")
+        return true
+    }
+    
+    /// Gets a summary of the current game state for debugging
+    func getGameStateSummary() -> String {
+        let gridBlockCount = grid.flatMap { $0 }.compactMap { $0 }.count
+        let trayCount = tray.count
+        let hasValidMoves = tray.contains { canPlaceBlockAnywhere($0) }
+        
+        return """
+        Game State Summary:
+        - Level: \(level)
+        - Score: \(score) (temp: \(temporaryScore))
+        - Blocks Placed: \(blocksPlaced)
+        - Lines Cleared: \(linesCleared)
+        - Grid Blocks: \(gridBlockCount)
+        - Tray Count: \(trayCount)
+        - Can Place Any: \(hasValidMoves)
+        - Is Game Over: \(isGameOver)
+        - Is Paused: \(isPaused)
+        - Level Complete: \(levelComplete)
+        - Can Undo: \(canUndo)
+        - Undo Count: \(undoCount)
+        - Ad Undo Count: \(adUndoCount)
+        - Has Used Continue Ad: \(hasUsedContinueAd)
+        """
     }
 }

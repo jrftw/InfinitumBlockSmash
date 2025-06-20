@@ -1385,28 +1385,42 @@ class FirebaseManager: ObservableObject {
             let doc = try await db.collection("users").document(userId).collection("progress").document("data").getDocument()
             
             guard let data = doc.data() else {
+                print("[FirebaseManager] No progress data found, returning empty progress")
                 return GameProgress() // Return empty progress if no data exists
             }
             
-            // Create progress object with personal high score and highest level
-            let progress = GameProgress(
-                score: data["score"] as? Int ?? 0,
-                level: data["level"] as? Int ?? 1,
-                blocksPlaced: data["blocksPlaced"] as? Int ?? 0,
-                linesCleared: data["linesCleared"] as? Int ?? 0,
-                gamesCompleted: data["gamesCompleted"] as? Int ?? 0,
-                perfectLevels: data["perfectLevels"] as? Int ?? 0,
-                totalPlayTime: data["totalPlayTime"] as? Double ?? 0,
-                highScore: data["personalHighScore"] as? Int ?? 0,  // Changed from highScore to personalHighScore
-                highestLevel: data["personalHighestLevel"] as? Int ?? 1,  // Changed from highestLevel to personalHighestLevel
-                grid: data["grid"] as? [[String]] ?? Array(repeating: Array(repeating: "nil", count: GameConstants.gridSize), count: GameConstants.gridSize),
-                tray: [],  // Tray is not stored in Firebase
-                lastSaveTime: (data["lastSaveTime"] as? Timestamp)?.dateValue() ?? Date()
-            )
+            print("[FirebaseManager] Loaded progress data: \(data)")
             
-            return progress
+            // Check if this is the new enhanced format or old format
+            if data["version"] != nil {
+                print("[FirebaseManager] Using new enhanced format")
+                // New enhanced format - use the dictionary initializer
+                let progress = GameProgress(dictionary: data) ?? GameProgress()
+                print("[FirebaseManager] Parsed progress: score=\(progress.score), level=\(progress.level), blocksPlaced=\(progress.blocksPlaced)")
+                return progress
+            } else {
+                print("[FirebaseManager] Using old format")
+                // Old format - create basic progress object
+                let progress = GameProgress(
+                    score: data["score"] as? Int ?? 0,
+                    level: data["level"] as? Int ?? 1,
+                    blocksPlaced: data["blocksPlaced"] as? Int ?? 0,
+                    linesCleared: data["linesCleared"] as? Int ?? 0,
+                    gamesCompleted: data["gamesCompleted"] as? Int ?? 0,
+                    perfectLevels: data["perfectLevels"] as? Int ?? 0,
+                    totalPlayTime: data["totalPlayTime"] as? Double ?? 0,
+                    highScore: data["personalHighScore"] as? Int ?? 0,
+                    highestLevel: data["personalHighestLevel"] as? Int ?? 1,
+                    grid: data["grid"] as? [[String]] ?? Array(repeating: Array(repeating: "nil", count: GameConstants.gridSize), count: GameConstants.gridSize),
+                    tray: [],  // Tray is not stored in Firebase
+                    lastSaveTime: (data["lastSaveTime"] as? Timestamp)?.dateValue() ?? Date()
+                )
+                
+                print("[FirebaseManager] Parsed old format progress: score=\(progress.score), level=\(progress.level), blocksPlaced=\(progress.blocksPlaced)")
+                return progress
+            }
         } catch {
-            print("Error loading game progress: \(error)")
+            print("[FirebaseManager] Error loading game progress: \(error)")
             throw error
         }
     }
@@ -1429,6 +1443,9 @@ class FirebaseManager: ObservableObject {
             progressData["personalHighScore"] = progress.highScore
             progressData["personalHighestLevel"] = progress.highestLevel
             
+            print("[FirebaseManager] Saving progress data: \(progressData)")
+            print("[FirebaseManager] Progress details: score=\(progress.score), level=\(progress.level), blocksPlaced=\(progress.blocksPlaced)")
+            
             // Save to Firestore with retry logic
             let firestoreRef = db.collection("users").document(userId)
                 .collection("progress")
@@ -1437,10 +1454,12 @@ class FirebaseManager: ObservableObject {
             do {
                 try await firestoreRef.setData(progressData, merge: true)
                 resetRetryCount(for: "progress")
+                print("[FirebaseManager] Successfully saved to Firestore")
             } catch {
                 try await exponentialBackoff(for: "progress")
                 try await firestoreRef.setData(progressData, merge: true)
                 resetRetryCount(for: "progress")
+                print("[FirebaseManager] Successfully saved to Firestore after retry")
             }
             
             // Save to RTDB for real-time sync
@@ -1450,9 +1469,11 @@ class FirebaseManager: ObservableObject {
             
             do {
                 try await rtdbRef.setValue(progressData)
+                print("[FirebaseManager] Successfully saved to RTDB")
             } catch {
                 try await exponentialBackoff(for: "progress")
                 try await rtdbRef.setValue(progressData)
+                print("[FirebaseManager] Successfully saved to RTDB after retry")
             }
             
             #if DEBUG

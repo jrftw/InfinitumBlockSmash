@@ -2,126 +2,115 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Rate limiting functions
-    function isWithinRateLimit(limit, window) {
-      return request.time > resource.data.lastWriteTime + duration.value(window, 's') ||
-             resource.data.writeCount < limit;
-    }
-    
-    function updateRateLimit() {
-      return {
-        lastWriteTime: request.time,
-        writeCount: (resource.data.writeCount + 1)
-      };
+    // Basic validation functions
+    function validateScore(score) {
+      return score is number && score >= 0 && score <= 1000000;
     }
 
-    // Enhanced error handling
-    function validateScore(score) {
-      return score is number && 
-             score >= 0 && 
-             score <= 1000000; // Maximum reasonable score
+    function validateTime(time) {
+      return time is number && time >= 0 && time <= 86400;
     }
 
     function validateLevel(level) {
-      return level is number && 
-             level >= 1 && 
-             level <= 100; // Maximum reasonable level
+      return level is number && level >= 1 && level <= 100;
     }
 
-    function validateTimestamp(timestamp) {
-      return timestamp is number && 
-             timestamp <= request.time.toMillis() &&
-             timestamp >= request.time.toMillis() - duration.value(7, 'd');
+    function validateTimestamp(timestampValue) {
+      return timestampValue is number && 
+             timestampValue <= request.time.toMillis() &&
+             timestampValue >= request.time.toMillis() - duration.value(7, 'd');
     }
 
     function validateUsername(username) {
-      return username is string && 
-             username.size() >= 3 && 
-             username.size() <= 30;
+      return username is string && username.size() >= 3 && username.size() <= 30;
     }
 
-    // Basic authentication check
+    // Simple authentication check
     function isAuthenticated() {
       return request.auth != null;
     }
     
-    // Ownership check for user-specific writes
+    // Ownership check
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // App Check verification
-    function hasValidAppCheck() {
-      return request.app != null;
-    }
-
-    // Leaderboards - public read, authenticated write with rate limiting
+    // Leaderboards - public read, authenticated write
     match /classic_leaderboard/{period}/scores/{userId} {
       allow read: if true;
       allow write: if isOwner(userId) && 
-                   hasValidAppCheck() && 
                    validateScore(request.resource.data.score) &&
-                   validateTimestamp(request.resource.data.timestamp) &&
-                   isWithinRateLimit(10, 60); // 10 writes per minute
+                   validateTimestamp(request.resource.data.timestamp);
     }
 
     match /classic_timed_leaderboard/{period}/scores/{userId} {
       allow read: if true;
-      allow write: if isOwner(userId) && hasValidAppCheck();
+      allow write: if isOwner(userId) && 
+                   validateTime(request.resource.data.time) &&
+                   validateTimestamp(request.resource.data.timestamp);
     }
 
     match /achievement_leaderboard/{period}/scores/{userId} {
       allow read: if true;
-      allow write: if isOwner(userId) && hasValidAppCheck();
+      allow write: if isOwner(userId) && 
+                   validateScore(request.resource.data.points) &&
+                   validateTimestamp(request.resource.data.timestamp);
     }
 
-    // User profiles - authenticated read, owner write with enhanced validation
+    // Legacy leaderboard collection
+    match /leaderboard/{document=**} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // User profiles - authenticated read/write
     match /users/{userId} {
-      allow read: if isAuthenticated() && hasValidAppCheck();
-      allow write: if isOwner(userId) && 
-                   hasValidAppCheck() &&
-                   isWithinRateLimit(5, 60) && // 5 writes per minute
-                   (request.resource.data.username == null || validateUsername(request.resource.data.username));
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
       
-      // Achievements subcollection
-      match /achievements/{achievementId} {
-        allow read: if isAuthenticated() && hasValidAppCheck();
-        allow write: if isOwner(userId) && hasValidAppCheck();
-      }
-      
-      // Progress subcollection with enhanced validation
-      match /progress/{progressId} {
-        allow read: if isAuthenticated() && hasValidAppCheck();
-        allow write: if isOwner(userId) && 
-                     hasValidAppCheck() &&
-                     validateScore(request.resource.data.score) &&
-                     validateLevel(request.resource.data.level) &&
-                     validateTimestamp(request.resource.data.lastSaveTime) &&
-                     isWithinRateLimit(5, 60);
+      // Subcollections
+      match /{subcollection}/{document=**} {
+        allow read: if isAuthenticated();
+        allow write: if isOwner(userId);
       }
     }
 
-    // Game states with rate limiting
+    // Game states
     match /game_states/{userId} {
-      allow read: if isAuthenticated() && hasValidAppCheck();
-      allow write: if isOwner(userId) && 
-                   hasValidAppCheck() &&
-                   isWithinRateLimit(20, 60); // 20 writes per minute
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
     }
 
-    // Settings - authenticated read, owner write with App Check
+    // Settings
     match /settings/{userId} {
-      allow read: if isAuthenticated() && hasValidAppCheck();
-      allow write: if isOwner(userId) && hasValidAppCheck();
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
     }
 
-    // Devices collection - for referral tracking
+    // Devices collection
     match /devices/{deviceId} {
-      allow read: if isAuthenticated() && hasValidAppCheck();
-      allow write: if isAuthenticated() && hasValidAppCheck();
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
     }
 
-    // Default deny for all unknown paths
+    // Security logs
+    match /security_logs/{logId} {
+      allow read: if false;
+      allow write: if isAuthenticated();
+    }
+
+    // Public collections
+    match /announcements/{announcementId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /bugs/{bugId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Default deny
     match /{document=**} {
       allow read, write: if false;
     }

@@ -1,17 +1,17 @@
 /*
  * MemoryLeakDetector.swift
  * 
- * MEMORY LEAK DETECTION AND MONITORING
+ * SIMPLE MEMORY LEAK DETECTION UTILITY
  * 
- * This utility helps identify potential memory leaks by tracking object
- * creation and destruction, monitoring memory usage patterns, and
- * providing alerts when suspicious memory growth is detected.
+ * This utility provides basic memory leak detection by tracking object
+ * creation and destruction. It integrates with the existing MemorySystem
+ * for comprehensive memory management.
  * 
  * KEY FEATURES:
  * - Object lifecycle tracking
  * - Memory usage pattern analysis
  * - Leak detection alerts
- * - Performance impact monitoring
+ * - Integration with MemorySystem
  * - Debug information logging
  */
 
@@ -28,6 +28,7 @@ class MemoryLeakDetector {
     private var lastSnapshotTime: Date = Date()
     private let snapshotInterval: TimeInterval = 30.0 // Take snapshot every 30 seconds
     private let maxSnapshots = 20 // Keep last 20 snapshots
+    private var monitoringTimer: Timer?
     
     // MARK: - Memory Snapshot
     struct MemorySnapshot {
@@ -112,10 +113,29 @@ class MemoryLeakDetector {
         return leaks
     }
     
+    /// Emergency memory cleanup for immediate pressure situations
+    func performEmergencyCleanup() {
+        Logger.shared.log("Performing emergency memory cleanup", category: .systemMemory, level: .warning)
+        
+        // Clear all tracked objects
+        trackedObjects.removeAll()
+        
+        // Clear memory snapshots
+        memorySnapshots.removeAll()
+        
+        // Force garbage collection
+        autoreleasepool {
+            // Clear any cached data
+            URLCache.shared.removeAllCachedResponses()
+        }
+        
+        Logger.shared.log("Emergency memory cleanup completed", category: .systemMemory, level: .info)
+    }
+    
     // MARK: - Private Methods
     
     private func startMonitoring() {
-        Timer.scheduledTimer(withTimeInterval: snapshotInterval, repeats: true) { [weak self] _ in
+        monitoringTimer = Timer.scheduledTimer(withTimeInterval: snapshotInterval, repeats: true) { [weak self] _ in
             self?.takeMemorySnapshot()
         }
     }
@@ -194,6 +214,11 @@ class MemoryLeakDetector {
         }
         
         return nil
+    }
+    
+    deinit {
+        monitoringTimer?.invalidate()
+        monitoringTimer = nil
     }
 }
 

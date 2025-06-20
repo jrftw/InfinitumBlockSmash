@@ -5,6 +5,7 @@
  *    - Block.swift (for block definitions)
  *    - GameDataVersion.swift (for version management)
  *    - GameConstants.swift (for grid size)
+ *    - GameMove.swift (for undo stack)
  * AUTHOR: @jrftw
  * LAST UPDATED: 6/19/2025
  */
@@ -27,6 +28,43 @@ struct GameProgress: Codable {
     let tray: [Block]
     let lastSaveTime: Date
     
+    // NEW: Additional game state components
+    let temporaryScore: Int
+    let currentChain: Int
+    let usedColors: [String] // Serialized Set<BlockColor>
+    let usedShapes: [String] // Serialized Set<BlockShape>
+    let isPerfectLevel: Bool
+    let undoCount: Int
+    let adUndoCount: Int
+    let hasUsedContinueAd: Bool
+    let levelsCompletedSinceLastAd: Int
+    let adsWatchedThisGame: Int
+    let isPaused: Bool
+    let targetFPS: Int
+    let gameStartTime: Date?
+    let lastPlayDate: Date?
+    let consecutiveDays: Int
+    let totalTime: TimeInterval
+    
+    // NEW: Preview placement state
+    let previewEnabled: Bool
+    let previewHeightOffset: Double
+    
+    // NEW: Game-specific settings and flags
+    let isTimedMode: Bool
+    let soundEnabled: Bool
+    let hapticsEnabled: Bool
+    let musicVolume: Double
+    let sfxVolume: Double
+    let difficulty: String
+    let theme: String
+    let autoSave: Bool
+    let placementPrecision: Double
+    let blockDragOffset: Double
+    
+    // NEW: Undo stack state (limited to prevent excessive storage)
+    let undoStack: [GameMove] // Limited to last 5 moves for storage efficiency
+    
     init(
         score: Int = 0,
         level: Int = 1,
@@ -39,7 +77,37 @@ struct GameProgress: Codable {
         highestLevel: Int = 1,
         grid: Any = Array(repeating: Array(repeating: "nil", count: GameConstants.gridSize), count: GameConstants.gridSize),
         tray: [Block] = [],
-        lastSaveTime: Date = Date()
+        lastSaveTime: Date = Date(),
+        // NEW: Additional parameters
+        temporaryScore: Int = 0,
+        currentChain: Int = 0,
+        usedColors: Set<BlockColor> = [],
+        usedShapes: Set<BlockShape> = [],
+        isPerfectLevel: Bool = true,
+        undoCount: Int = 0,
+        adUndoCount: Int = 3,
+        hasUsedContinueAd: Bool = false,
+        levelsCompletedSinceLastAd: Int = 0,
+        adsWatchedThisGame: Int = 0,
+        isPaused: Bool = false,
+        targetFPS: Int = 60,
+        gameStartTime: Date? = nil,
+        lastPlayDate: Date? = nil,
+        consecutiveDays: Int = 0,
+        totalTime: TimeInterval = 0,
+        previewEnabled: Bool = true,
+        previewHeightOffset: Double = 0.0,
+        isTimedMode: Bool = false,
+        soundEnabled: Bool = true,
+        hapticsEnabled: Bool = true,
+        musicVolume: Double = 1.0,
+        sfxVolume: Double = 1.0,
+        difficulty: String = "normal",
+        theme: String = "auto",
+        autoSave: Bool = true,
+        placementPrecision: Double = 0.15,
+        blockDragOffset: Double = 0.4,
+        undoStack: [GameMove] = []
     ) {
         self.version = GameDataVersion.currentVersion
         self.score = score
@@ -67,6 +135,37 @@ struct GameProgress: Codable {
         
         self.tray = tray
         self.lastSaveTime = lastSaveTime
+        
+        // NEW: Set additional properties
+        self.temporaryScore = temporaryScore
+        self.currentChain = currentChain
+        self.usedColors = usedColors.map { $0.rawValue }
+        self.usedShapes = usedShapes.map { $0.rawValue }
+        self.isPerfectLevel = isPerfectLevel
+        self.undoCount = undoCount
+        self.adUndoCount = adUndoCount
+        self.hasUsedContinueAd = hasUsedContinueAd
+        self.levelsCompletedSinceLastAd = levelsCompletedSinceLastAd
+        self.adsWatchedThisGame = adsWatchedThisGame
+        self.isPaused = isPaused
+        self.targetFPS = targetFPS
+        self.gameStartTime = gameStartTime
+        self.lastPlayDate = lastPlayDate
+        self.consecutiveDays = consecutiveDays
+        self.totalTime = totalTime
+        self.previewEnabled = previewEnabled
+        self.previewHeightOffset = previewHeightOffset
+        self.isTimedMode = isTimedMode
+        self.soundEnabled = soundEnabled
+        self.hapticsEnabled = hapticsEnabled
+        self.musicVolume = musicVolume
+        self.sfxVolume = sfxVolume
+        self.difficulty = difficulty
+        self.theme = theme
+        self.autoSave = autoSave
+        self.placementPrecision = placementPrecision
+        self.blockDragOffset = blockDragOffset
+        self.undoStack = undoStack
     }
     
     // MARK: - Dictionary Conversion
@@ -94,13 +193,77 @@ struct GameProgress: Codable {
                     "shape": block.shape.rawValue
                 ]
             },
-            "lastSaveTime": lastSaveTime
+            "lastSaveTime": lastSaveTime.timeIntervalSince1970,
+            // NEW: Additional properties
+            "temporaryScore": temporaryScore,
+            "currentChain": currentChain,
+            "usedColors": usedColors,
+            "usedShapes": usedShapes,
+            "isPerfectLevel": isPerfectLevel,
+            "undoCount": undoCount,
+            "adUndoCount": adUndoCount,
+            "hasUsedContinueAd": hasUsedContinueAd,
+            "levelsCompletedSinceLastAd": levelsCompletedSinceLastAd,
+            "adsWatchedThisGame": adsWatchedThisGame,
+            "isPaused": isPaused,
+            "targetFPS": targetFPS,
+            "gameStartTime": gameStartTime?.timeIntervalSince1970 as Any,
+            "lastPlayDate": lastPlayDate?.timeIntervalSince1970 as Any,
+            "consecutiveDays": consecutiveDays,
+            "totalTime": totalTime,
+            "previewEnabled": previewEnabled,
+            "previewHeightOffset": previewHeightOffset,
+            "isTimedMode": isTimedMode,
+            "soundEnabled": soundEnabled,
+            "hapticsEnabled": hapticsEnabled,
+            "musicVolume": musicVolume,
+            "sfxVolume": sfxVolume,
+            "difficulty": difficulty,
+            "theme": theme,
+            "autoSave": autoSave,
+            "placementPrecision": placementPrecision,
+            "blockDragOffset": blockDragOffset,
+            "undoStack": undoStack.map { move in
+                [
+                    "block": [
+                        "color": move.block.color.rawValue,
+                        "shape": move.block.shape.rawValue
+                    ],
+                    "position": ["row": move.position.row, "col": move.position.col],
+                    "previousGridSize": GameConstants.gridSize,
+                    "previousGridData": move.previousGrid.flatMap { row in
+                        row.map { color in
+                            color?.rawValue ?? "nil"
+                        }
+                    },
+                    "previousTray": move.previousTray.map { block in
+                        [
+                            "color": block.color.rawValue,
+                            "shape": block.shape.rawValue
+                        ]
+                    },
+                    "previousScore": move.previousScore,
+                    "previousLevel": move.previousLevel,
+                    "previousBlocksPlaced": move.previousBlocksPlaced,
+                    "previousLinesCleared": move.previousLinesCleared,
+                    "previousCurrentChain": move.previousCurrentChain,
+                    "previousUsedColors": move.previousUsedColors.map { $0.rawValue },
+                    "previousUsedShapes": move.previousUsedShapes.map { $0.rawValue },
+                    "previousIsPerfectLevel": move.previousIsPerfectLevel,
+                    "timestamp": move.timestamp?.timeIntervalSince1970 as Any
+                ]
+            }
         ]
     }
     
     init?(dictionary: [String: Any]) {
+        print("[GameProgress] Attempting to parse dictionary: \(dictionary)")
+        
         // Validate data version
-        guard GameDataVersion.validateData(dictionary) else { return nil }
+        guard GameDataVersion.validateData(dictionary) else { 
+            print("[GameProgress] Data validation failed")
+            return nil 
+        }
         
         guard let version = dictionary["version"] as? Int,
               let score = dictionary["score"] as? Int,
@@ -115,9 +278,20 @@ struct GameProgress: Codable {
               let gridSize = dictionary["gridSize"] as? Int,
               let gridData = dictionary["gridData"] as? [String],
               let trayData = dictionary["tray"] as? [[String: Any]],
-              let lastSaveTime = dictionary["lastSaveTime"] as? Date else {
+              let lastSaveTime = dictionary["lastSaveTime"] as? TimeInterval else {
+            print("[GameProgress] Failed to parse required fields from dictionary")
+            print("[GameProgress] version: \(dictionary["version"] as? Int ?? -1)")
+            print("[GameProgress] score: \(dictionary["score"] as? Int ?? -1)")
+            print("[GameProgress] level: \(dictionary["level"] as? Int ?? -1)")
+            print("[GameProgress] blocksPlaced: \(dictionary["blocksPlaced"] as? Int ?? -1)")
+            print("[GameProgress] gridSize: \(dictionary["gridSize"] as? Int ?? -1)")
+            print("[GameProgress] gridData: \(dictionary["gridData"] as? [String] ?? [])")
+            print("[GameProgress] trayData: \(dictionary["tray"] as? [[String: Any]] ?? [])")
+            print("[GameProgress] lastSaveTime: \(dictionary["lastSaveTime"] as? TimeInterval ?? -1)")
             return nil
         }
+        
+        print("[GameProgress] Successfully parsed all required fields")
         
         self.version = version
         self.score = score
@@ -139,7 +313,7 @@ struct GameProgress: Codable {
         }
         self.grid = reconstructedGrid
         
-        self.tray = trayData.compactMap { blockData in
+        self.tray = trayData.compactMap { blockData -> Block? in
             guard let colorString = blockData["color"] as? String,
                   let shapeString = blockData["shape"] as? String,
                   let color = BlockColor(rawValue: colorString),
@@ -148,6 +322,152 @@ struct GameProgress: Codable {
             }
             return Block(color: color, shape: shape)
         }
-        self.lastSaveTime = lastSaveTime
+        self.lastSaveTime = Date(timeIntervalSince1970: lastSaveTime)
+        
+        // NEW: Load additional properties with defaults
+        self.temporaryScore = dictionary["temporaryScore"] as? Int ?? 0
+        self.currentChain = dictionary["currentChain"] as? Int ?? 0
+        let usedColorsStrings = dictionary["usedColors"] as? [String] ?? []
+        self.usedColors = usedColorsStrings
+        let usedShapesStrings = dictionary["usedShapes"] as? [String] ?? []
+        self.usedShapes = usedShapesStrings
+        self.isPerfectLevel = dictionary["isPerfectLevel"] as? Bool ?? true
+        self.undoCount = dictionary["undoCount"] as? Int ?? 0
+        self.adUndoCount = dictionary["adUndoCount"] as? Int ?? 3
+        self.hasUsedContinueAd = dictionary["hasUsedContinueAd"] as? Bool ?? false
+        self.levelsCompletedSinceLastAd = dictionary["levelsCompletedSinceLastAd"] as? Int ?? 0
+        self.adsWatchedThisGame = dictionary["adsWatchedThisGame"] as? Int ?? 0
+        self.isPaused = dictionary["isPaused"] as? Bool ?? false
+        self.targetFPS = dictionary["targetFPS"] as? Int ?? 60
+        self.gameStartTime = {
+            if let timeInterval = dictionary["gameStartTime"] as? TimeInterval {
+                return Date(timeIntervalSince1970: timeInterval)
+            }
+            return nil
+        }()
+        self.lastPlayDate = {
+            if let timeInterval = dictionary["lastPlayDate"] as? TimeInterval {
+                return Date(timeIntervalSince1970: timeInterval)
+            }
+            return nil
+        }()
+        self.consecutiveDays = dictionary["consecutiveDays"] as? Int ?? 0
+        self.totalTime = dictionary["totalTime"] as? TimeInterval ?? 0
+        self.previewEnabled = dictionary["previewEnabled"] as? Bool ?? true
+        self.previewHeightOffset = dictionary["previewHeightOffset"] as? Double ?? 0.0
+        self.isTimedMode = dictionary["isTimedMode"] as? Bool ?? false
+        self.soundEnabled = dictionary["soundEnabled"] as? Bool ?? true
+        self.hapticsEnabled = dictionary["hapticsEnabled"] as? Bool ?? true
+        self.musicVolume = dictionary["musicVolume"] as? Double ?? 1.0
+        self.sfxVolume = dictionary["sfxVolume"] as? Double ?? 1.0
+        self.difficulty = dictionary["difficulty"] as? String ?? "normal"
+        self.theme = dictionary["theme"] as? String ?? "auto"
+        self.autoSave = dictionary["autoSave"] as? Bool ?? true
+        self.placementPrecision = dictionary["placementPrecision"] as? Double ?? 0.15
+        self.blockDragOffset = dictionary["blockDragOffset"] as? Double ?? 0.4
+        
+        // Load undo stack
+        let undoStackData = dictionary["undoStack"] as? [[String: Any]] ?? []
+        self.undoStack = undoStackData.compactMap { moveData -> GameMove? in
+            guard let blockData = moveData["block"] as? [String: Any],
+                  let colorString = blockData["color"] as? String,
+                  let shapeString = blockData["shape"] as? String,
+                  let color = BlockColor(rawValue: colorString),
+                  let shape = BlockShape(rawValue: shapeString),
+                  let positionData = moveData["position"] as? [String: Any],
+                  let row = positionData["row"] as? Int,
+                  let col = positionData["col"] as? Int,
+                  let previousGridSize = moveData["previousGridSize"] as? Int,
+                  let previousGridData = moveData["previousGridData"] as? [String],
+                  let previousTrayData = moveData["previousTray"] as? [[String: Any]],
+                  let previousScore = moveData["previousScore"] as? Int,
+                  let previousLevel = moveData["previousLevel"] as? Int,
+                  let previousBlocksPlaced = moveData["previousBlocksPlaced"] as? Int,
+                  let previousLinesCleared = moveData["previousLinesCleared"] as? Int,
+                  let previousCurrentChain = moveData["previousCurrentChain"] as? Int,
+                  let previousUsedColorsData = moveData["previousUsedColors"] as? [String],
+                  let previousUsedShapesData = moveData["previousUsedShapes"] as? [String],
+                  let previousIsPerfectLevel = moveData["previousIsPerfectLevel"] as? Bool else {
+                return nil
+            }
+            
+            let block = Block(color: color, shape: shape)
+            let position = (row: row, col: col)
+            
+            // Reconstruct the previousGrid from flat array
+            var reconstructedPreviousGrid: [[BlockColor?]] = []
+            for i in 0..<previousGridSize {
+                let start = i * previousGridSize
+                let end = start + previousGridSize
+                let row = Array(previousGridData[start..<end]).map { colorString in
+                    colorString == "nil" ? nil : BlockColor(rawValue: colorString)
+                }
+                reconstructedPreviousGrid.append(row)
+            }
+            
+            let previousTray = previousTrayData.compactMap { blockData -> Block? in
+                guard let colorString = blockData["color"] as? String,
+                      let shapeString = blockData["shape"] as? String,
+                      let color = BlockColor(rawValue: colorString),
+                      let shape = BlockShape(rawValue: shapeString) else {
+                    return nil
+                }
+                return Block(color: color, shape: shape)
+            }
+            
+            let previousUsedColors = Set(previousUsedColorsData.compactMap { BlockColor(rawValue: $0) })
+            let previousUsedShapes = Set(previousUsedShapesData.compactMap { BlockShape(rawValue: $0) })
+            let timestamp: Date?
+            if let timestampInterval = moveData["timestamp"] as? TimeInterval {
+                timestamp = Date(timeIntervalSince1970: timestampInterval)
+            } else {
+                timestamp = nil
+            }
+            
+            return GameMove(
+                block: block,
+                position: position,
+                previousGrid: reconstructedPreviousGrid,
+                previousTray: previousTray,
+                previousScore: previousScore,
+                previousLevel: previousLevel,
+                previousBlocksPlaced: previousBlocksPlaced,
+                previousLinesCleared: previousLinesCleared,
+                previousCurrentChain: previousCurrentChain,
+                previousUsedColors: previousUsedColors,
+                previousUsedShapes: previousUsedShapes,
+                previousIsPerfectLevel: previousIsPerfectLevel,
+                timestamp: timestamp
+            )
+        }
+    }
+    
+    // MARK: - Helper Methods
+    
+    /// Returns the used colors as a Set<BlockColor>
+    var usedColorsSet: Set<BlockColor> {
+        Set(usedColors.compactMap { BlockColor(rawValue: $0) })
+    }
+    
+    /// Returns the used shapes as a Set<BlockShape>
+    var usedShapesSet: Set<BlockShape> {
+        Set(usedShapes.compactMap { BlockShape(rawValue: $0) })
+    }
+    
+    /// Checks if this represents a new game (no progress)
+    var isNewGame: Bool {
+        // Check if there's any actual game progress
+        let hasScore = score > 0
+        let hasBlocksPlaced = blocksPlaced > 0
+        let hasGridBlocks = grid.flatMap { $0 }.contains { $0 != "nil" }
+        
+        // A game is considered "new" only if there's no meaningful progress
+        // Having tray blocks doesn't count as progress since they're always present
+        return !hasScore && !hasBlocksPlaced && !hasGridBlocks && level == 1
+    }
+    
+    /// Creates a fresh game progress for new games
+    static func newGame() -> GameProgress {
+        return GameProgress()
     }
 } 

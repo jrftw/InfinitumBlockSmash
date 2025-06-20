@@ -220,7 +220,8 @@ struct ContentView: View {
                                         showingGameView = true
                                     } catch {
                                         Logger.shared.log("Error loading saved game: \(error.localizedDescription)", category: .gameState, level: .error)
-                                        // If loading fails, start a fresh game
+                                        // If loading fails, clean up the invalid save and start a fresh game
+                                        gameState.deleteSavedGame()
                                         gameState.resetGame()
                                         showingGameView = true
                                     }
@@ -401,7 +402,7 @@ struct ContentView: View {
             StoreView()
         }
         .fullScreenCover(isPresented: $showingClassicTimedView) {
-            ClassicTimedGameView()
+            ClassicTimedGameView(gameState: gameState)
         }
         .sheet(isPresented: $showingAnnouncements) {
             AnnouncementsView()
@@ -415,7 +416,7 @@ struct ContentView: View {
         .alert("Start New Game?", isPresented: $showingNewGameConfirmation) {
             Button("No", role: .cancel) { }
             Button("Yes", role: .destructive) {
-                gameState.resetGame()
+                gameState.startNewGame()
                 showingGameModeSelection = true
             }
         } message: {
@@ -435,13 +436,14 @@ struct ContentView: View {
                     UserDefaults.standard.set(false, forKey: "isTimedMode")
                     showingGameModeSelection = false
                     // Ensure we start with a fresh game
-                    gameState.resetGame()
+                    gameState.startNewGame()
                     showingGameView = true
                 },
                 onClassicTimed: {
                     UserDefaults.standard.set(true, forKey: "isTimedMode")
                     showingGameModeSelection = false
-                    // ClassicTimedGameView creates its own GameState, so no need to reset here
+                    // ClassicTimedGameView now uses the shared GameState, so we need to reset it
+                    gameState.startNewGame()
                     showingClassicTimedView = true
                 }
             )

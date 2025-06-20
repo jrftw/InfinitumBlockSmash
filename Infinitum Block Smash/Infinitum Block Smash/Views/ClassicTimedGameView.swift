@@ -3,7 +3,7 @@ import SpriteKit
 
 struct ClassicTimedGameView: View {
     // MARK: - Properties
-    @StateObject private var gameState = GameState()
+    @ObservedObject var gameState: GameState
     @StateObject private var timedState: ClassicTimedGameState
     @State private var showingSettings = false
     @State private var showingAchievements = false
@@ -16,9 +16,8 @@ struct ClassicTimedGameView: View {
     @State private var showingSaveWarning = false
     
     // MARK: - Initializers
-    init() {
-        let gameState = GameState()
-        _gameState = StateObject(wrappedValue: gameState)
+    init(gameState: GameState) {
+        self.gameState = gameState
         _timedState = StateObject(wrappedValue: ClassicTimedGameState(gameState: gameState))
     }
     
@@ -87,7 +86,7 @@ struct ClassicTimedGameView: View {
             UserDefaults.standard.set(true, forKey: "isTimedMode")
             
             // Ensure we start with a completely fresh game
-            gameState.resetGame()
+            gameState.startNewGame()
             
             Task {
                 await timedState.startNewLevel()
@@ -291,7 +290,8 @@ struct ClassicTimedGameView: View {
                 onSave: {
                     Task {
                         do {
-                            try await gameState.saveProgress()
+                            // Always save the current game state
+                            try await gameState.forceSaveGame()
                             timedState.saveTimerState()
                             isPaused = false
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -309,10 +309,6 @@ struct ClassicTimedGameView: View {
                         await timedState.startNewLevel()
                     }
                     isPaused = false
-                },
-                onHome: {
-                    gameState.resetGame()
-                    dismiss()
                 },
                 onEndGame: {
                     gameState.resetGame()
@@ -358,7 +354,7 @@ private struct StatsOverlayView: View {
                                 StatText("FPS: \(Int(performanceMonitor.currentFPS))")
                             }
                             if showMemory {
-                                StatText("Memory: \(String(format: "%.1f", performanceMonitor.memoryUsage))MB")
+                                StatText("Memory: \(String(format: "%.1f", performanceMonitor.getCurrentMemoryUsage()))MB")
                             }
                             if showFrame {
                                 StatText("Frame: \(String(format: "%.1f", performanceMonitor.frameTime))ms")

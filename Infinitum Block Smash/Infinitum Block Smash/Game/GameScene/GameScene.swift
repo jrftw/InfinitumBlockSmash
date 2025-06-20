@@ -101,7 +101,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var particleEmitter: SKEmitterNode?
     private var glowNode: SKNode?
     private var activeParticleEmitters: [SKEmitterNode] = [] // Track active particle emitters
-    private let maxParticleEmitters = 3 // Reduced from 5 to prevent memory buildup
+    private let maxParticleEmitters = 2 // Reduced from 3 to prevent memory buildup
     // MARK: - Properties
     private var blockNodes: [SKNode] = []
     private var scoreLabel: SKLabelNode?
@@ -122,7 +122,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // MARK: - Texture Management
     private var activeTextures: Set<SKTexture> = []
     private var gradientTextureCache: [String: SKTexture] = [:] // Cache gradient textures by color
-    private let maxGradientCacheSize = 10 // Reduced from 20 to prevent memory buildup
+    private let maxGradientCacheSize = 5 // Reduced from 10 to prevent memory buildup
     
     func getCachedGradientTexture(for color: BlockColor) -> SKTexture? {
         let key = color.rawValue
@@ -1307,8 +1307,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     // MARK: - Memory Management
     private func setupMemoryManagement() async {
-        // Start periodic memory monitoring with reduced frequency
-        Timer.scheduledTimer(withTimeInterval: MemoryConfig.getIntervals().memoryCheck * 2, repeats: true) { [weak self] _ in
+        // Start periodic memory monitoring with significantly reduced frequency
+        Timer.scheduledTimer(withTimeInterval: MemoryConfig.getIntervals().memoryCheck * 3, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 await self?.checkAndCleanupMemory()
             }
@@ -1651,23 +1651,25 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
     }
     private func optimizeParticleEmitter(_ emitter: SKEmitterNode) {
-        // Reduce particle count
-        emitter.particleBirthRate = min(emitter.particleBirthRate, 50)
+        // Reduce particle count significantly
+        emitter.particleBirthRate = min(emitter.particleBirthRate, 25) // Reduced from 50
         // Reduce lifetime
-        emitter.particleLifetime = min(emitter.particleLifetime, 1.0)
+        emitter.particleLifetime = min(emitter.particleLifetime, 0.8) // Reduced from 1.0
         // Reduce particle size
         emitter.particleSize = CGSize(
-            width: min(emitter.particleSize.width, 10),
-            height: min(emitter.particleSize.height, 10)
+            width: min(emitter.particleSize.width, 6), // Reduced from 10
+            height: min(emitter.particleSize.height, 6) // Reduced from 10
         )
         // Reduce alpha
-        emitter.particleAlpha = min(emitter.particleAlpha, 0.8)
+        emitter.particleAlpha = min(emitter.particleAlpha, 0.6) // Reduced from 0.8
         // Reduce speed
-        emitter.particleSpeed = min(emitter.particleSpeed, 100)
+        emitter.particleSpeed = min(emitter.particleSpeed, 60) // Reduced from 100
         // Reduce acceleration
-        emitter.particleSpeedRange = min(emitter.particleSpeedRange, 50)
+        emitter.particleSpeedRange = min(emitter.particleSpeedRange, 30) // Reduced from 50
         // Reduce emission angle
-        emitter.emissionAngleRange = min(emitter.emissionAngleRange, .pi / 4)
+        emitter.emissionAngleRange = min(emitter.emissionAngleRange, .pi / 6) // Reduced from pi/4
+        // Reduce maximum particles
+        emitter.numParticlesToEmit = min(emitter.numParticlesToEmit, 20) // Add limit
     }
     private func addParticleEffect(at position: CGPoint) {
         cleanupParticleEffects()

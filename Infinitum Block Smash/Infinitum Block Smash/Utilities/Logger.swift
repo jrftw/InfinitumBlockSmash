@@ -232,16 +232,18 @@ class Logger {
         
         // Log to SecurityLogger for security-related events
         if category == .securityLogger {
-            SecurityLogger.shared.logSuspiciousActivity(
-                userId: nil,
-                activity: message,
-                details: [
-                    "level": level.rawValue,
-                    "file": fileName,
-                    "function": function,
-                    "line": line
-                ]
-            )
+            Task {
+                SecurityLogger.shared.logSuspiciousActivity(
+                    userId: nil,
+                    activity: message,
+                    details: [
+                        "level": level.rawValue,
+                        "file": fileName,
+                        "function": function,
+                        "line": line
+                    ]
+                )
+            }
         }
     }
     

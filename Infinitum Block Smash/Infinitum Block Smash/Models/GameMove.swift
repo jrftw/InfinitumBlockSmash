@@ -12,7 +12,7 @@ import Foundation
 import SwiftUI
 
 // MARK: - Game Types
-struct GameMove {
+struct GameMove: Codable {
     let block: Block
     let position: (row: Int, col: Int)
     let previousGrid: [[BlockColor?]]
@@ -41,6 +41,83 @@ struct GameMove {
         self.previousUsedShapes = previousUsedShapes
         self.previousIsPerfectLevel = previousIsPerfectLevel
         self.timestamp = timestamp
+    }
+    
+    // MARK: - Codable Implementation
+    
+    enum CodingKeys: String, CodingKey {
+        case block, position, previousGrid, previousTray, previousScore, previousLevel
+        case previousBlocksPlaced, previousLinesCleared, previousCurrentChain
+        case previousUsedColors, previousUsedShapes, previousIsPerfectLevel, timestamp
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        block = try container.decode(Block.self, forKey: .block)
+        
+        // Decode position tuple
+        let positionData = try container.decode([String: Int].self, forKey: .position)
+        guard let row = positionData["row"], let col = positionData["col"] else {
+            throw DecodingError.dataCorruptedError(forKey: .position, in: container, debugDescription: "Invalid position data")
+        }
+        position = (row: row, col: col)
+        
+        // Decode grid
+        let gridData = try container.decode([[String]].self, forKey: .previousGrid)
+        previousGrid = gridData.map { row in
+            row.map { colorString in
+                colorString == "nil" ? nil : BlockColor(rawValue: colorString)
+            }
+        }
+        
+        previousTray = try container.decode([Block].self, forKey: .previousTray)
+        previousScore = try container.decode(Int.self, forKey: .previousScore)
+        previousLevel = try container.decode(Int.self, forKey: .previousLevel)
+        previousBlocksPlaced = try container.decode(Int.self, forKey: .previousBlocksPlaced)
+        previousLinesCleared = try container.decode(Int.self, forKey: .previousLinesCleared)
+        previousCurrentChain = try container.decode(Int.self, forKey: .previousCurrentChain)
+        
+        // Decode sets
+        let usedColorsData = try container.decode([String].self, forKey: .previousUsedColors)
+        previousUsedColors = Set(usedColorsData.compactMap { BlockColor(rawValue: $0) })
+        
+        let usedShapesData = try container.decode([String].self, forKey: .previousUsedShapes)
+        previousUsedShapes = Set(usedShapesData.compactMap { BlockShape(rawValue: $0) })
+        
+        previousIsPerfectLevel = try container.decode(Bool.self, forKey: .previousIsPerfectLevel)
+        timestamp = try container.decodeIfPresent(Date.self, forKey: .timestamp)
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        
+        try container.encode(block, forKey: .block)
+        
+        // Encode position tuple
+        try container.encode(["row": position.row, "col": position.col], forKey: .position)
+        
+        // Encode grid
+        let gridData = previousGrid.map { row in
+            row.map { color in
+                color?.rawValue ?? "nil"
+            }
+        }
+        try container.encode(gridData, forKey: .previousGrid)
+        
+        try container.encode(previousTray, forKey: .previousTray)
+        try container.encode(previousScore, forKey: .previousScore)
+        try container.encode(previousLevel, forKey: .previousLevel)
+        try container.encode(previousBlocksPlaced, forKey: .previousBlocksPlaced)
+        try container.encode(previousLinesCleared, forKey: .previousLinesCleared)
+        try container.encode(previousCurrentChain, forKey: .previousCurrentChain)
+        
+        // Encode sets
+        try container.encode(previousUsedColors.map { $0.rawValue }, forKey: .previousUsedColors)
+        try container.encode(previousUsedShapes.map { $0.rawValue }, forKey: .previousUsedShapes)
+        
+        try container.encode(previousIsPerfectLevel, forKey: .previousIsPerfectLevel)
+        try container.encodeIfPresent(timestamp, forKey: .timestamp)
     }
 }
 
@@ -74,6 +151,19 @@ class GameMoveStack {
     
     func clear() {
         moves.removeAll()
+    }
+    
+    // NEW: Get all moves for saving
+    var allMoves: [GameMove] {
+        return moves
+    }
+    
+    // NEW: Load moves from saved data
+    func loadMoves(_ moves: [GameMove]) {
+        self.moves = moves
+        if self.moves.count > maxSize {
+            self.moves = Array(self.moves.suffix(maxSize))
+        }
     }
 }
 

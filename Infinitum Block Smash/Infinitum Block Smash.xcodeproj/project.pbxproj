@@ -47,7 +47,6 @@
 			membershipExceptions = (
 				App/Info.plist,
 				"Config/app-ads.txt",
-				Config/database.rules.json,
 				Config/firebase.json,
 				Config/firestore.rules,
 				Config/realtime.rules.json,

@@ -192,9 +192,9 @@ final class MemorySystem {
         let deviceSimulator = DeviceSimulator.shared
         if deviceSimulator.isRunningInSimulator() {
             let limit = deviceSimulator.getSimulatedMemoryLimit()
-            return limit * 0.6 // Target 60% of available memory
+            return limit * 0.4 // Target 40% of available memory (reduced from 60%)
         } else {
-            return 100.0 // Default 100MB for real devices
+            return 80.0 // Default 80MB for real devices (reduced from 100MB)
         }
     }
     
@@ -202,15 +202,15 @@ final class MemorySystem {
         let deviceSimulator = DeviceSimulator.shared
         if deviceSimulator.isRunningInSimulator() {
             let limit = deviceSimulator.getSimulatedMemoryLimit()
-            return limit * 0.8 // Max 80% of available memory
+            return limit * 0.6 // Max 60% of available memory (reduced from 80%)
         } else {
-            return 150.0 // Default 150MB for real devices
+            return 120.0 // Default 120MB for real devices (reduced from 150MB)
         }
     }
     
     // MARK: — Timing
     private var lastCleanupDate = Date.distantPast
-    private let minimumInterval: TimeInterval = 60.0 // Increased from 30.0 to 60.0 seconds to reduce overhead
+    private let minimumInterval: TimeInterval = 120.0 // Increased from 60.0 to 120.0 seconds to reduce overhead
     private let monitoringInterval: TimeInterval = MemoryConfig.getIntervals().memoryCheck
     
     // MARK: — Memory Pressure Source
@@ -234,15 +234,15 @@ final class MemorySystem {
         let deviceSimulator = DeviceSimulator.shared
         if deviceSimulator.isRunningInSimulator() {
             let limit = deviceSimulator.getSimulatedMemoryLimit()
-            let targetMB = min(limit * 0.02, 25.0) // 2% of available memory, max 25MB
+            let targetMB = min(limit * 0.01, 15.0) // 1% of available memory, max 15MB (reduced from 2% and 25MB)
             memoryCache.totalCostLimit = Int(targetMB * 1024 * 1024)
-            memoryCache.countLimit = deviceSimulator.isLowEndDevice() ? 25 : 50
+            memoryCache.countLimit = deviceSimulator.isLowEndDevice() ? 15 : 30 // Reduced from 25:50
         } else {
             // Original logic for real devices
             let totalMB = Double(ProcessInfo.processInfo.physicalMemory) / 1024 / 1024
-            let targetMB = min(25.0, totalMB * 0.01)  // at most 25 MB, or 1% of RAM
+            let targetMB = min(15.0, totalMB * 0.005)  // at most 15 MB, or 0.5% of RAM (reduced from 25MB and 1%)
             memoryCache.totalCostLimit = Int(targetMB * 1024 * 1024)
-            memoryCache.countLimit = 50
+            memoryCache.countLimit = 30 // Reduced from 50
         }
         
         // Set up system memory pressure monitoring

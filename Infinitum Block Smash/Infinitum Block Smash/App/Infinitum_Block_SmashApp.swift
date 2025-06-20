@@ -109,6 +109,12 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
         // Configure Firebase Performance
         Performance.sharedInstance().isDataCollectionEnabled = true
         
+        // Initialize PerformanceMonitor early to ensure memory monitoring starts immediately
+        _ = PerformanceMonitor.shared
+        #if DEBUG
+        print("[PerformanceMonitor] Initialized early in app lifecycle")
+        #endif
+        
         // Configure Firebase Remote Config
         let remoteConfig = RemoteConfig.remoteConfig()
         let settings = RemoteConfigSettings()
@@ -179,6 +185,14 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
         
         // Configure background tasks
         configureBackgroundTasks()
+        
+        // Add memory pressure observer
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleMemoryWarning),
+            name: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil
+        )
         
         // Add auth state listener
         _ = Auth.auth().addStateDidChangeListener { auth, user in
@@ -439,6 +453,32 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
                               withCompletionHandler completionHandler: @escaping () -> Void) {
         completionHandler()
     }
+
+    @objc private func handleMemoryWarning() {
+        // Handle memory warning
+        print("[App] Received memory warning")
+        
+        // Perform emergency memory cleanup
+        Task {
+            // Clear all caches
+            URLCache.shared.removeAllCachedResponses()
+            
+            // Clear texture caches
+            await SKTextureAtlas.preloadTextureAtlases([])
+            await SKTexture.preload([])
+            
+            // Clear memory leak detector data
+            MemoryLeakDetector.shared.performEmergencyCleanup()
+            
+            // Clear node pools
+            NodePool.shared.clearAllPools()
+            
+            // Clear any remaining cached data
+            CacheManager.shared.clearAllCaches()
+            
+            print("[App] Emergency memory cleanup completed")
+        }
+    }
 }
 
 // MARK: - InAppMessagingDelegate
@@ -502,8 +542,12 @@ struct Infinitum_Block_SmashApp: App {
                 // Save game state when app moves to background
                 Task {
                     do {
-                        try await gameState.saveProgress()
-                        print("[App] Successfully saved game progress in background")
+                        if gameState.canSaveGame() {
+                            try await gameState.saveProgressWithValidation()
+                            print("[App] Successfully saved game progress in background")
+                        } else {
+                            print("[App] Skipping save - game state not suitable for saving")
+                        }
                     } catch {
                         print("[App] Error saving game progress in background: \(error.localizedDescription)")
                     }
@@ -514,8 +558,12 @@ struct Infinitum_Block_SmashApp: App {
                 // Save game state when app becomes inactive
                 Task {
                     do {
-                        try await gameState.saveProgress()
-                        print("[App] Successfully saved game progress when inactive")
+                        if gameState.canSaveGame() {
+                            try await gameState.saveProgressWithValidation()
+                            print("[App] Successfully saved game progress when inactive")
+                        } else {
+                            print("[App] Skipping save - game state not suitable for saving")
+                        }
                     } catch {
                         print("[App] Error saving game progress when inactive: \(error.localizedDescription)")
                     }

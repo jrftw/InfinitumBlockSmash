@@ -559,67 +559,40 @@ final class LeaderboardService: ObservableObject {
         if let cachedData = LeaderboardCache.shared.getCachedLeaderboard(type: type, period: period) {
             print("[Leaderboard] 📦 Using cached data for \(period) leaderboard")
             print("[Leaderboard] 📦 Cached entries count: \(cachedData.count)")
-            return (cachedData, cachedData.count)
+            
+            // For All Time, return total players count; for other periods, return entries count
+            let countToReturn: Int
+            if period == "alltime" {
+                countToReturn = try await FirebaseManager.shared.getTotalPlayersCount()
+            } else {
+                countToReturn = cachedData.count
+            }
+            
+            return (cachedData, countToReturn)
         }
         
         do {
-            // Check if we're in simulator or test flight
-            #if targetEnvironment(simulator)
-            print("[Leaderboard] 📱 Running in simulator - skipping security checks")
-            #else
-            if Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt" {
-                print("[Leaderboard] 📱 Running in TestFlight - skipping security checks")
-            } else {
-                // In production, try to verify App Check but don't fail if it's not available
-                do {
-                    try await AppCheck.appCheck().token(forcingRefresh: false)
-                    print("[Leaderboard] ✅ App Check verification successful")
-                } catch {
-                    print("[Leaderboard] ⚠️ App Check verification failed, but continuing: \(error.localizedDescription)")
-                }
-            }
-            #endif
-            
-            let now = Date()
+            // Determine query start date for period filtering
+            let queryStartDate: Date?
             let calendar = Calendar.current
-            let startOfDay = calendar.startOfDay(for: now)
+            let now = Date()
             
-            var queryStartDate: Date?
             switch period {
             case "daily":
-                queryStartDate = startOfDay
+                queryStartDate = calendar.startOfDay(for: now)
             case "weekly":
-                // Get start of current week (Sunday)
-                let weekday = calendar.component(.weekday, from: now)
-                let daysToSubtract = (weekday + 6) % 7 // Convert to Sunday-based week
-                queryStartDate = calendar.date(byAdding: .day, value: -daysToSubtract, to: startOfDay)
+                queryStartDate = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now))
             case "monthly":
-                // Get start of current month
-                let components = calendar.dateComponents([.year, .month], from: now)
-                queryStartDate = calendar.date(from: components)
+                queryStartDate = calendar.date(from: calendar.dateComponents([.year, .month], from: now))
             case "alltime":
                 queryStartDate = nil
             default:
-                throw LeaderboardError.invalidPeriod
+                queryStartDate = nil
             }
             
             if let queryStartDate = queryStartDate {
                 print("[Leaderboard] 📅 Filtering from date: \(queryStartDate)")
             }
-            
-            // Get total users count
-            let totalUsersQuery = db.collection(type.collectionName)
-                .document(period)
-                .collection("scores")
-            
-            if let queryStartDate = queryStartDate {
-                totalUsersQuery.whereField("timestamp", isGreaterThanOrEqualTo: Timestamp(date: queryStartDate))
-            }
-            
-            print("[Leaderboard] 🔍 Executing total users query")
-            let totalUsersSnapshot = try await totalUsersQuery.count.getAggregation(source: .server)
-            let totalUsers = Int(truncating: totalUsersSnapshot.count)
-            print("[Leaderboard] 👥 Total users: \(totalUsers)")
             
             // Get top 20 entries
             var query = db.collection(type.collectionName)
@@ -665,14 +638,33 @@ final class LeaderboardService: ObservableObject {
             // Cache the results
             LeaderboardCache.shared.cacheLeaderboard(entries, type: type, period: period)
             
-            return (entries, totalUsers)
+            // For All Time, return total players count; for other periods, return entries count
+            let countToReturn: Int
+            if period == "alltime" {
+                countToReturn = try await FirebaseManager.shared.getTotalPlayersCount()
+                print("[Leaderboard] 👥 Total players count: \(countToReturn)")
+            } else {
+                countToReturn = entries.count
+                print("[Leaderboard] 📊 Entries count: \(countToReturn)")
+            }
+            
+            return (entries, countToReturn)
         } catch {
             print("[Leaderboard] ❌ Error loading \(period) leaderboard: \(error.localizedDescription)")
             print("[Leaderboard] ❌ Error details: \(error)")
             // Try to get cached data as fallback
             if let cachedData = LeaderboardCache.shared.getCachedLeaderboard(type: type, period: period) {
                 print("[Leaderboard] 📦 Using cached data after error")
-                return (cachedData, cachedData.count)
+                
+                // For All Time, return total players count; for other periods, return entries count
+                let countToReturn: Int
+                if period == "alltime" {
+                    countToReturn = try await FirebaseManager.shared.getTotalPlayersCount()
+                } else {
+                    countToReturn = cachedData.count
+                }
+                
+                return (cachedData, countToReturn)
             }
             throw LeaderboardError.loadFailed(error)
         }

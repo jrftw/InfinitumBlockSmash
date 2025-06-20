@@ -117,7 +117,7 @@ struct LeaderboardView: View {
             
             Spacer()
             
-            Text("Total users: \(totalUsers)")
+            Text(selectedPeriod == "alltime" ? "Total users: \(totalUsers)" : "Entries: \(totalUsers)")
                 .font(.caption)
                 .foregroundColor(.gray)
         }
@@ -262,7 +262,12 @@ struct LeaderboardView: View {
                 print("[LeaderboardView] Using cached data after error")
                 print("[LeaderboardView] Cached entries count: \(cachedData.count)")
                 leaderboardData = cachedData
-                totalUsers = cachedData.count
+                // Get total players count for consistency even in fallback
+                do {
+                    totalUsers = try await FirebaseManager.shared.getTotalPlayersCount()
+                } catch {
+                    totalUsers = cachedData.count
+                }
                 isOffline = true
             } else {
                 print("[LeaderboardView] ❌ No cached data available")

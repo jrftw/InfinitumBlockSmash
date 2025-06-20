@@ -35,6 +35,11 @@ class PerformanceMonitor: ObservableObject {
         startMemoryMonitoring()
         startCPUMonitoring()
         startNetworkMonitoring()
+        
+        // Perform immediate initial updates
+        updateMemoryUsage()
+        updateCPUUsage()
+        updateNetworkLatency()
     }
     
     deinit {
@@ -49,9 +54,14 @@ class PerformanceMonitor: ObservableObject {
     
     private func startMemoryMonitoring() {
         // Start periodic memory monitoring with device-specific frequency
-        memoryTimer = Timer.scheduledTimer(withTimeInterval: MemoryConfig.getIntervals().memoryCheck, repeats: true) { [weak self] _ in
+        let interval = MemoryConfig.getIntervals().memoryCheck
+        memoryTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             self?.updateMemoryUsage()
         }
+        
+        #if DEBUG
+        print("[PerformanceMonitor] Memory monitoring started with interval: \(interval)s")
+        #endif
     }
     
     private func startCPUMonitoring() {
@@ -91,8 +101,20 @@ class PerformanceMonitor: ObservableObject {
         }
         
         if kr == KERN_SUCCESS {
-            memoryUsage = Double(info.resident_size) / 1024.0 / 1024.0 // Convert to MB
-            performanceMetrics["memory"] = memoryUsage
+            let newMemoryUsage = Double(info.resident_size) / 1024.0 / 1024.0 // Convert to MB
+            
+            DispatchQueue.main.async { [weak self] in
+                self?.memoryUsage = newMemoryUsage
+                self?.performanceMetrics["memory"] = newMemoryUsage
+            }
+            
+            #if DEBUG
+            print("[PerformanceMonitor] Memory updated: \(String(format: "%.1f", newMemoryUsage))MB")
+            #endif
+        } else {
+            #if DEBUG
+            print("[PerformanceMonitor] Failed to get memory info: \(kr)")
+            #endif
         }
     }
     
@@ -124,8 +146,12 @@ class PerformanceMonitor: ObservableObject {
                 }
             }
             
-            cpuUsage = totalUsage / Double(numCpus)
-            performanceMetrics["cpu"] = cpuUsage
+            let newCPUUsage = totalUsage / Double(numCpus)
+            
+            DispatchQueue.main.async { [weak self] in
+                self?.cpuUsage = newCPUUsage
+                self?.performanceMetrics["cpu"] = newCPUUsage
+            }
         }
         
         if let cpuInfo = cpuInfo {
@@ -136,8 +162,12 @@ class PerformanceMonitor: ObservableObject {
     private func updateNetworkLatency() {
         // Simulate network latency measurement
         // In a real implementation, you would ping your game server
-        networkLatency = Double.random(in: 20...100)
-        performanceMetrics["network_latency"] = networkLatency
+        let newNetworkLatency = Double.random(in: 20...100)
+        
+        DispatchQueue.main.async { [weak self] in
+            self?.networkLatency = newNetworkLatency
+            self?.performanceMetrics["network_latency"] = newNetworkLatency
+        }
     }
     
     @objc private func updateFPS() {
@@ -145,35 +175,76 @@ class PerformanceMonitor: ObservableObject {
         
         // Calculate frame time
         if lastFrameTimestamp > 0 {
-            frameTime = (currentTime - lastFrameTimestamp) * 1000 // Convert to milliseconds
-            performanceMetrics["frame_time"] = frameTime
+            let newFrameTime = (currentTime - lastFrameTimestamp) * 1000 // Convert to milliseconds
+            
+            DispatchQueue.main.async { [weak self] in
+                self?.frameTime = newFrameTime
+                self?.performanceMetrics["frame_time"] = newFrameTime
+            }
         }
         lastFrameTimestamp = currentTime
         
         frameCount += 1
         
         if currentTime - lastFPSUpdate >= updateInterval {
-            currentFPS = Double(frameCount) / (currentTime - lastFPSUpdate)
+            let newFPS = Double(frameCount) / (currentTime - lastFPSUpdate)
             frameCount = 0
             lastFPSUpdate = currentTime
             
-            // Update FPS history
-            fpsHistory.append(currentFPS)
-            if fpsHistory.count > maxHistorySize {
-                fpsHistory.removeFirst()
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                
+                // Update FPS history
+                self.fpsHistory.append(newFPS)
+                if self.fpsHistory.count > self.maxHistorySize {
+                    self.fpsHistory.removeFirst()
+                }
+                
+                // Update performance metrics
+                self.currentFPS = newFPS
+                self.performanceMetrics["fps"] = newFPS
             }
-            
-            // Update performance metrics
-            performanceMetrics["fps"] = currentFPS
         }
     }
     
     func recordInputEvent() {
         let currentTime = CACurrentMediaTime()
         if lastInputTimestamp > 0 {
-            inputLatency = (currentTime - lastInputTimestamp) * 1000 // Convert to milliseconds
-            performanceMetrics["input_latency"] = inputLatency
+            let newInputLatency = (currentTime - lastInputTimestamp) * 1000 // Convert to milliseconds
+            
+            DispatchQueue.main.async { [weak self] in
+                self?.inputLatency = newInputLatency
+                self?.performanceMetrics["input_latency"] = newInputLatency
+            }
         }
         lastInputTimestamp = currentTime
+    }
+    
+    // MARK: - Public Methods for Debugging
+    
+    /// Force an immediate memory usage update
+    func forceMemoryUpdate() {
+        updateMemoryUsage()
+    }
+    
+    /// Force an immediate CPU usage update
+    func forceCPUUpdate() {
+        updateCPUUsage()
+    }
+    
+    /// Get current memory usage with immediate update
+    func getCurrentMemoryUsage() -> Double {
+        updateMemoryUsage()
+        return memoryUsage
+    }
+    
+    /// Check if memory monitoring timer is running
+    func isMemoryMonitoringActive() -> Bool {
+        return memoryTimer?.isValid == true
+    }
+    
+    /// Get memory monitoring interval
+    func getMemoryMonitoringInterval() -> TimeInterval {
+        return MemoryConfig.getIntervals().memoryCheck
     }
 } 
