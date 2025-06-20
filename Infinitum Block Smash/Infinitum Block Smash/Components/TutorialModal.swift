@@ -1,3 +1,60 @@
+/******************************************************
+ * FILE: TutorialModal.swift
+ * MARK: Interactive Game Tutorial System
+ * CREATED: 6/19/2025 by @jrftw
+ * MODIFIED LAST: 6/19/2025 by @jrftw
+ ******************************************************/
+
+/*
+ * PURPOSE:
+ * Provides an interactive tutorial system that guides new players through
+ * game mechanics, rules, and features with step-by-step instructions.
+ *
+ * KEY RESPONSIBILITIES:
+ * - Display tutorial steps with progressive guidance
+ * - Provide interactive navigation between tutorial sections
+ * - Show game mechanics explanations with visual aids
+ * - Support accessibility features for all users
+ * - Handle tutorial state persistence
+ * - Provide skip and completion options
+ * - Include haptic feedback for interactions
+ *
+ * MAJOR DEPENDENCIES:
+ * - BlurView.swift: Background blur effect
+ * - SwiftUI: Core UI framework for tutorial display
+ * - AppStorage: Tutorial state persistence
+ * - UIKit: Haptic feedback generation
+ * - IconAnimationModifier: Custom animation effects
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - SwiftUI: Modern declarative UI framework
+ * - UIKit: iOS UI framework for haptic feedback
+ * - Foundation: Core framework for data structures
+ *
+ * ARCHITECTURE ROLE:
+ * Acts as the onboarding interface that introduces
+ * new players to game mechanics and features.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - Tutorial steps must be presented in logical order
+ * - Navigation must be intuitive and accessible
+ * - State must persist across app sessions
+ * - Skip functionality must be easily accessible
+ */
+
+/******************************************************
+ * REVIEW NOTES:
+ * - Verify tutorial step progression and clarity
+ * - Check accessibility compliance for all interactions
+ * - Test tutorial state persistence
+ * - Validate skip and completion functionality
+ *
+ * FUTURE IDEAS / SUGGESTIONS:
+ * - Add interactive tutorial elements
+ * - Implement tutorial video integration
+ * - Add tutorial customization options
+ ******************************************************/
+
 import SwiftUI
 
 struct TutorialModal: View {

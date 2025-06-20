@@ -1,3 +1,62 @@
+/******************************************************
+ * FILE: ClassicTimedGameState.swift
+ * MARK: Timed Game Mode State Management
+ * CREATED: 6/19/2025 by @jrftw
+ * MODIFIED LAST: 6/19/2025 by @jrftw
+ ******************************************************/
+
+/*
+ * PURPOSE:
+ * Manages the state and logic for the classic timed game mode,
+ * providing time-based gameplay with adaptive difficulty and scoring.
+ *
+ * KEY RESPONSIBILITIES:
+ * - Timer management and countdown functionality
+ * - Time-based scoring and bonus calculations
+ * - Adaptive difficulty based on level progression
+ * - Pause/resume timer functionality
+ * - Time limit calculations for different levels
+ * - Integration with main game state
+ * - Leaderboard submission for timed scores
+ *
+ * MAJOR DEPENDENCIES:
+ * - GameState.swift: Main game state and logic
+ * - AdaptiveDifficultyManager.swift: Dynamic difficulty adjustment
+ * - LeaderboardService.swift: Score submission
+ * - FirebaseFirestore: Cloud data persistence
+ * - Combine: Reactive state management
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - Foundation: Core framework for timer and time management
+ * - SwiftUI: Modern UI framework for state observation
+ * - Combine: Reactive programming for state updates
+ * - FirebaseFirestore: Cloud database for leaderboard
+ * - FirebaseAuth: User authentication
+ *
+ * ARCHITECTURE ROLE:
+ * Acts as a specialized game mode layer that extends the main
+ * game state with time-based mechanics and scoring.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - Timer must be properly managed to prevent memory leaks
+ * - Time calculations must be accurate and synchronized
+ * - State updates must occur on main thread
+ * - Difficulty adjustments must be applied correctly
+ */
+
+/******************************************************
+ * REVIEW NOTES:
+ * - Verify timer accuracy and synchronization
+ * - Check memory management for timer objects
+ * - Test difficulty adjustment calculations
+ * - Validate leaderboard submission accuracy
+ *
+ * FUTURE IDEAS / SUGGESTIONS:
+ * - Add time bonus multipliers
+ * - Implement time extension power-ups
+ * - Add time-based achievements
+ ******************************************************/
+
 import Foundation
 import SwiftUI
 import Combine

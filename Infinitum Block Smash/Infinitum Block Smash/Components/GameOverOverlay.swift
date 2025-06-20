@@ -1,3 +1,60 @@
+/******************************************************
+ * FILE: GameOverOverlay.swift
+ * MARK: Game Over Screen Interface
+ * CREATED: 6/19/2025 by @jrftw
+ * MODIFIED LAST: 6/19/2025 by @jrftw
+ ******************************************************/
+
+/*
+ * PURPOSE:
+ * Displays the game over screen when the game ends, showing final statistics
+ * and providing navigation options for the player.
+ *
+ * KEY RESPONSIBILITIES:
+ * - Display final score and level reached
+ * - Provide retry, continue, and main menu options
+ * - Show animated game over interface
+ * - Handle user navigation decisions
+ * - Play appropriate audio and haptic feedback
+ * - Support accessibility features
+ * - Manage overlay presentation and dismissal
+ *
+ * MAJOR DEPENDENCIES:
+ * - AudioManager.swift: Sound effects for game over
+ * - BlurView.swift: Background blur effect
+ * - ScaleButtonStyle: Custom button animations
+ * - SwiftUI: Core UI framework for overlay display
+ * - UIKit: Haptic feedback generation
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - SwiftUI: Modern declarative UI framework
+ * - UIKit: iOS UI framework for haptic feedback
+ * - Foundation: Core framework for data structures
+ *
+ * ARCHITECTURE ROLE:
+ * Acts as the game termination interface that provides
+ * closure and navigation options when gameplay ends.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - Must display above all game elements
+ * - Audio and haptic feedback must trigger on appearance
+ * - Animations must be smooth and engaging
+ * - Button actions must be clearly defined and accessible
+ */
+
+/******************************************************
+ * REVIEW NOTES:
+ * - Verify overlay animation smoothness and timing
+ * - Check accessibility compliance for all buttons
+ * - Test audio and haptic feedback functionality
+ * - Validate score and level display accuracy
+ *
+ * FUTURE IDEAS / SUGGESTIONS:
+ * - Add social sharing options for high scores
+ * - Implement achievement notifications
+ * - Add replay functionality for final moments
+ ******************************************************/
+
 import SwiftUI
 
 struct GameOverOverlay: View {

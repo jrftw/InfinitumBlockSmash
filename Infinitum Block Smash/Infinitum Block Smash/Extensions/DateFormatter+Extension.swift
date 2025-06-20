@@ -1,3 +1,55 @@
+/******************************************************
+ * FILE: DateFormatter+Extension.swift
+ * MARK: Date Formatting Utility Extensions
+ * CREATED: 6/19/2025 by @jrftw
+ * MODIFIED LAST: 6/19/2025 by @jrftw
+ ******************************************************/
+
+/*
+ * PURPOSE:
+ * Provides utility extensions for DateFormatter, offering convenient
+ * methods for relative time and date formatting with localization support.
+ *
+ * KEY RESPONSIBILITIES:
+ * - Format relative time strings (e.g., "2 hours ago")
+ * - Format relative date strings (e.g., "Yesterday", "Last week")
+ * - Support localization for all time formats
+ * - Handle edge cases and time boundaries
+ * - Provide user-friendly time representations
+ *
+ * MAJOR DEPENDENCIES:
+ * - Foundation: Core framework for DateFormatter and Calendar
+ * - Localization system: Multi-language support
+ * - Calendar: Date calculations and comparisons
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - Foundation: Core framework for date and time operations
+ * - Localization: Multi-language string support
+ *
+ * ARCHITECTURE ROLE:
+ * Acts as a user experience enhancement layer that provides
+ * human-readable time representations throughout the app.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - Localization strings must be properly defined
+ * - Time calculations must be accurate
+ * - Edge cases must be handled gracefully
+ * - Performance must be optimized for frequent use
+ */
+
+/******************************************************
+ * REVIEW NOTES:
+ * - Verify all localization strings are defined
+ * - Test time calculations across different time zones
+ * - Check performance for frequent formatting calls
+ * - Validate edge case handling
+ *
+ * FUTURE IDEAS / SUGGESTIONS:
+ * - Add more time format options
+ * - Implement custom time intervals
+ * - Add time zone handling
+ ******************************************************/
+
 import Foundation
 
 extension DateFormatter {

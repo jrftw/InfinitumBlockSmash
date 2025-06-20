@@ -1,3 +1,60 @@
+/******************************************************
+ * FILE: GridRenderer.swift
+ * MARK: Game Grid Visual Rendering System
+ * CREATED: 6/19/2025 by @jrftw
+ * MODIFIED LAST: 6/19/2025 by @jrftw
+ ******************************************************/
+
+/*
+ * PURPOSE:
+ * Handles the visual rendering of the game grid, including grid lines
+ * and placed blocks with gradient effects and visual styling.
+ *
+ * KEY RESPONSIBILITIES:
+ * - Render grid lines and structure
+ * - Display placed blocks with gradient effects
+ * - Apply visual styling and shadows
+ * - Handle block positioning and layout
+ * - Generate gradient textures for blocks
+ * - Manage grid visual updates
+ *
+ * MAJOR DEPENDENCIES:
+ * - GameState.swift: Game state and grid data
+ * - Block.swift: Block data model and properties
+ * - SpriteKit: Core framework for visual rendering
+ * - GameConstants.swift: Grid size and layout constants
+ * - CoreGraphics: Gradient creation and rendering
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - SpriteKit: Game development framework for visual nodes
+ * - SwiftUI: Modern UI framework for integration
+ * - CoreGraphics: Graphics framework for gradient creation
+ * - UIKit: Image processing and color handling
+ *
+ * ARCHITECTURE ROLE:
+ * Acts as a visual rendering layer that transforms game state
+ * into attractive visual representation of the game grid.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - Grid rendering must be efficient and responsive
+ * - Block positioning must be pixel-perfect
+ * - Gradient generation must be optimized
+ * - Visual effects must be applied consistently
+ */
+
+/******************************************************
+ * REVIEW NOTES:
+ * - Verify grid rendering performance
+ * - Check block positioning accuracy
+ * - Test gradient generation efficiency
+ * - Validate visual effect consistency
+ *
+ * FUTURE IDEAS / SUGGESTIONS:
+ * - Add grid animation effects
+ * - Implement grid customization
+ * - Add performance optimizations
+ ******************************************************/
+
 import SpriteKit
 import SwiftUI
 

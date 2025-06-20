@@ -1,3 +1,54 @@
+/******************************************************
+ * FILE: ForceLogout.swift
+ * MARK: Version Migration Force Logout Manager
+ * CREATED: 6/19/2025 by @jrftw
+ * MODIFIED LAST:  6/19/2025 by @jrftw
+ ******************************************************/
+
+/*
+ * PURPOSE:
+ * Manages forced logout functionality for version migrations and debug purposes,
+ * ensuring users are properly logged out when critical app changes require it.
+ *
+ * KEY RESPONSIBILITIES:
+ * - Detect version changes that require force logout
+ * - Manage force logout state persistence
+ * - Handle version migration scenarios
+ * - Provide debug override capabilities
+ * - Track version history for migration logic
+ *
+ * MAJOR DEPENDENCIES:
+ * - DebugManager.swift: Debug override capabilities
+ * - Logger.swift: Logging force logout events
+ * - UserDefaults: Persistent storage for logout state
+ * - Bundle: App version information retrieval
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - Foundation: Core framework for data structures and UserDefaults
+ *
+ * ARCHITECTURE ROLE:
+ * Acts as a version migration safety mechanism that ensures users are
+ * properly logged out when app changes require fresh authentication.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - Must be initialized early in app lifecycle
+ * - Version checking occurs on app launch
+ * - Force logout state persists across app restarts
+ * - Debug manager can override normal behavior
+ */
+
+/******************************************************
+ * REVIEW NOTES:
+ * - Critical for data integrity during version migrations
+ * - Debug override provides testing flexibility
+ * - Version comparison logic is hardcoded for specific migrations
+ *
+ * FUTURE IDEAS / SUGGESTIONS:
+ * - Implement remote configuration for migration rules
+ * - Add migration progress tracking
+ * - Enhance version comparison logic
+ ******************************************************/
+
 import Foundation
 
 class ForceLogout {

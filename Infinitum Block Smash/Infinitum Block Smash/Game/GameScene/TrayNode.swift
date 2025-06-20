@@ -1,3 +1,57 @@
+/******************************************************
+ * FILE: TrayNode.swift
+ * MARK: Block Tray Visual Container
+ * CREATED: 6/19/2025 by @jrftw
+ * MODIFIED LAST: 6/19/2025 by @jrftw
+ ******************************************************/
+
+/*
+ * PURPOSE:
+ * Provides visual representation of the block tray, managing the display
+ * and layout of available blocks for player selection.
+ *
+ * KEY RESPONSIBILITIES:
+ * - Display available blocks in a visual tray
+ * - Handle block scaling and positioning
+ * - Manage tray layout and spacing
+ * - Support drag-and-drop interactions
+ * - Provide visual feedback for block selection
+ * - Handle tray resizing and adaptation
+ *
+ * MAJOR DEPENDENCIES:
+ * - Block.swift: Block data model and properties
+ * - ShapeNode.swift: Visual block representation
+ * - SpriteKit: Core framework for visual nodes
+ * - GameConstants.swift: Layout and sizing constants
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - SpriteKit: Game development framework for visual nodes
+ * - CoreGraphics: Graphics framework for layout calculations
+ *
+ * ARCHITECTURE ROLE:
+ * Acts as a visual container that displays available blocks
+ * in an organized and accessible layout for player interaction.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - Block scaling must maintain aspect ratios
+ * - Tray layout must be responsive to different screen sizes
+ * - Block positioning must be accurate for drag-and-drop
+ * - Visual feedback must be immediate and clear
+ */
+
+/******************************************************
+ * REVIEW NOTES:
+ * - Verify tray layout on different screen sizes
+ * - Check block scaling and positioning accuracy
+ * - Test drag-and-drop interaction precision
+ * - Validate visual feedback responsiveness
+ *
+ * FUTURE IDEAS / SUGGESTIONS:
+ * - Add tray animation effects
+ * - Implement block highlighting
+ * - Add tray customization options
+ ******************************************************/
+
 import SpriteKit
 
 class TrayNode: SKNode {

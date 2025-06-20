@@ -1,3 +1,60 @@
+/******************************************************
+ * FILE: LevelCompleteOverlay.swift
+ * MARK: Level Completion Celebration Interface
+ * CREATED: 6/19/2025 by @jrftw
+ * MODIFIED LAST: 6/19/2025 by @jrftw
+ ******************************************************/
+
+/*
+ * PURPOSE:
+ * Displays a celebration overlay when a level is completed, showing
+ * progress and providing continuation options for the player.
+ *
+ * KEY RESPONSIBILITIES:
+ * - Display level completion celebration
+ * - Show current score and level progress
+ * - Provide continue button for next level
+ * - Play success audio and haptic feedback
+ * - Animate overlay appearance and interactions
+ * - Support accessibility features
+ * - Manage overlay presentation and dismissal
+ *
+ * MAJOR DEPENDENCIES:
+ * - AudioManager.swift: Success sound effects
+ * - BlurView.swift: Background blur effect
+ * - ScaleButtonStyle: Custom button animations
+ * - SwiftUI: Core UI framework for overlay display
+ * - UIKit: Haptic feedback generation
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - SwiftUI: Modern declarative UI framework
+ * - UIKit: iOS UI framework for haptic feedback
+ * - Foundation: Core framework for data structures
+ *
+ * ARCHITECTURE ROLE:
+ * Acts as the level progression interface that celebrates
+ * player achievements and facilitates continued gameplay.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - Must display above all game elements
+ * - Success feedback must trigger on appearance
+ * - Animations must be celebratory and engaging
+ * - Continue action must be clearly accessible
+ */
+
+/******************************************************
+ * REVIEW NOTES:
+ * - Verify overlay animation smoothness and timing
+ * - Check accessibility compliance for continue button
+ * - Test audio and haptic feedback functionality
+ * - Validate score and level display accuracy
+ *
+ * FUTURE IDEAS / SUGGESTIONS:
+ * - Add confetti animation effects
+ * - Implement level-specific celebrations
+ * - Add achievement unlock notifications
+ ******************************************************/
+
 import SwiftUI
 import UIKit
 

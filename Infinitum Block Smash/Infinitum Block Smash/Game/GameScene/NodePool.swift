@@ -1,3 +1,57 @@
+/******************************************************
+ * FILE: NodePool.swift
+ * MARK: SpriteKit Node Object Pooling System
+ * CREATED: 6/19/2025 by @jrftw
+ * MODIFIED LAST: 6/19/2025 by @jrftw
+ ******************************************************/
+
+/*
+ * PURPOSE:
+ * Provides object pooling for SpriteKit nodes to optimize memory usage
+ * and performance by reusing node instances instead of creating new ones.
+ *
+ * KEY RESPONSIBILITIES:
+ * - Pool management for block nodes, particle emitters, and highlight nodes
+ * - Node lifecycle management and cleanup
+ * - Memory optimization through object reuse
+ * - Pool size management and limits
+ * - Pre-warming pools for better performance
+ * - Thread-safe pool operations
+ *
+ * MAJOR DEPENDENCIES:
+ * - SpriteKit: Core framework for node types
+ * - Logger.swift: Logging pool operations
+ * - Foundation: Core framework for data structures
+ * - MainActor: Thread safety for UI operations
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - SpriteKit: Game development framework for nodes
+ * - Foundation: Core framework for data structures
+ *
+ * ARCHITECTURE ROLE:
+ * Acts as a performance optimization layer that reduces
+ * memory allocation overhead and improves game performance.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - Pool operations must be thread-safe
+ * - Node cleanup must be thorough and complete
+ * - Pool sizes must be managed to prevent memory leaks
+ * - Pre-warming must occur on main thread
+ */
+
+/******************************************************
+ * REVIEW NOTES:
+ * - Verify pool memory usage stays within limits
+ * - Test node reuse efficiency and correctness
+ * - Check thread safety of pool operations
+ * - Validate pool cleanup effectiveness
+ *
+ * FUTURE IDEAS / SUGGESTIONS:
+ * - Add pool analytics and metrics
+ * - Implement adaptive pool sizing
+ * - Add more node type pools
+ ******************************************************/
+
 import SpriteKit
 
 final class NodePool {

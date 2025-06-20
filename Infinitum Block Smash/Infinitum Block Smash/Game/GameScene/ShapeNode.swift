@@ -1,3 +1,58 @@
+/******************************************************
+ * FILE: ShapeNode.swift
+ * MARK: SpriteKit Block Shape Visual Node
+ * CREATED: 6/19/2025 by @jrftw
+ * MODIFIED LAST: 6/19/2025 by @jrftw
+ ******************************************************/
+
+/*
+ * PURPOSE:
+ * Provides visual representation of block shapes in SpriteKit,
+ * creating gradient-filled nodes with shadows and visual effects.
+ *
+ * KEY RESPONSIBILITIES:
+ * - Create visual block shape nodes from Block data
+ * - Apply gradient fills and color schemes
+ * - Add shadow and shine visual effects
+ * - Handle block size and positioning
+ * - Generate gradient textures for blocks
+ * - Support visual styling and theming
+ *
+ * MAJOR DEPENDENCIES:
+ * - Block.swift: Block data model and properties
+ * - SpriteKit: Core framework for visual nodes
+ * - UIKit: Image generation and color handling
+ * - CoreGraphics: Gradient creation and rendering
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - SpriteKit: Game development framework for visual nodes
+ * - UIKit: iOS UI framework for image processing
+ * - CoreGraphics: Graphics framework for gradient creation
+ *
+ * ARCHITECTURE ROLE:
+ * Acts as a visual rendering component that transforms
+ * block data into attractive SpriteKit visual nodes.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - Gradient textures must be generated efficiently
+ * - Visual effects must be applied in correct order
+ * - Block positioning must be accurate
+ * - Memory management for textures must be handled
+ */
+
+/******************************************************
+ * REVIEW NOTES:
+ * - Verify gradient texture generation performance
+ * - Check visual effect rendering quality
+ * - Test block positioning accuracy
+ * - Validate memory usage for textures
+ *
+ * FUTURE IDEAS / SUGGESTIONS:
+ * - Add animation support for shape changes
+ * - Implement texture caching
+ * - Add more visual effects
+ ******************************************************/
+
 import SpriteKit
 
 class ShapeNode: SKNode {

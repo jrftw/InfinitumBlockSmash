@@ -1,3 +1,57 @@
+/******************************************************
+ * FILE: LoggerConfig.swift
+ * MARK: Logging System Configuration Manager
+ * CREATED: 6/19/2025 by @jrftw
+ * MODIFIED LAST: 6/19/2025 by @jrftw
+ ******************************************************/
+
+/*
+ * PURPOSE:
+ * Centralizes logging configuration for all app components, providing
+ * granular control over logging levels and categories across different environments.
+ *
+ * KEY RESPONSIBILITIES:
+ * - Define logging enablement for different environments
+ * - Configure log levels (debug, info, warning, error, critical)
+ * - Manage category-specific logging settings
+ * - Control Firebase component logging
+ * - Handle game component logging configuration
+ * - Provide debug mode logging controls
+ * - Manage performance and analytics logging
+ *
+ * MAJOR DEPENDENCIES:
+ * - DebugManager.swift: Debug mode and verbose logging controls
+ * - Foundation: Core framework for configuration management
+ * - Conditional compilation: Environment-specific settings
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - Foundation: Core framework for data structures
+ * - Conditional compilation: Build-time configuration
+ *
+ * ARCHITECTURE ROLE:
+ * Acts as the central logging configuration hub that controls
+ * what gets logged across all app components and environments.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - Configuration must be available before any logging occurs
+ * - Debug mode settings must be respected
+ * - Production logging must be minimal for performance
+ * - Critical logging must always be enabled
+ */
+
+/******************************************************
+ * REVIEW NOTES:
+ * - Verify logging configuration works in all environments
+ * - Check that production logging is appropriately minimal
+ * - Test debug mode logging controls
+ * - Validate category-specific logging settings
+ *
+ * FUTURE IDEAS / SUGGESTIONS:
+ * - Add remote logging configuration
+ * - Implement log level persistence
+ * - Add logging analytics and metrics
+ ******************************************************/
+
 import Foundation
 
 /// Configuration for the logging system

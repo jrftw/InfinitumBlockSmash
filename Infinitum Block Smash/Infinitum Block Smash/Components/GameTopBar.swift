@@ -1,3 +1,59 @@
+/******************************************************
+ * FILE: GameTopBar.swift
+ * MARK: Game Interface Top Navigation Bar
+ * CREATED: 6/19/2025 by @jrftw
+ * MODIFIED LAST: 6/19/2025 by @jrftw
+ ******************************************************/
+
+/*
+ * PURPOSE:
+ * Provides the top navigation bar for the game interface, containing
+ * essential game controls, settings access, and navigation elements.
+ *
+ * KEY RESPONSIBILITIES:
+ * - Display pause button for game control
+ * - Show hint button with ad integration
+ * - Provide access to achievements and leaderboard
+ * - Include settings button for game configuration
+ * - Handle responsive design for different screen sizes
+ * - Implement accessibility features for all buttons
+ * - Manage button states and visual feedback
+ *
+ * MAJOR DEPENDENCIES:
+ * - GameState.swift: Game state management and hint system
+ * - LeaderboardView.swift: Leaderboard display
+ * - SwiftUI: Core UI framework for interface elements
+ * - UIKit: Screen size detection and accessibility
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - SwiftUI: Modern declarative UI framework
+ * - UIKit: iOS UI framework for screen detection
+ * - Foundation: Core framework for data structures
+ *
+ * ARCHITECTURE ROLE:
+ * Acts as the primary navigation interface for the game,
+ * providing access to all major game features and controls.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - Must be displayed above all game elements (zIndex: 100)
+ * - Button tap targets must meet accessibility standards (44pt minimum)
+ * - Hint button must be disabled after 3 uses per game
+ * - Responsive design must work across all device sizes
+ */
+
+/******************************************************
+ * REVIEW NOTES:
+ * - Verify accessibility compliance for all buttons
+ * - Check responsive design on different screen sizes
+ * - Test button tap targets and press animations
+ * - Validate hint button state management
+ *
+ * FUTURE IDEAS / SUGGESTIONS:
+ * - Add haptic feedback for button presses
+ * - Implement button state persistence
+ * - Add more game control options
+ ******************************************************/
+
 import SwiftUI
 
 struct GameTopBar: View {

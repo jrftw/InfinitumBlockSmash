@@ -1,3 +1,60 @@
+/******************************************************
+ * FILE: DeviceManager.swift
+ * MARK: Device Simulation and Capability Management
+ * CREATED: 6/19/2025 by @jrftw
+ * MODIFIED LAST: 6/19/2025 by @jrftw
+ ******************************************************/
+
+/*
+ * PURPOSE:
+ * Provides device simulation and capability management for testing and
+ * optimization, enabling realistic device constraints and performance testing.
+ *
+ * KEY RESPONSIBILITIES:
+ * - Device specification simulation for testing
+ * - Memory limit management and constraints
+ * - CPU core and performance simulation
+ * - FPS capability detection and simulation
+ * - Low-end device identification and optimization
+ * - Device model detection and classification
+ * - Simulator mode management
+ * - Performance testing support
+ *
+ * MAJOR DEPENDENCIES:
+ * - UIKit: Device capability detection
+ * - Foundation: Core framework for device information
+ * - FirebaseFirestore: Device data storage
+ * - System information: Device hardware detection
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - Foundation: Core framework for data structures
+ * - FirebaseFirestore: Cloud database for device data
+ * - UIKit: iOS UI framework for device detection
+ *
+ * ARCHITECTURE ROLE:
+ * Acts as a device simulation layer that provides realistic
+ * device constraints for testing and optimization purposes.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - Device detection must be accurate and reliable
+ * - Simulator mode must be properly detected
+ * - Memory limits must be realistic and safe
+ * - Performance constraints must be appropriate
+ */
+
+/******************************************************
+ * REVIEW NOTES:
+ * - Verify device detection accuracy across all models
+ * - Test simulator mode functionality
+ * - Check memory limit calculations
+ * - Validate performance constraint application
+ *
+ * FUTURE IDEAS / SUGGESTIONS:
+ * - Add more device models and specifications
+ * - Implement dynamic performance testing
+ * - Add device-specific optimization profiles
+ ******************************************************/
+
 import Foundation
 import FirebaseFirestore
 import UIKit

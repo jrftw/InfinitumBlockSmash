@@ -1,3 +1,57 @@
+/******************************************************
+ * FILE: ButtonStyles.swift
+ * MARK: Custom Button Style Definitions
+ * CREATED: 6/19/2025 by @jrftw
+ * MODIFIED LAST: 6/19/2025 by @jrftw
+ ******************************************************/
+
+/*
+ * PURPOSE:
+ * Defines custom button styles for consistent UI design throughout the app,
+ * providing reusable button styling with animations and visual effects.
+ *
+ * KEY RESPONSIBILITIES:
+ * - Define primary button style with gradient backgrounds
+ * - Define secondary button style with blur effects
+ * - Define icon button style for circular buttons
+ * - Provide button style extensions for easy application
+ * - Handle dark/light mode color scheme adaptation
+ * - Implement press animations and visual feedback
+ *
+ * MAJOR DEPENDENCIES:
+ * - SwiftUI: Core UI framework for button styling
+ * - BlurView.swift: Blur effect components for secondary buttons
+ * - Color.accentColor: App's primary accent color
+ * - Environment colorScheme: Dark/light mode detection
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - SwiftUI: Modern declarative UI framework
+ * - Foundation: Core framework for data structures
+ *
+ * ARCHITECTURE ROLE:
+ * Acts as a UI styling layer that provides consistent button appearance
+ * and behavior across the entire application.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - Button styles must be applied consistently across the app
+ * - Color scheme changes must be handled automatically
+ * - Press animations must be smooth and responsive
+ * - Accessibility considerations must be maintained
+ */
+
+/******************************************************
+ * REVIEW NOTES:
+ * - Verify button style consistency across different screen sizes
+ * - Check accessibility compliance for all button styles
+ * - Test button animations and press feedback
+ * - Validate color scheme adaptation
+ *
+ * FUTURE IDEAS / SUGGESTIONS:
+ * - Add more button style variants
+ * - Implement haptic feedback for button presses
+ * - Add button state management for loading states
+ ******************************************************/
+
 import SwiftUI
 
 struct PrimaryButtonStyle: ButtonStyle {
