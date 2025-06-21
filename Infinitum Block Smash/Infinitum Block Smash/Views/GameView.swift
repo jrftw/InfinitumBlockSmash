@@ -1,108 +1,67 @@
+/******************************************************
+ * FILE: GameView.swift
+ * MARK: Main Game SwiftUI View Wrapper and Interface Coordinator
+ * CREATED: 6/19/2025 by @jrftw
+ * MODIFIED LAST: 6/19/2025 by @jrftw
+ ******************************************************/
+
 /*
- * GameView.swift
- * 
- * MAIN GAME SWIFTUI VIEW WRAPPER
- * 
- * This is the primary SwiftUI view that wraps the SpriteKit game scene and provides
- * the complete game interface including overlays, settings, achievements, and
- * various UI components. It serves as the main entry point for the game experience.
- * 
+ * PURPOSE:
+ * Serves as the primary SwiftUI view wrapper for the SpriteKit game scene,
+ * providing the complete game interface including overlays, settings,
+ * achievements, and various UI components. This view coordinates all
+ * game-related user interactions and manages the integration between
+ * different game systems and services.
+ *
  * KEY RESPONSIBILITIES:
- * - SwiftUI wrapper for SpriteKit GameScene
- * - Game state management and UI updates
- * - Overlay management (settings, achievements, stats)
- * - Advertisement integration and management
- * - Notification permission handling
- * - Tutorial system integration
- * - Score animation display
- * - Sync status and error handling
- * - High score banner display
- * - Save game confirmation dialogs
- * 
- * MAJOR DEPENDENCIES:
- * - GameScene.swift: Core SpriteKit game scene
- * - GameState.swift: Game data and logic management
- * - AdManager.swift: Advertisement loading and display
- * - NotificationService.swift: Push notification management
- * - SettingsView.swift: Game settings interface
- * - AchievementsView.swift: Achievement display
- * - StatsView.swift: Statistics and analytics display
- * - TutorialModal.swift: Tutorial system
- * - HighScoreBannerView.swift: High score notifications
- * - ScoreAnimationView.swift: Score animation effects
- * 
- * UI COMPONENTS:
- * - GameSceneProvider: SpriteKit scene container
- * - BannerAdView: Advertisement banner
- * - Overlay system for various modals
- * - Score animation container
- * - Sync status indicators
- * - Error handling dialogs
- * - Achievement progress overlays
- * 
- * STATE MANAGEMENT:
- * - Game state observation and updates
- * - Advertisement loading states
- * - Notification permission states
- * - Tutorial display states
- * - Settings and overlay visibility
- * - Sync status and error handling
- * - Achievement notification states
- * 
- * USER INTERACTION:
- * - Settings menu access
- * - Achievement viewing
- * - Tutorial system interaction
- * - Advertisement interaction
- * - Notification permission requests
- * - Save game confirmations
- * - Statistics viewing
- * 
- * PERFORMANCE FEATURES:
- * - Lazy loading of heavy resources
- * - Background task management
- * - Memory-efficient overlay system
- * - Optimized advertisement loading
- * - Efficient state updates
- * 
- * INTEGRATION POINTS:
- * - SpriteKit scene for game rendering
- * - Firebase for data synchronization
- * - Advertisement networks for monetization
- * - Push notification services
- * - Analytics and tracking systems
- * - Settings and preferences storage
- * 
- * ERROR HANDLING:
- * - Sync error recovery
- * - Advertisement loading failures
- * - Network connectivity issues
- * - Data persistence errors
- * - User-friendly error messages
- * 
- * ACCESSIBILITY:
- * - VoiceOver support
- * - Dynamic type support
- * - High contrast mode
- * - Reduced motion support
- * - Accessibility labels and hints
- * 
- * ARCHITECTURE ROLE:
- * This view acts as the "View" layer in the MVVM architecture, providing
- * the complete user interface and coordinating between various services
- * and the core game logic.
- * 
- * THREADING CONSIDERATIONS:
- * - UI updates on main thread
- * - Background operations for data loading
- * - Async/await for network operations
- * - State management with Combine
- * 
- * LIFECYCLE MANAGEMENT:
- * - View appearance/disappearance handling
- * - Resource cleanup and memory management
+ * - SwiftUI wrapper for SpriteKit GameScene integration
+ * - Comprehensive game state management and UI updates
+ * - Overlay system management (settings, achievements, stats, tutorials)
+ * - Advertisement integration and monetization management
+ * - Push notification permission handling and user prompts
+ * - Tutorial system integration and progression tracking
+ * - Score animation display and visual feedback
+ * - Data synchronization status and error handling
+ * - High score banner display and notifications
+ * - Save game confirmation dialogs and user prompts
+ * - Performance monitoring and debug information display
+ * - Accessibility support and user experience optimization
+ * - Memory management and resource cleanup
  * - Background/foreground state handling
- * - Scene lifecycle coordination
+ *
+ * MAJOR DEPENDENCIES:
+ * - GameScene.swift: Core SpriteKit game scene and rendering
+ * - GameState.swift: Game data and logic management
+ * - AdManager.swift: Advertisement loading, display, and error handling
+ * - NotificationService.swift: Push notification management and permissions
+ * - SettingsView.swift: Game settings and configuration interface
+ * - AchievementsView.swift: Achievement display and progress tracking
+ * - StatsView.swift: Statistics and analytics display
+ * - TutorialModal.swift: Tutorial system and user guidance
+ * - HighScoreBannerView.swift: High score notifications and celebrations
+ * - ScoreAnimationView.swift: Score animation effects and visual feedback
+ * - FirebaseManager.swift: Data synchronization and cloud services
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - SwiftUI: Modern declarative UI framework
+ * - SpriteKit: Game development framework for scene integration
+ * - UIKit: iOS UI framework for system integration
+ * - GoogleMobileAds: Advertisement network integration
+ * - AppTrackingTransparency: Privacy and tracking permission
+ * - Firebase: Backend services and analytics
+ *
+ * ARCHITECTURE ROLE:
+ * Acts as the primary "View" layer in the MVVM architecture, providing
+ * the complete user interface and coordinating between various services,
+ * the core game logic, and the SpriteKit rendering system.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - UI updates must occur on main thread for responsiveness
+ * - Advertisement loading should be non-blocking for user experience
+ * - State management requires careful coordination between multiple systems
+ * - Memory management is critical for performance on all device types
+ * - Accessibility features must be properly implemented for all users
+ * - Error handling should be graceful and user-friendly
  */
 
 import SwiftUI

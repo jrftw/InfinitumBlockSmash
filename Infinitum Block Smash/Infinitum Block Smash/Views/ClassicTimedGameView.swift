@@ -1,3 +1,61 @@
+/******************************************************
+ * FILE: ClassicTimedGameView.swift
+ * MARK: Classic Timed Game Mode SwiftUI Interface
+ * CREATED: 6/19/2025 by @jrftw
+ * MODIFIED LAST: 6/19/2025 by @jrftw
+ ******************************************************/
+
+/*
+ * PURPOSE:
+ * Provides the SwiftUI interface for the classic timed game mode, featuring
+ * time-based gameplay with countdown timers, level progression, and enhanced
+ * scoring mechanics. This view manages the complete timed game experience
+ * including timer display, score tracking, and game state coordination.
+ *
+ * KEY RESPONSIBILITIES:
+ * - Classic timed game mode interface and user experience
+ * - Timer display and countdown management
+ * - Time-based scoring and level progression
+ * - Game state coordination with ClassicTimedGameState
+ * - Save game warning and confirmation dialogs
+ * - Performance monitoring and statistics overlay
+ * - Game pause and resume functionality
+ * - Score animation and visual feedback
+ * - High score display and tracking
+ * - Settings and achievements access
+ * - Game cleanup and state management
+ * - Notification handling for save warnings
+ * - Accessibility support for timed gameplay
+ *
+ * MAJOR DEPENDENCIES:
+ * - GameState.swift: Core game state and logic management
+ * - ClassicTimedGameState.swift: Timed game mode state management
+ * - GameSceneProvider.swift: SpriteKit scene integration
+ * - GameTopBar.swift: Game interface top bar component
+ * - StatsOverlayView.swift: Performance statistics display
+ * - ScoreAnimationContainer.swift: Score animation effects
+ * - NotificationCenter: Save warning notifications
+ * - UserDefaults: Game mode persistence and settings
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - SwiftUI: Modern declarative UI framework
+ * - SpriteKit: Game development framework for scene integration
+ * - Foundation: Core framework for notifications and data handling
+ *
+ * ARCHITECTURE ROLE:
+ * Acts as the primary interface for the classic timed game mode,
+ * coordinating between the game state, timed state management,
+ * and user interface components to provide a complete timed
+ * gameplay experience.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - Timer state must be properly synchronized with game state
+ * - Save game warnings require user confirmation before proceeding
+ * - Game cleanup must occur on view disappearance
+ * - Performance monitoring should be non-intrusive to gameplay
+ * - Accessibility features must support timed gameplay mechanics
+ */
+
 import SwiftUI
 import SpriteKit
 

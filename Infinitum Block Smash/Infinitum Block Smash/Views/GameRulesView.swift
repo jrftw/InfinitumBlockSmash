@@ -1,3 +1,54 @@
+/******************************************************
+ * FILE: GameRulesView.swift
+ * MARK: Game Rules and Instructions Display Interface
+ * CREATED: 6/19/2025 by @jrftw
+ * MODIFIED LAST: 6/19/2025 by @jrftw
+ ******************************************************/
+
+/*
+ * PURPOSE:
+ * Provides a comprehensive game rules and instructions interface that displays
+ * detailed information about gameplay mechanics, scoring systems, level progression,
+ * and special features. This view serves as the primary reference for players
+ * to understand game rules and strategies.
+ *
+ * KEY RESPONSIBILITIES:
+ * - Comprehensive game rules display and explanation
+ * - Scoring system breakdown and point calculations
+ * - Level progression requirements and thresholds
+ * - Special level mechanics and difficulty scaling
+ * - Game feature explanations and usage instructions
+ * - Visual rule presentation with icons and formatting
+ * - Accessibility support for rule comprehension
+ * - Game mode-specific rule variations
+ * - Strategy tips and gameplay advice
+ * - Achievement and progression information
+ * - User interface navigation and interaction
+ * - Responsive design for different screen sizes
+ *
+ * MAJOR DEPENDENCIES:
+ * - SwiftUI: Core UI framework for interface components
+ * - GameState.swift: Game mechanics and scoring information
+ * - GameConstants.swift: Level thresholds and configuration
+ * - Foundation: Core framework for string handling and localization
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - SwiftUI: Modern declarative UI framework
+ * - Foundation: Core framework for data structures and localization
+ *
+ * ARCHITECTURE ROLE:
+ * Acts as an informational interface that provides players with
+ * comprehensive understanding of game mechanics, rules, and
+ * strategies to enhance their gameplay experience.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - Rules must be accurate and up-to-date with current game mechanics
+ * - Scoring information should reflect actual game calculations
+ * - Level progression data must match current game configuration
+ * - Visual presentation should be clear and accessible
+ * - Content should be properly localized for different languages
+ */
+
 import SwiftUI
 
 struct GameRulesView: View {

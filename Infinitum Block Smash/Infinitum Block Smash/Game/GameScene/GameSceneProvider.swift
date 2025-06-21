@@ -1,42 +1,52 @@
 /******************************************************
  * FILE: GameSceneProvider.swift
- * MARK: SwiftUI SpriteKit Scene Provider
+ * MARK: SwiftUI SpriteKit Scene Integration Provider
  * CREATED: 6/19/2025 by @jrftw
  * MODIFIED LAST: 6/19/2025 by @jrftw
  ******************************************************/
 
 /*
  * PURPOSE:
- * Provides a SwiftUI wrapper for the SpriteKit GameScene, enabling
- * seamless integration between SwiftUI and SpriteKit rendering.
+ * Provides a SwiftUI wrapper for the SpriteKit GameScene, enabling seamless
+ * integration between SwiftUI and SpriteKit rendering systems. This component
+ * manages the lifecycle, initialization, and state synchronization between
+ * the modern SwiftUI interface and the SpriteKit game rendering engine.
  *
  * KEY RESPONSIBILITIES:
- * - Bridge SwiftUI and SpriteKit frameworks
- * - Manage GameScene lifecycle and initialization
- * - Handle scene size and scaling configuration
- * - Provide SwiftUI view integration for SpriteKit
- * - Support GameState observation and updates
- * - Manage scene creation and disposal
+ * - Bridge SwiftUI and SpriteKit frameworks for seamless integration
+ * - Manage GameScene lifecycle, initialization, and disposal
+ * - Handle scene size and scaling configuration for different devices
+ * - Provide SwiftUI view integration for SpriteKit rendering
+ * - Support GameState observation and real-time updates
+ * - Manage scene creation, configuration, and memory management
+ * - Handle device-specific scene sizing and aspect ratios
+ * - Coordinate scene state with SwiftUI view lifecycle
+ * - Provide performance optimization for scene rendering
+ * - Support scene debugging and logging integration
  *
  * MAJOR DEPENDENCIES:
- * - GameScene.swift: SpriteKit scene implementation
- * - GameState.swift: Game state management
- * - SwiftUI: Modern UI framework for view integration
- * - SpriteKit: Game rendering framework
+ * - GameScene.swift: Core SpriteKit scene implementation and rendering
+ * - GameState.swift: Game state management and data synchronization
+ * - SwiftUI: Modern declarative UI framework for view integration
+ * - SpriteKit: Game rendering framework for visual presentation
+ * - Logger.swift: Debug logging and performance tracking
  *
  * EXTERNAL FRAMEWORKS USED:
  * - SwiftUI: Modern declarative UI framework
- * - SpriteKit: Game development framework
+ * - SpriteKit: Game development framework for rendering
+ * - UIKit: iOS UI framework for screen size detection
  *
  * ARCHITECTURE ROLE:
- * Acts as a bridge layer that enables SwiftUI views to host
- * and manage SpriteKit game scenes seamlessly.
+ * Acts as a bridge layer that enables SwiftUI views to host and manage
+ * SpriteKit game scenes seamlessly, providing the integration point
+ * between modern UI frameworks and game rendering systems.
  *
  * CRITICAL ORDER / EXECUTION NOTES:
- * - Scene must be properly initialized with correct size
- * - GameState must be available before scene creation
- * - Scene lifecycle must be managed correctly
- * - Memory management must be handled properly
+ * - Scene must be properly initialized with correct device-specific size
+ * - GameState must be available and synchronized before scene creation
+ * - Scene lifecycle must be managed correctly for memory efficiency
+ * - Memory management must be handled properly to prevent leaks
+ * - Scene scaling must adapt to different device orientations
  */
 
 /******************************************************

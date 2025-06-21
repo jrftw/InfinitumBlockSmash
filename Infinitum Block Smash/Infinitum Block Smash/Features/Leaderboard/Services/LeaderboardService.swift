@@ -811,53 +811,10 @@ final class LeaderboardService: ObservableObject {
     }
 }
 
-enum LeaderboardError: LocalizedError {
-    case invalidUserData
-    case updateFailed(Error)
-    case loadFailed(Error)
-    case invalidPeriod
-    case notAuthenticated
-    case rateLimited
-    case invalidData
-    
-    var errorDescription: String? {
-        switch self {
-        case .invalidUserData:
-            return "Invalid user data"
-        case .updateFailed(let error):
-            return "Failed to update leaderboard: \(error.localizedDescription)"
-        case .loadFailed(let error):
-            return "Failed to load leaderboard: \(error.localizedDescription)"
-        case .invalidPeriod:
-            return "Invalid time period"
-        case .notAuthenticated:
-            return "User not authenticated"
-        case .rateLimited:
-            return "Rate limited"
-        case .invalidData:
-            return "Invalid data"
-        }
-    }
-}
-
 // Add these structs at the top of the file
 private struct GuestScore: Codable {
     let score: Int
     let timestamp: Date
     let level: Int?
     let time: TimeInterval?
-}
-
-private struct PendingScore: Codable {
-    let score: Int
-    let timestamp: Date
-    let level: Int?
-    let time: TimeInterval?
-    
-    init(score: Int, timestamp: Date, level: Int? = nil, time: TimeInterval? = nil) {
-        self.score = score
-        self.timestamp = timestamp
-        self.level = level
-        self.time = time
-    }
 } 

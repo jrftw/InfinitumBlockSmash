@@ -1,13 +1,51 @@
-/*
+/******************************************************
  * FILE: GameProgress.swift
- * PURPOSE: Defines game progress data structure for persistence and cloud sync
- * DEPENDENCIES:
- *    - Block.swift (for block definitions)
- *    - GameDataVersion.swift (for version management)
- *    - GameConstants.swift (for grid size)
- *    - GameMove.swift (for undo stack)
- * AUTHOR: @jrftw
- * LAST UPDATED: 6/19/2025
+ * MARK: Game Progress Data Model and Persistence System
+ * CREATED: 6/19/2025 by @jrftw
+ * MODIFIED LAST: 6/19/2025 by @jrftw
+ ******************************************************/
+
+/*
+ * PURPOSE:
+ * Defines the comprehensive game progress data structure for persistence,
+ * cloud synchronization, and game state restoration. This file manages
+ * all aspects of game state that need to be saved and restored across
+ * sessions and devices.
+ *
+ * KEY RESPONSIBILITIES:
+ * - Complete game state data structure definition
+ * - Game progress persistence and restoration
+ * - Cloud synchronization data management
+ * - Version control and data migration
+ * - Undo stack state preservation
+ * - User preferences and settings storage
+ * - Performance metrics and statistics tracking
+ * - Cross-device data compatibility
+ * - Data validation and integrity checking
+ * - Memory-efficient data serialization
+ *
+ * MAJOR DEPENDENCIES:
+ * - Block.swift: Block data model and properties
+ * - GameDataVersion.swift: Version management and migration
+ * - GameConstants.swift: Game configuration constants
+ * - GameMove.swift: Undo stack and move history
+ * - Foundation: Core framework for data structures and Codable
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - Foundation: Core framework for data structures and serialization
+ * - Codable: Data persistence and cloud synchronization
+ *
+ * ARCHITECTURE ROLE:
+ * Acts as the central data model for game persistence, providing
+ * a complete snapshot of game state that can be saved, restored,
+ * and synchronized across devices and sessions.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - Version control ensures data compatibility across app updates
+ * - Grid data serialization optimizes storage efficiency
+ * - Undo stack limits prevent excessive storage usage
+ * - Data validation maintains state integrity
+ * - Cross-device compatibility requires careful data formatting
  */
 
 import Foundation

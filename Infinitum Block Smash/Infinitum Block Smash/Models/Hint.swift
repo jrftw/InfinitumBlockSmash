@@ -1,46 +1,56 @@
 /******************************************************
  * FILE: Hint.swift
- * MARK: Game Hint System and Move Analysis
+ * MARK: Intelligent Game Hint System and Move Analysis Engine
  * CREATED: 6/19/2025 by @jrftw
  * MODIFIED LAST: 6/19/2025 by @jrftw
  ******************************************************/
 
 /*
  * PURPOSE:
- * Provides intelligent hint system for players, analyzing game state
- * and suggesting optimal moves to improve gameplay experience.
+ * Provides an intelligent hint system that analyzes game state and suggests
+ * optimal moves to enhance player experience. This system includes advanced
+ * move evaluation algorithms, visual hint rendering, and subscription-based
+ * hint management for premium users.
  *
  * KEY RESPONSIBILITIES:
- * - Analyze current game state for valid moves
- * - Evaluate move quality and scoring potential
- * - Provide visual hints for optimal block placement
- * - Manage hint usage limits and cooldowns
- * - Cache hints for performance optimization
- * - Support subscription-based unlimited hints
- * - Detect game over conditions
- * - Analyze line clearing and pattern creation
+ * - Advanced game state analysis and move evaluation
+ * - Intelligent hint generation with multiple scoring factors
+ * - Visual hint rendering and highlighting system
+ * - Hint usage tracking and cooldown management
+ * - Subscription-based unlimited hint access
+ * - Move caching for performance optimization
+ * - Game over condition detection and analysis
+ * - Line clearing and pattern creation evaluation
+ * - Chain reaction potential assessment
+ * - Space efficiency and color matching analysis
+ * - Performance optimization for real-time hint generation
  *
  * MAJOR DEPENDENCIES:
  * - GameState.swift: Game state analysis and validation
- * - Block.swift: Block data and shape analysis
- * - GameConstants.swift: Grid size and game rules
- * - SubscriptionManager.swift: Premium hint access
- * - SpriteKit: Visual hint rendering
+ * - Block.swift: Block data model and shape analysis
+ * - GameConstants.swift: Grid size and game configuration
+ * - SubscriptionManager.swift: Premium feature access control
+ * - SpriteKit: Visual hint rendering and highlighting
+ * - Foundation: Core framework for data structures and timing
  *
  * EXTERNAL FRAMEWORKS USED:
- * - Foundation: Core framework for data structures
+ * - Foundation: Core framework for data structures and timing
  * - SwiftUI: Modern UI framework for state management
  * - SpriteKit: Game development framework for visual hints
+ * - QuartzCore: Animation and timing for hint cooldowns
  *
  * ARCHITECTURE ROLE:
- * Acts as an intelligent assistance system that helps players
- * make optimal moves while maintaining game challenge and engagement.
+ * Acts as an intelligent assistance system that enhances player
+ * experience by providing strategic guidance while maintaining
+ * game challenge and engagement through sophisticated analysis.
  *
  * CRITICAL ORDER / EXECUTION NOTES:
- * - Hint analysis must be efficient and non-blocking
- * - Move evaluation must consider multiple scoring factors
- * - Visual hints must be clear and non-intrusive
- * - Hint limits must be properly enforced
+ * - Hint analysis must be efficient and non-blocking for UI responsiveness
+ * - Move evaluation considers multiple factors for optimal suggestions
+ * - Visual hints must be clear, non-intrusive, and accessible
+ * - Hint limits and cooldowns must be properly enforced
+ * - Caching system optimizes performance for repeated hint requests
+ * - Subscription integration provides premium hint access
  */
 
 /******************************************************

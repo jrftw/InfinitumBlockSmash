@@ -1,3 +1,55 @@
+/******************************************************
+ * FILE: StatsView.swift
+ * MARK: Game Statistics and Player Progress Display Interface
+ * CREATED: 6/19/2025 by @jrftw
+ * MODIFIED LAST: 6/19/2025 by @jrftw
+ ******************************************************/
+
+/*
+ * PURPOSE:
+ * Provides a comprehensive statistics and progress tracking interface that displays
+ * detailed player performance metrics, achievement progress, and skill level analysis.
+ * This view serves as the primary analytics dashboard for players to track their
+ * improvement and understand their gameplay patterns.
+ *
+ * KEY RESPONSIBILITIES:
+ * - Comprehensive game statistics display and tracking
+ * - Player skill level calculation and analysis
+ * - Achievement progress monitoring and visualization
+ * - Performance metrics breakdown and analysis
+ * - Play time tracking and formatting
+ * - Skill component analysis and scoring
+ * - Visual data presentation with cards and grids
+ * - Interactive information tooltips and explanations
+ * - Responsive design for different screen sizes
+ * - Accessibility support for statistics comprehension
+ * - Real-time data updates and synchronization
+ * - Achievement progress visualization
+ * - Player skill level assessment and feedback
+ *
+ * MAJOR DEPENDENCIES:
+ * - GameState.swift: Game statistics and player data
+ * - AchievementsManager.swift: Achievement tracking and progress
+ * - Foundation: Core framework for data formatting and calculations
+ * - SwiftUI: Core UI framework for interface components
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - SwiftUI: Modern declarative UI framework
+ * - Foundation: Core framework for data structures and formatting
+ *
+ * ARCHITECTURE ROLE:
+ * Acts as an analytics dashboard that provides players with
+ * comprehensive insights into their gameplay performance,
+ * progress tracking, and skill development.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - Statistics must be calculated accurately and in real-time
+ * - Skill level calculations should reflect current game mechanics
+ * - Achievement progress should be properly synchronized
+ * - Data formatting should be user-friendly and localized
+ * - Performance should be optimized for frequent updates
+ */
+
 import SwiftUI
 
 struct StatsView: View {

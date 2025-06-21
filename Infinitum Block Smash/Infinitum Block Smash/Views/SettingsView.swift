@@ -1,125 +1,65 @@
+/******************************************************
+ * FILE: SettingsView.swift
+ * MARK: Comprehensive App Settings and User Preferences Management Interface
+ * CREATED: 6/19/2025 by @jrftw
+ * MODIFIED LAST: 6/19/2025 by @jrftw
+ ******************************************************/
+
 /*
- * SettingsView.swift
- * 
- * APP SETTINGS AND USER PREFERENCES MANAGEMENT
- * 
- * This view provides a comprehensive settings interface for Infinitum Block Smash,
+ * PURPOSE:
+ * Provides a comprehensive settings interface for Infinitum Block Smash,
  * allowing users to customize their game experience, manage their account,
- * and configure various app features and preferences.
- * 
+ * and configure various app features and preferences. This view serves as
+ * the central hub for all user customization and app configuration needs.
+ *
  * KEY RESPONSIBILITIES:
- * - Game settings and customization options
- * - Visual theme management and selection
- * - Performance settings (FPS, graphics)
- * - Gameplay preferences and controls
+ * - Comprehensive game settings and customization options
+ * - Visual theme management and premium theme selection
+ * - Performance settings optimization (FPS, graphics, memory)
+ * - Gameplay preferences and control customization
  * - Account management and profile settings
- * - Privacy and data management
- * - Notification preferences
+ * - Privacy and data management controls
+ * - Notification preferences and permission management
  * - Language and localization settings
- * - Premium feature management
- * - Support and feedback options
- * 
+ * - Premium feature management and subscription status
+ * - Support and feedback system integration
+ * - Accessibility features and customization
+ * - Analytics and tracking preferences
+ * - Data export and account deletion options
+ * - Performance monitoring and optimization recommendations
+ *
  * MAJOR DEPENDENCIES:
- * - GameState.swift: Game state and preferences
- * - ThemeManager.swift: Visual theme management
- * - FPSManager.swift: Performance optimization
- * - SubscriptionManager.swift: Premium feature access
- * - NotificationManager.swift: Push notification settings
+ * - GameState.swift: Game state and preferences management
+ * - ThemeManager.swift: Visual theme management and switching
+ * - FPSManager.swift: Performance optimization and FPS control
+ * - SubscriptionManager.swift: Premium feature access and management
+ * - NotificationManager.swift: Push notification settings and permissions
  * - FirebaseManager.swift: Account and data management
- * - AppTrackingTransparency: Privacy settings
- * - MessageUI: Support email functionality
- * - SafariServices: External link handling
- * 
- * SETTINGS CATEGORIES:
- * - Game Settings: Theme, FPS, tutorial, auto-save
- * - Gameplay Settings: Precision, drag sensitivity, controls
- * - Account Settings: Profile, privacy, data management
- * - Notification Settings: Push notifications, alerts
- * - Performance Settings: Graphics, memory, optimization
- * - Support Settings: Help, feedback, contact
- * - Premium Settings: Subscription management
- * 
- * THEME MANAGEMENT:
- * - System theme integration
- * - Custom theme selection
- * - Premium theme unlocking
- * - Theme preview and preview
- * - Dynamic theme switching
- * - Theme persistence
- * 
- * PERFORMANCE FEATURES:
- * - FPS target selection
- * - Graphics quality settings
- * - Memory management options
- * - Performance monitoring
- * - Optimization recommendations
- * - Device-specific settings
- * 
- * GAMEPLAY CUSTOMIZATION:
- * - Placement precision controls
- * - Block drag sensitivity
- * - Control scheme options
- * - Accessibility features
- * - Haptic feedback settings
- * - Sound and audio preferences
- * 
- * PRIVACY AND SECURITY:
- * - Data collection preferences
- * - Privacy policy access
- * - Account deletion options
- * - Data export functionality
- * - Security settings
- * - Tracking transparency
- * 
- * LOCALIZATION:
- * - Multi-language support
- * - Regional preferences
- * - Date and time formats
- * - Currency settings
- * - Accessibility language
- * 
- * PREMIUM FEATURES:
- * - Subscription status display
- * - Premium feature access
- * - Theme unlocking status
- * - Purchase history
- * - Trial management
- * - Upgrade prompts
- * 
- * SUPPORT AND FEEDBACK:
- * - Help documentation access
- * - Contact support options
- * - Bug reporting interface
- * - Feature request submission
- * - FAQ and troubleshooting
- * - Community links
- * 
- * USER EXPERIENCE:
- * - Intuitive settings organization
- * - Clear option descriptions
- * - Real-time setting previews
- * - Responsive design
- * - Accessibility compliance
- * - Smooth transitions
- * 
+ * - AppTrackingTransparency: Privacy settings and tracking permissions
+ * - MessageUI: Support email functionality and communication
+ * - SafariServices: External link handling and web content
+ * - Foundation: Core framework for localization and data handling
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - SwiftUI: Modern declarative UI framework
+ * - AppTrackingTransparency: Privacy and tracking permission management
+ * - MessageUI: Email composition and support communication
+ * - Firebase: Backend services and user management
+ * - SafariServices: Web content and external link handling
+ * - Foundation: Core framework for data structures and localization
+ *
  * ARCHITECTURE ROLE:
- * This view acts as the central hub for user customization and
- * app configuration, providing a comprehensive interface for
- * managing all aspects of the user experience.
- * 
- * THREADING CONSIDERATIONS:
- * - UI updates on main thread
- * - Background settings validation
- * - Async/await for network operations
- * - State management with Combine
- * 
- * INTEGRATION POINTS:
- * - Game state management
- * - Theme system
- * - Performance monitoring
- * - Subscription system
- * - Notification system
- * - Analytics and tracking
+ * Acts as the central configuration hub for user customization and
+ * app settings, providing a comprehensive interface for managing
+ * all aspects of the user experience and app behavior.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - Settings changes must be applied immediately for user feedback
+ * - Theme switching requires proper window interface style updates
+ * - Performance settings must be validated for device compatibility
+ * - Privacy settings require proper permission handling
+ * - Premium features must be properly gated and accessible
+ * - Localization changes should be applied system-wide
  */
 
 import SwiftUI

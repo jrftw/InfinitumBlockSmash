@@ -1,11 +1,47 @@
-/*
+/******************************************************
  * FILE: GameMove.swift
- * PURPOSE: Defines game move data structures and undo/redo functionality
- * DEPENDENCIES:
- *    - Block.swift (for block definitions)
- *    - GameState.swift (for game state integration)
- * AUTHOR: @jrftw
- * LAST UPDATED: 6/19/2025
+ * MARK: Game Move Data Model and Undo/Redo System
+ * CREATED: 6/19/2025 by @jrftw
+ * MODIFIED LAST: 6/19/2025 by @jrftw
+ ******************************************************/
+
+/*
+ * PURPOSE:
+ * Defines the core data structures for game moves, undo/redo functionality,
+ * and scoring breakdown. This file manages the complete state capture
+ * required for game history and move reversal operations.
+ *
+ * KEY RESPONSIBILITIES:
+ * - Game move data structure definition and management
+ * - Complete game state snapshot capture for undo operations
+ * - Undo/redo stack management with size limits
+ * - Move persistence and restoration for saved games
+ * - Scoring breakdown and detailed score tracking
+ * - Custom Codable implementation for complex data structures
+ * - Move validation and state integrity checking
+ * - Performance optimization for move storage
+ *
+ * MAJOR DEPENDENCIES:
+ * - Block.swift: Block data model and properties
+ * - GameState.swift: Game state integration and validation
+ * - Foundation: Core framework for data structures and Codable
+ * - SwiftUI: UI framework for score display components
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - Foundation: Core framework for data structures and serialization
+ * - SwiftUI: Modern UI framework for score components
+ *
+ * ARCHITECTURE ROLE:
+ * Acts as the data persistence layer for game moves and history,
+ * providing the foundation for undo/redo functionality and
+ * detailed scoring analysis.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - Move snapshots must capture complete game state
+ * - Undo stack size limits prevent memory issues
+ * - Custom Codable implementation handles complex data types
+ * - Move validation ensures state integrity
+ * - Performance optimization for frequent move operations
  */
 
 import Foundation

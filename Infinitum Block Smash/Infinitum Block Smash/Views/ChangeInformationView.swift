@@ -1,3 +1,61 @@
+/******************************************************
+ * FILE: ChangeInformationView.swift
+ * MARK: User Profile Information Management Interface
+ * CREATED: 6/19/2025 by @jrftw
+ * MODIFIED LAST: 6/19/2025 by @jrftw
+ ******************************************************/
+
+/*
+ * PURPOSE:
+ * Provides a comprehensive user profile management interface that allows users
+ * to view, edit, and manage their account information, including username,
+ * email, password, and connection types. This view handles all aspects of
+ * user profile customization and account security.
+ *
+ * KEY RESPONSIBILITIES:
+ * - User profile information display and editing
+ * - Username change management with validation and cooldowns
+ * - Email address management and verification
+ * - Password change functionality with security validation
+ * - Account linking (Email, Game Center) management
+ * - Profile deletion with confirmation and data cleanup
+ * - Real-time form validation and error handling
+ * - Connection type display and management
+ * - User ID display and account identification
+ * - Security confirmation dialogs and alerts
+ * - Data persistence and synchronization
+ * - Input sanitization and validation
+ * - Accessibility support for form interactions
+ * - Error recovery and user feedback
+ *
+ * MAJOR DEPENDENCIES:
+ * - FirebaseAuth: User authentication and account management
+ * - FirebaseFirestore: User data persistence and synchronization
+ * - GameKit: Game Center integration and linking
+ * - SwiftUI: Core UI framework for interface components
+ * - Foundation: Core framework for data validation and formatting
+ *
+ * EXTERNAL FRAMEWORKS USED:
+ * - SwiftUI: Modern declarative UI framework
+ * - FirebaseAuth: Authentication and user management
+ * - FirebaseFirestore: Cloud database and data persistence
+ * - GameKit: Game Center integration
+ * - Foundation: Core framework for data structures and validation
+ *
+ * ARCHITECTURE ROLE:
+ * Acts as the primary interface for user account management,
+ * providing secure and user-friendly access to profile
+ * customization and account security features.
+ *
+ * CRITICAL ORDER / EXECUTION NOTES:
+ * - Username changes require validation and cooldown periods
+ * - Password changes must meet security requirements
+ * - Account linking requires proper authentication flow
+ * - Profile deletion must include data cleanup confirmation
+ * - Form validation must be real-time and user-friendly
+ * - Error handling should provide clear user feedback
+ */
+
 import SwiftUI
 import FirebaseAuth
 import FirebaseFirestore
