@@ -695,8 +695,7 @@ struct GameView: View {
             }
             
             // Update last sync time
-            UserDefaults.standard.set(Date(), forKey: "lastFirebaseSaveTime")
-            UserDefaults.standard.synchronize()
+            UserDefaultsManager.shared.setLastFirebaseSaveTime(Date())
             
             isSyncing = false
         } catch let error as FirebaseError {
