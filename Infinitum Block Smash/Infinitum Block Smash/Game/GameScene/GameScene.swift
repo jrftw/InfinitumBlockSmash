@@ -1084,7 +1084,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 AudioManager.shared.playPlacementSound()
                 // Refill tray after successful placement
                 if gameState.tray.count < 3 {
-                    gameState.refillTray()
+                    gameState.refillTray(skipGameStateCheck: true)
                 }
             } else {
                 print("[ERROR] Block placement failed despite validation!")

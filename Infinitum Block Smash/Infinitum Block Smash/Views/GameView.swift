@@ -110,6 +110,7 @@ struct GameView: View {
     @AppStorage("showTemperature") private var showTemperature = false
     @AppStorage("showDetailedTemperature") private var showDetailedTemperature = false
     @AppStorage("temperatureUnit") private var temperatureUnit = "Celsius"
+    @State private var gameOverShown: Bool = false
     
     private enum SettingsAction {
         case resumeGame
@@ -126,6 +127,45 @@ struct GameView: View {
             overlays
             scoreAnimator
             bannerAdView
+            
+            // Game Over Overlay - positioned above everything else, only when gameOverShown is true
+            if gameOverShown {
+                GameOverOverlay(
+                    isPresented: true,
+                    score: gameState.score,
+                    level: gameState.level,
+                    onRetry: {
+                        gameState.startNewGame()
+                        gameOverShown = false
+                    },
+                    onMainMenu: {
+                        presentationMode.wrappedValue.dismiss()
+                        gameOverShown = false
+                    },
+                    onContinue: {
+                        gameState.continueGame()
+                        gameOverShown = false
+                    },
+                    canContinue: !gameState.hasUsedContinueAd,
+                    isTimedMode: UserDefaults.standard.bool(forKey: "isTimedMode"),
+                    timeRemaining: 0,
+                    breakdown: gameState.getGameBreakdown()
+                )
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Game Over. Final Score: \(gameState.score), Level: \(gameState.level)")
+                .zIndex(1000)
+                .onAppear {
+                    print("[GameOverOverlay] onAppear ✅")
+                }
+                .overlay(
+                    GeometryReader { geo in
+                        Color.clear
+                            .onAppear {
+                                print("[GameOverOverlay] 📐 Frame: \(geo.frame(in: .global))")
+                            }
+                    }
+                )
+            }
             
             // Add notification permission request
             if notificationService.shouldShowPermissionRequest {
@@ -307,6 +347,12 @@ struct GameView: View {
                 showingSaveWarning = true
             }
             
+            // Add observer for game over
+            NotificationCenter.default.addObserver(forName: .gameOver, object: nil, queue: .main) { _ in
+                print("[GameView] 🔔 Game over notification received")
+                gameOverShown = true
+            }
+            
             setupAchievementTracking()
         }
         .onChange(of: gameState.levelComplete) { isComplete in
@@ -419,7 +465,7 @@ struct GameView: View {
                     await gameState.undo()
                 }
             }) {
-                Text(gameState.canUndo ? 
+                Text(gameState.canUndo ?
                     NSLocalizedString("Undo Last Move", comment: "Undo button text") :
                     NSLocalizedString("Watch Ad for Undo", comment: "Watch ad for undo button text"))
                     .font(.system(size: UIScreen.main.bounds.width <= 390 ? 14 : 16, weight: .semibold))
@@ -427,10 +473,10 @@ struct GameView: View {
             }
             .disabled(!gameState.canUndo && !gameState.canAdUndo)
             .buttonStyle(PlainButtonStyle())
-            .accessibilityLabel(gameState.canUndo ? 
+            .accessibilityLabel(gameState.canUndo ?
                 NSLocalizedString("Undo Last Move", comment: "Undo button accessibility label") :
                 NSLocalizedString("Watch Ad for Undo", comment: "Watch ad for undo button accessibility label"))
-            .accessibilityHint(gameState.canUndo ? 
+            .accessibilityHint(gameState.canUndo ?
                 NSLocalizedString("Tap to undo your last move", comment: "Undo button accessibility hint") :
                 NSLocalizedString("Watch an ad to get more undos", comment: "Watch ad for undo button accessibility hint"))
             
@@ -473,7 +519,7 @@ struct GameView: View {
         }
         .padding(.bottom, 6)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(String(format: NSLocalizedString("Level High Score: %d and All-Time High Score: %d", comment: "High scores accessibility label"), 
+        .accessibilityLabel(String(format: NSLocalizedString("Level High Score: %d and All-Time High Score: %d", comment: "High scores accessibility label"),
             UserDefaults.standard.integer(forKey: "highScore_level_\(gameState.level)"),
             gameState.leaderboardHighScore))
     }
@@ -493,8 +539,8 @@ struct GameView: View {
             }
             
             LevelCompleteOverlay(
-                isPresented: gameState.levelComplete, 
-                score: gameState.score, 
+                isPresented: gameState.levelComplete,
+                score: gameState.score,
                 level: gameState.level,
                 onContinue: {
                     gameState.confirmLevelCompletion()
@@ -507,27 +553,6 @@ struct GameView: View {
             )
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Level \(gameState.level) Complete! Score: \(gameState.score)")
-            
-            GameOverOverlay(
-                isPresented: gameState.isGameOver,
-                score: gameState.score,
-                level: gameState.level,
-                onRetry: {
-                    gameState.startNewGame()
-                },
-                onMainMenu: {
-                    presentationMode.wrappedValue.dismiss()
-                },
-                onContinue: {
-                    gameState.continueGame()
-                },
-                canContinue: !gameState.hasUsedContinueAd,
-                isTimedMode: UserDefaults.standard.bool(forKey: "isTimedMode"),
-                timeRemaining: 0, // Classic mode doesn't use time
-                breakdown: gameState.getGameBreakdown()
-            )
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Game Over. Final Score: \(gameState.score), Level: \(gameState.level)")
             
             PauseMenuOverlay(
                 isPresented: isPaused,

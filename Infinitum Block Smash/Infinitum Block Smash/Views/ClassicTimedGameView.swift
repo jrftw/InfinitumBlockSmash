@@ -100,6 +100,34 @@ struct ClassicTimedGameView: View {
             overlays
             scoreAnimator
             
+            // Game Over Overlay - positioned above everything else
+            GameOverOverlay(
+                isPresented: gameState.isGameOver,
+                score: gameState.score,
+                level: gameState.level,
+                onRetry: {
+                    gameState.resetGame()
+                    Task {
+                        await timedState.startNewLevel()
+                    }
+                },
+                onMainMenu: {
+                    dismiss()
+                },
+                onContinue: {
+                    Task {
+                        await timedState.handleTimeUp()
+                    }
+                },
+                canContinue: !gameState.hasUsedContinueAd,
+                isTimedMode: true,
+                timeRemaining: timedState.timeRemaining,
+                breakdown: gameState.getGameBreakdown()
+            )
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Game Over. Final Score: \(gameState.score), Level: \(gameState.level)")
+            .zIndex(1000)
+            
             // Add save warning alert
             if showingSaveWarning {
                 Color.black.opacity(0.7)
@@ -113,6 +141,7 @@ struct ClassicTimedGameView: View {
                                 .foregroundColor(.white)
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal)
+                            
                             HStack(spacing: 20) {
                                 Button("Cancel") {
                                     showingSaveWarning = false
@@ -127,7 +156,6 @@ struct ClassicTimedGameView: View {
                                     Task {
                                         do {
                                             try await gameState.confirmSaveOverwrite()
-                                            timedState.confirmSaveTimerState()
                                             isPaused = false
                                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                                 dismiss()
@@ -325,32 +353,6 @@ struct ClassicTimedGameView: View {
             )
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Level \(gameState.level) Complete! Score: \(gameState.score)")
-            
-            GameOverOverlay(
-                isPresented: gameState.isGameOver,
-                score: gameState.score,
-                level: gameState.level,
-                onRetry: {
-                    gameState.resetGame()
-                    Task {
-                        await timedState.startNewLevel()
-                    }
-                },
-                onMainMenu: {
-                    dismiss()
-                },
-                onContinue: {
-                    Task {
-                        await timedState.handleTimeUp()
-                    }
-                },
-                canContinue: !gameState.hasUsedContinueAd,
-                isTimedMode: true,
-                timeRemaining: timedState.timeRemaining,
-                breakdown: gameState.getGameBreakdown()
-            )
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Game Over. Final Score: \(gameState.score), Level: \(gameState.level)")
             
             PauseMenuOverlay(
                 isPresented: isPaused,
