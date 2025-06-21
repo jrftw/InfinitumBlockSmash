@@ -63,8 +63,8 @@ final class NodePool {
     private var highlightNodePool: [SKNode] = []
     private var previewNodePool: [SKNode] = []
     
-    private let maxPoolSize = 50
-    private let minPoolSize = 10
+    private let maxPoolSize = 30
+    private let minPoolSize = 5
     
     // MARK: - Initialization
     private init() {
@@ -193,7 +193,7 @@ final class NodePool {
         // Pre-create some common node types for better performance
         await MainActor.run {
             // Pre-create some preview nodes with common shapes
-            for _ in 0..<5 {
+            for _ in 0..<3 {
                 let previewNode = SKNode()
                 previewNode.name = "preview_block"
                 previewNode.zPosition = 5
@@ -201,7 +201,7 @@ final class NodePool {
             }
             
             // Pre-create some highlight containers
-            for _ in 0..<3 {
+            for _ in 0..<2 {
                 let highlightNode = SKNode()
                 highlightNode.name = "highlight_container"
                 highlightNode.zPosition = 10

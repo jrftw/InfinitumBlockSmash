@@ -101,7 +101,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var particleEmitter: SKEmitterNode?
     private var glowNode: SKNode?
     private var activeParticleEmitters: [SKEmitterNode] = [] // Track active particle emitters
-    private let maxParticleEmitters = 2 // Reduced from 3 to prevent memory buildup
+    private let maxParticleEmitters = 1 // Reduced from 2 to prevent memory buildup
     // MARK: - Properties
     private var blockNodes: [SKNode] = []
     private var scoreLabel: SKLabelNode?
@@ -122,7 +122,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // MARK: - Texture Management
     private var activeTextures: Set<SKTexture> = []
     private var gradientTextureCache: [String: SKTexture] = [:] // Cache gradient textures by color
-    private let maxGradientCacheSize = 5 // Reduced from 10 to prevent memory buildup
+    private let maxGradientCacheSize = 3 // Reduced from 5 to prevent memory buildup
     
     func getCachedGradientTexture(for color: BlockColor) -> SKTexture? {
         let key = color.rawValue
@@ -172,10 +172,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     // MARK: - Texture Management
     private var textureCache: [String: SKTexture] = [:]
-    private let maxTextureCacheSize = 50
+    private let maxTextureCacheSize = 25 // Reduced from 50 to prevent memory buildup
     // MARK: - Node Management
     private var activeNodes: Set<SKNode> = []
-    private let maxActiveNodes = 1000
+    private let maxActiveNodes = 500 // Reduced from 1000 to prevent memory buildup
     // MARK: - Node Management
     var placedBlockNodes: [String: SKNode] = [:] // Track placed block nodes by position
     private var lastCleanupTime: TimeInterval = 0
@@ -1749,17 +1749,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         
         // Apply the reduction factor to particle properties
-        emitter.particleBirthRate = min(emitter.particleBirthRate * reductionFactor, 15) // Max 15 particles per second
-        emitter.particleLifetime = min(emitter.particleLifetime * reductionFactor, 0.5) // Max 0.5 seconds
+        emitter.particleBirthRate = min(emitter.particleBirthRate * reductionFactor, 10) // Max 10 particles per second (reduced from 15)
+        emitter.particleLifetime = min(emitter.particleLifetime * reductionFactor, 0.3) // Max 0.3 seconds (reduced from 0.5)
         emitter.particleSize = CGSize(
-            width: min(emitter.particleSize.width * reductionFactor, 4), // Max 4x4 pixels
-            height: min(emitter.particleSize.height * reductionFactor, 4)
+            width: min(emitter.particleSize.width * reductionFactor, 3), // Max 3x3 pixels (reduced from 4)
+            height: min(emitter.particleSize.height * reductionFactor, 3)
         )
-        emitter.particleAlpha = min(emitter.particleAlpha * reductionFactor, 0.4) // Max 40% opacity
-        emitter.particleSpeed = min(emitter.particleSpeed * reductionFactor, 40) // Max 40 speed
-        emitter.particleSpeedRange = min(emitter.particleSpeedRange * reductionFactor, 20) // Max 20 speed range
-        emitter.emissionAngleRange = min(emitter.emissionAngleRange * reductionFactor, .pi / 8) // Max pi/8 angle range
-        emitter.numParticlesToEmit = min(emitter.numParticlesToEmit, Int(10 * reductionFactor)) // Max 10 particles total
+        emitter.particleAlpha = min(emitter.particleAlpha * reductionFactor, 0.3) // Max 30% opacity (reduced from 40%)
+        emitter.particleSpeed = min(emitter.particleSpeed * reductionFactor, 30) // Max 30 speed (reduced from 40)
+        emitter.particleSpeedRange = min(emitter.particleSpeedRange * reductionFactor, 15) // Max 15 speed range (reduced from 20)
+        emitter.emissionAngleRange = min(emitter.emissionAngleRange * reductionFactor, .pi / 12) // Max pi/12 angle range (reduced from pi/8)
+        emitter.numParticlesToEmit = min(emitter.numParticlesToEmit, Int(5 * reductionFactor)) // Max 5 particles total (reduced from 10)
         
         // Log optimization if significant reduction was applied
         if reductionFactor < 0.5 {
@@ -1801,10 +1801,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         emitter.run(SKAction.sequence([wait, remove]))
     }
     private func manageCachedNodes() {
-        // Limit cache size to 50 nodes
-        if cachedNodes.count > 50 {
+        // Limit cache size to 25 nodes (reduced from 50)
+        if cachedNodes.count > 25 {
             // Remove oldest entries
-            let excessCount = cachedNodes.count - 50
+            let excessCount = cachedNodes.count - 25
             let keysToRemove = Array(cachedNodes.keys.prefix(excessCount))
             for key in keysToRemove {
                 cachedNodes[key]?.removeFromParent()

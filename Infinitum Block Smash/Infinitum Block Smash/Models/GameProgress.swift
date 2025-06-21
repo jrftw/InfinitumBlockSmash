@@ -498,10 +498,12 @@ struct GameProgress: Codable {
         let hasScore = score > 0
         let hasBlocksPlaced = blocksPlaced > 0
         let hasGridBlocks = grid.flatMap { $0 }.contains { $0 != "nil" }
+        let hasTrayBlocks = !tray.isEmpty
         
         // A game is considered "new" only if there's no meaningful progress
-        // Having tray blocks doesn't count as progress since they're always present
-        return !hasScore && !hasBlocksPlaced && !hasGridBlocks && level == 1
+        // Having tray blocks counts as progress since it means the game has started
+        // Having any score, blocks placed, or grid blocks also counts as progress
+        return !hasScore && !hasBlocksPlaced && !hasGridBlocks && !hasTrayBlocks && level == 1
     }
     
     /// Creates a fresh game progress for new games

@@ -60,30 +60,30 @@ struct MemoryConfig {
     /// Memory usage thresholds for different actions
     struct Thresholds {
         // Much more conservative thresholds to prevent app killing
-        static let warningLevel: Double = 0.4      // 40% memory usage (reduced from 50%)
-        static let criticalLevel: Double = 0.55    // 55% memory usage (reduced from 65%)
-        static let extremeLevel: Double = 0.65     // 65% memory usage (reduced from 75%)
+        static let warningLevel: Double = 0.35     // 35% memory usage (reduced from 40%)
+        static let criticalLevel: Double = 0.45    // 45% memory usage (reduced from 55%)
+        static let extremeLevel: Double = 0.55     // 55% memory usage (reduced from 65%)
     }
     
     // MARK: - Cache Limits
     
     /// Cache size limits based on device type
     static let highEndDeviceCacheLimits = CacheLimits(
-        memoryCacheSize: 15 * 1024 * 1024,  // 15MB (reduced from 20MB)
-        diskCacheSize: 30 * 1024 * 1024,   // 30MB (reduced from 40MB)
-        maxCacheEntries: 75
+        memoryCacheSize: 10 * 1024 * 1024,  // 10MB (reduced from 15MB)
+        diskCacheSize: 20 * 1024 * 1024,   // 20MB (reduced from 30MB)
+        maxCacheEntries: 50
     )
     
     static let midRangeDeviceCacheLimits = CacheLimits(
-        memoryCacheSize: 8 * 1024 * 1024,   // 8MB (reduced from 10MB)
-        diskCacheSize: 15 * 1024 * 1024,    // 15MB (reduced from 20MB)
-        maxCacheEntries: 40
+        memoryCacheSize: 5 * 1024 * 1024,   // 5MB (reduced from 8MB)
+        diskCacheSize: 10 * 1024 * 1024,    // 10MB (reduced from 15MB)
+        maxCacheEntries: 25
     )
     
     static let lowEndDeviceCacheLimits = CacheLimits(
-        memoryCacheSize: 3 * 1024 * 1024,   // 3MB (reduced from 5MB)
-        diskCacheSize: 8 * 1024 * 1024,     // 8MB (reduced from 10MB)
-        maxCacheEntries: 15
+        memoryCacheSize: 2 * 1024 * 1024,   // 2MB (reduced from 3MB)
+        diskCacheSize: 5 * 1024 * 1024,     // 5MB (reduced from 8MB)
+        maxCacheEntries: 10
     )
     
     // MARK: - Performance Settings

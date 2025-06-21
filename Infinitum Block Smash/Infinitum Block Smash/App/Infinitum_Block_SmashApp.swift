@@ -473,8 +473,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
             // Clear node pools
             NodePool.shared.clearAllPools()
             
-            // Clear any remaining cached data
-            CacheManager.shared.clearAllCaches()
+            // Clear memory system cache
+            MemorySystem.shared.clearAllCaches()
             
             print("[App] Emergency memory cleanup completed")
         }
@@ -539,12 +539,12 @@ struct Infinitum_Block_SmashApp: App {
         .onChange(of: scenePhase) { newPhase in
             switch newPhase {
             case .background:
-                // Save game state when app moves to background
+                // Save game state when app moves to background (local only)
                 Task {
                     do {
                         if gameState.canSaveGame() {
-                            try await gameState.saveProgressWithValidation()
-                            print("[App] Successfully saved game progress in background")
+                            try await gameState.saveProgressLocally()
+                            print("[App] Successfully saved game progress locally in background")
                         } else {
                             print("[App] Skipping save - game state not suitable for saving")
                         }
@@ -555,12 +555,12 @@ struct Infinitum_Block_SmashApp: App {
                 // Notify game scene to pause animations
                 NotificationCenter.default.post(name: NSNotification.Name("PauseBackgroundAnimations"), object: nil)
             case .inactive:
-                // Save game state when app becomes inactive
+                // Save game state when app becomes inactive (local only)
                 Task {
                     do {
                         if gameState.canSaveGame() {
-                            try await gameState.saveProgressWithValidation()
-                            print("[App] Successfully saved game progress when inactive")
+                            try await gameState.saveProgressLocally()
+                            print("[App] Successfully saved game progress locally when inactive")
                         } else {
                             print("[App] Skipping save - game state not suitable for saving")
                         }
@@ -585,13 +585,13 @@ class SceneDelegate: NSObject, UIWindowSceneDelegate {
     var gameState: GameState?
     
     func sceneDidEnterBackground(_ scene: UIScene) {
-        // Save game state when app enters background
+        // Save game state when app enters background (local only)
         guard let gameState = gameState else { return }
         
         Task {
             do {
-                try await gameState.saveProgress()
-                print("[Scene] Successfully saved game progress in background")
+                try await gameState.saveProgressLocally()
+                print("[Scene] Successfully saved game progress locally in background")
             } catch {
                 print("[Scene] Error saving game progress in background: \(error.localizedDescription)")
             }
@@ -599,13 +599,13 @@ class SceneDelegate: NSObject, UIWindowSceneDelegate {
     }
     
     func sceneWillTerminate(_ scene: UIScene) {
-        // Save game state when app is about to terminate
+        // Save game state when app is about to terminate (local only)
         guard let gameState = gameState else { return }
         
         Task {
             do {
-                try await gameState.saveProgress()
-                print("[Scene] Successfully saved game progress before termination")
+                try await gameState.saveProgressLocally()
+                print("[Scene] Successfully saved game progress locally before termination")
             } catch {
                 print("[Scene] Error saving game progress before termination: \(error.localizedDescription)")
             }

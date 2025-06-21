@@ -217,7 +217,13 @@ struct ContentView: View {
                                     do {
                                         try await gameState.loadSavedGame()
                                         Logger.shared.log("Successfully loaded saved game", category: .gameState, level: .info)
-                                        showingGameView = true
+                                        
+                                        // Check if it's a timed mode game and show appropriate view
+                                        if UserDefaults.standard.bool(forKey: "isTimedMode") {
+                                            showingClassicTimedView = true
+                                        } else {
+                                            showingGameView = true
+                                        }
                                     } catch {
                                         Logger.shared.log("Error loading saved game: \(error.localizedDescription)", category: .gameState, level: .error)
                                         // If loading fails, clean up the invalid save and start a fresh game
@@ -435,15 +441,19 @@ struct ContentView: View {
                 onClassic: {
                     UserDefaults.standard.set(false, forKey: "isTimedMode")
                     showingGameModeSelection = false
-                    // Ensure we start with a fresh game
-                    gameState.startNewGame()
+                    // Only start a new game if we're not resuming a game
+                    if !gameState.isResumingGame {
+                        gameState.startNewGame()
+                    }
                     showingGameView = true
                 },
                 onClassicTimed: {
                     UserDefaults.standard.set(true, forKey: "isTimedMode")
                     showingGameModeSelection = false
-                    // ClassicTimedGameView now uses the shared GameState, so we need to reset it
-                    gameState.startNewGame()
+                    // Only start a new game if we're not resuming a game
+                    if !gameState.isResumingGame {
+                        gameState.startNewGame()
+                    }
                     showingClassicTimedView = true
                 }
             )

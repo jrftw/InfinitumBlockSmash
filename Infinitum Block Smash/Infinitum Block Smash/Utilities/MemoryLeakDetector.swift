@@ -26,8 +26,8 @@ class MemoryLeakDetector {
     private var trackedObjects: [String: WeakReference] = [:]
     private var memorySnapshots: [MemorySnapshot] = []
     private var lastSnapshotTime: Date = Date()
-    private let snapshotInterval: TimeInterval = 30.0 // Take snapshot every 30 seconds
-    private let maxSnapshots = 20 // Keep last 20 snapshots
+    private let snapshotInterval: TimeInterval = 60.0 // Take snapshot every 60 seconds (increased from 30)
+    private let maxSnapshots = 10 // Keep last 10 snapshots (reduced from 20)
     private var monitoringTimer: Timer?
     
     // MARK: - Memory Snapshot
@@ -208,8 +208,8 @@ class MemoryLeakDetector {
         let memoryGrowth = recentSnapshots.last!.memoryUsage - recentSnapshots.first!.memoryUsage
         let timeSpan = recentSnapshots.last!.timestamp.timeIntervalSince(recentSnapshots.first!.timestamp)
         
-        // If memory grew more than 10MB in the time span, it's suspicious
-        if memoryGrowth > 10.0 && timeSpan > 60.0 {
+        // If memory grew more than 5MB in the time span, it's suspicious (reduced from 10MB)
+        if memoryGrowth > 5.0 && timeSpan > 60.0 {
             return "Memory grew \(String(format: "%.1f", memoryGrowth))MB over \(String(format: "%.1f", timeSpan))s"
         }
         

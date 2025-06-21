@@ -57,7 +57,7 @@ extension UIImageView {
     private static var imageCache = NSCache<NSString, UIImage>()
     private static var lastCleanupTime = Date()
     private static let cleanupInterval: TimeInterval = 300 // 5 minutes
-    private static let maxCacheSize: Int = 50 * 1024 * 1024 // 50MB
+    private static let maxCacheSize: Int = 15 * 1024 * 1024 // 15MB (reduced from 50MB to prevent memory buildup)
     private static var currentCacheSize: Int = 0
     
     static func clearImageCache() {

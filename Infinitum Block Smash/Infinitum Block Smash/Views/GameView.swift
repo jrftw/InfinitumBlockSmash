@@ -321,11 +321,14 @@ struct GameView: View {
         .onAppear {
             print("[DEBUG] GameView appeared - Current level: \(gameState.level)")
             
-            // FIXED: Ensure game is properly initialized for new Classic games
-            if !UserDefaults.standard.bool(forKey: "isTimedMode") {
+            // FIXED: Ensure game is properly initialized for new Classic games (but not when resuming)
+            if !UserDefaults.standard.bool(forKey: "isTimedMode") && !gameState.isResumingGame {
                 print("[DEBUG] Classic mode detected, ensuring proper initialization")
                 gameState.ensureProperInitialization()
             }
+            
+            // Mark game as started to reset resuming flag
+            gameState.markGameAsStarted()
             
             if showTutorial {
                 showingTutorial = true

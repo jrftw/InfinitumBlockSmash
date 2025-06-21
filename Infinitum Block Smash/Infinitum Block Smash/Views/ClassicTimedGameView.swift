@@ -184,12 +184,18 @@ struct ClassicTimedGameView: View {
         .onAppear {
             UserDefaults.standard.set(true, forKey: "isTimedMode")
             
-            // Ensure we start with a completely fresh game
-            gameState.startNewGame()
-            
-            Task {
-                await timedState.startNewLevel()
+            // Only start a new game if we're not resuming
+            if !gameState.isResumingGame {
+                // Ensure we start with a completely fresh game
+                gameState.startNewGame()
+                
+                Task {
+                    await timedState.startNewLevel()
+                }
             }
+            
+            // Mark game as started to reset resuming flag
+            gameState.markGameAsStarted()
             
             // Add observer for save warning
             NotificationCenter.default.addObserver(
