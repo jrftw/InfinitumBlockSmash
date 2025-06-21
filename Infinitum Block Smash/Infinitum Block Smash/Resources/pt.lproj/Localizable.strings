@@ -1,1 +1,200 @@
- 
+/* Common */
+"OK" = "OK";
+"Cancel" = "Cancelar";
+"Save" = "Salvar";
+"Delete" = "Excluir";
+"Edit" = "Editar";
+"Done" = "Concluído";
+"Loading..." = "Carregando...";
+"Error" = "Erro";
+"Success" = "Sucesso";
+"Warning" = "Aviso";
+"Info" = "Informação";
+
+/* Language Selection */
+"Language" = "Idioma";
+"Language Changed" = "Idioma Alterado";
+"Please restart the app for the language change to take effect." = "Por favor, reinicie o aplicativo para que a mudança de idioma tenha efeito.";
+
+/* Settings View */
+"Game Settings" = "Configurações do Jogo";
+"System Theme" = "Tema do Sistema";
+"Light" = "Claro";
+"Dark" = "Escuro";
+"Auto" = "Automático";
+"Custom Theme" = "Tema Personalizado";
+"Locked" = "Bloqueado";
+"Target FPS" = "FPS Alvo";
+"Show Tutorial" = "Mostrar Tutorial";
+"Auto Save" = "Salvamento Automático";
+"Gameplay Settings" = "Configurações de Jogabilidade";
+"Placement Precision" = "Precisão de Posicionamento";
+"Block Drag Position" = "Posição de Arrastar Bloco";
+"Lower = More Precise" = "Menor = Mais Preciso";
+"Reset" = "Redefinir";
+"Sound Effects" = "Efeitos Sonoros";
+"Music" = "Música";
+"Vibration" = "Vibração";
+"Notifications" = "Notificações";
+"Privacy" = "Privacidade";
+"Terms of Service" = "Termos de Serviço";
+"About" = "Sobre";
+"Version" = "Versão";
+"Contact Support" = "Contatar Suporte";
+"Rate App" = "Avaliar App";
+"Share App" = "Compartilhar App";
+
+/* Game View */
+"Score" = "Pontuação";
+"Level" = "Nível";
+"Undo Last Move" = "Desfazer Último Movimento";
+"Watch Ad for Undo" = "Assistir Anúncio para Desfazer";
+"Undos: %d" = "Desfazer: %d";
+"Need: %d" = "Precisa: %d";
+"Level High: %d" = "Máximo do Nível: %d";
+"All-Time High: %d" = "Máximo de Todos os Tempos: %d";
+"Pause" = "Pausar";
+"Resume" = "Continuar";
+"Restart" = "Reiniciar";
+"Quit" = "Sair";
+"Next Level" = "Próximo Nível";
+"Level Complete!" = "Nível Concluído!";
+"New High Score!" = "Nova Pontuação Máxima!";
+"Combo: %dx" = "Combo: %dx";
+"Perfect!" = "Perfeito!";
+"Great!" = "Ótimo!";
+"Good!" = "Bom!";
+
+/* Game Over */
+"Game Over" = "Fim de Jogo";
+"Final Score" = "Pontuação Final";
+"Level Reached" = "Nível Alcançado";
+"Continue" = "Continuar";
+"Try Again" = "Tentar Novamente";
+"Main Menu" = "Menu Principal";
+"Share Score" = "Compartilhar Pontuação";
+"View Leaderboard" = "Ver Classificação";
+"New Record!" = "Novo Recorde!";
+"Best Score: %d" = "Melhor Pontuação: %d";
+"Time Played: %@" = "Tempo Jogado: %@";
+
+/* Achievements */
+"Achievements" = "Conquistas";
+"Total Points" = "Pontos Totais";
+"Leaderboard" = "Classificação";
+"All" = "Todos";
+"Score" = "Pontuação";
+"Level" = "Nível";
+"Clearing" = "Limpeza";
+"Combo" = "Combo";
+"Special" = "Especial";
+"Daily" = "Diário";
+"Achievement Unlocked!" = "Conquista Desbloqueada!";
+"%d pts" = "%d pts";
+"Progress: %d/%d (%d%%)" = "Progresso: %d/%d (%d%%)";
+"Locked Achievement" = "Conquista Bloqueada";
+"Complete to unlock" = "Complete para desbloquear";
+"View Details" = "Ver Detalhes";
+"Recent Achievements" = "Conquistas Recentes";
+"Achievement Progress" = "Progresso das Conquistas";
+
+/* Store & Subscriptions */
+"Store" = "Loja";
+"Subscriptions" = "Assinaturas";
+"Premium" = "Premium";
+"Elite" = "Elite";
+"Monthly" = "Mensal";
+"Yearly" = "Anual";
+"Best Value" = "Melhor Valor";
+"Subscribe" = "Assinar";
+"Restore Purchases" = "Restaurar Compras";
+"Terms & Conditions" = "Termos e Condições";
+"Privacy Policy" = "Política de Privacidade";
+"Subscription Benefits" = "Benefícios da Assinatura";
+"Current Plan" = "Plano Atual";
+"Expires: %@" = "Expira: %@";
+"Active" = "Ativo";
+"Expired" = "Expirado";
+"Trial" = "Teste";
+
+/* Authentication */
+"Sign In" = "Entrar";
+"Sign Up" = "Cadastrar";
+"Sign Out" = "Sair";
+"Email" = "E-mail";
+"Password" = "Senha";
+"Forgot Password?" = "Esqueceu a Senha?";
+"Reset Password" = "Redefinir Senha";
+"Username" = "Nome de Usuário";
+"Confirm Password" = "Confirmar Senha";
+"Create Account" = "Criar Conta";
+"Already have an account?" = "Já tem uma conta?";
+"Don't have an account?" = "Não tem uma conta?";
+"Continue with Apple" = "Continuar com Apple";
+"Continue with Google" = "Continuar com Google";
+"Continue as Guest" = "Continuar como Convidado";
+
+/* Date/Time Formatting */
+"Today" = "Hoje";
+"Yesterday" = "Ontem";
+"Last Week" = "Última Semana";
+"Last Month" = "Último Mês";
+"Just Now" = "Agora Mesmo";
+"%d minutes ago" = "há %d minutos";
+"%d hours ago" = "há %d horas";
+"%d days ago" = "há %d dias";
+"%d weeks ago" = "há %d semanas";
+"%d months ago" = "há %d meses";
+"%d years ago" = "há %d anos";
+"Date: %@" = "Data: %@";
+"Time: %@" = "Hora: %@";
+
+/* Pluralization */
+"%d point" = "%d ponto";
+"%d points" = "%d pontos";
+"%d level" = "%d nível";
+"%d levels" = "%d níveis";
+"%d undo" = "%d desfazer";
+"%d undos" = "%d desfazer";
+"%d minute" = "%d minuto";
+"%d minutes" = "%d minutos";
+"%d hour" = "%d hora";
+"%d hours" = "%d horas";
+"%d day" = "%d dia";
+"%d days" = "%d dias";
+"%d week" = "%d semana";
+"%d weeks" = "%d semanas";
+"%d month" = "%d mês";
+"%d months" = "%d meses";
+"%d year" = "%d ano";
+"%d years" = "%d anos";
+"%d achievement" = "%d conquista";
+"%d achievements" = "%d conquistas";
+"%d player" = "%d jogador";
+"%d players" = "%d jogadores";
+"%d game" = "%d jogo";
+"%d games" = "%d jogos";
+
+/* Notifications */
+"Enable Notifications" = "Ativar Notificações";
+"Daily Reminder" = "Lembrete Diário";
+"New Achievement" = "Nova Conquista";
+"Level Up" = "Subir de Nível";
+"Special Event" = "Evento Especial";
+"Notification Settings" = "Configurações de Notificação";
+"Push Notifications" = "Notificações Push";
+"Email Notifications" = "Notificações por E-mail";
+"Notification Preferences" = "Preferências de Notificação";
+
+/* Tutorial */
+"Welcome to Block Smash!" = "Bem-vindo ao Block Smash!";
+"Tap to Start" = "Toque para Começar";
+"Drag blocks to match" = "Arraste blocos para combinar";
+"Match 3 or more" = "Combine 3 ou mais";
+"Clear blocks to score" = "Limpe blocos para pontuar";
+"Complete levels" = "Complete níveis";
+"Earn achievements" = "Ganhe conquistas";
+"Skip Tutorial" = "Pular Tutorial";
+"Next" = "Próximo";
+"Previous" = "Anterior";
+"Got it!" = "Entendi!"; 

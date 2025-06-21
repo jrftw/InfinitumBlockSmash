@@ -301,7 +301,11 @@ extension GameScene: GameStateDelegate {
     }
     
     func updateFPS(_ newFPS: Int) {
-        view?.preferredFramesPerSecond = newFPS
+        let fpsManager = FPSManager.shared
+        let thermalAwareFPS = fpsManager.getThermalAwareFPS()
+        view?.preferredFramesPerSecond = thermalAwareFPS
+        
+        Logger.shared.debug("[Thermal] Updated FPS to \(thermalAwareFPS) (requested: \(newFPS))", category: .debugGameScene)
     }
     
     private func clearAllHighlightContainers() {

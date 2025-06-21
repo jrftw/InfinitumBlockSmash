@@ -1,3 +1,21 @@
+/* Common */
+"OK" = "OK";
+"Cancel" = "キャンセル";
+"Save" = "保存";
+"Delete" = "削除";
+"Edit" = "編集";
+"Done" = "完了";
+"Loading..." = "読み込み中...";
+"Error" = "エラー";
+"Success" = "成功";
+"Warning" = "警告";
+"Info" = "情報";
+
+/* Language Selection */
+"Language" = "言語";
+"Language Changed" = "言語が変更されました";
+"Please restart the app for the language change to take effect." = "言語の変更を有効にするには、アプリを再起動してください。";
+
 /* Settings View */
 "Game Settings" = "ゲーム設定";
 "System Theme" = "システムテーマ";
@@ -13,4 +31,170 @@
 "Placement Precision" = "配置精度";
 "Block Drag Position" = "ブロックドラッグ位置";
 "Lower = More Precise" = "低い = より正確";
-"Reset" = "リセット"; 
+"Reset" = "リセット";
+"Sound Effects" = "サウンドエフェクト";
+"Music" = "音楽";
+"Vibration" = "振動";
+"Notifications" = "通知";
+"Privacy" = "プライバシー";
+"Terms of Service" = "利用規約";
+"About" = "について";
+"Version" = "バージョン";
+"Contact Support" = "サポートに連絡";
+"Rate App" = "アプリを評価";
+"Share App" = "アプリを共有";
+
+/* Game View */
+"Score" = "スコア";
+"Level" = "レベル";
+"Undo Last Move" = "最後の手を元に戻す";
+"Watch Ad for Undo" = "元に戻すために広告を見る";
+"Undos: %d" = "元に戻し: %d";
+"Need: %d" = "必要: %d";
+"Level High: %d" = "レベル最高: %d";
+"All-Time High: %d" = "歴代最高: %d";
+"Pause" = "一時停止";
+"Resume" = "再開";
+"Restart" = "再スタート";
+"Quit" = "終了";
+"Next Level" = "次のレベル";
+"Level Complete!" = "レベル完了！";
+"New High Score!" = "新しいハイスコア！";
+"Combo: %dx" = "コンボ: %dx";
+"Perfect!" = "パーフェクト！";
+"Great!" = "素晴らしい！";
+"Good!" = "良い！";
+
+/* Game Over */
+"Game Over" = "ゲームオーバー";
+"Final Score" = "最終スコア";
+"Level Reached" = "到達レベル";
+"Continue" = "続ける";
+"Try Again" = "再試行";
+"Main Menu" = "メインメニュー";
+"Share Score" = "スコアを共有";
+"View Leaderboard" = "リーダーボードを見る";
+"New Record!" = "新記録！";
+"Best Score: %d" = "最高スコア: %d";
+"Time Played: %@" = "プレイ時間: %@";
+
+/* Achievements */
+"Achievements" = "実績";
+"Total Points" = "総ポイント";
+"Leaderboard" = "リーダーボード";
+"All" = "すべて";
+"Score" = "スコア";
+"Level" = "レベル";
+"Clearing" = "クリア";
+"Combo" = "コンボ";
+"Special" = "スペシャル";
+"Daily" = "デイリー";
+"Achievement Unlocked!" = "実績解除！";
+"%d pts" = "%d ポイント";
+"Progress: %d/%d (%d%%)" = "進捗: %d/%d (%d%%)";
+"Locked Achievement" = "ロックされた実績";
+"Complete to unlock" = "解除するには完了";
+"View Details" = "詳細を見る";
+"Recent Achievements" = "最近の実績";
+"Achievement Progress" = "実績進捗";
+
+/* Store & Subscriptions */
+"Store" = "ストア";
+"Subscriptions" = "サブスクリプション";
+"Premium" = "プレミアム";
+"Elite" = "エリート";
+"Monthly" = "月額";
+"Yearly" = "年額";
+"Best Value" = "最高の価値";
+"Subscribe" = "購読";
+"Restore Purchases" = "購入を復元";
+"Terms & Conditions" = "利用規約";
+"Privacy Policy" = "プライバシーポリシー";
+"Subscription Benefits" = "サブスクリプション特典";
+"Current Plan" = "現在のプラン";
+"Expires: %@" = "期限: %@";
+"Active" = "アクティブ";
+"Expired" = "期限切れ";
+"Trial" = "トライアル";
+
+/* Authentication */
+"Sign In" = "サインイン";
+"Sign Up" = "サインアップ";
+"Sign Out" = "サインアウト";
+"Email" = "メール";
+"Password" = "パスワード";
+"Forgot Password?" = "パスワードを忘れましたか？";
+"Reset Password" = "パスワードをリセット";
+"Username" = "ユーザー名";
+"Confirm Password" = "パスワードを確認";
+"Create Account" = "アカウントを作成";
+"Already have an account?" = "すでにアカウントをお持ちですか？";
+"Don't have an account?" = "アカウントをお持ちでないですか？";
+"Continue with Apple" = "Appleで続行";
+"Continue with Google" = "Googleで続行";
+"Continue as Guest" = "ゲストとして続行";
+
+/* Date/Time Formatting */
+"Today" = "今日";
+"Yesterday" = "昨日";
+"Last Week" = "先週";
+"Last Month" = "先月";
+"Just Now" = "今";
+"%d minutes ago" = "%d分前";
+"%d hours ago" = "%d時間前";
+"%d days ago" = "%d日前";
+"%d weeks ago" = "%d週間前";
+"%d months ago" = "%dヶ月前";
+"%d years ago" = "%d年前";
+"Date: %@" = "日付: %@";
+"Time: %@" = "時間: %@";
+
+/* Pluralization */
+"%d point" = "%dポイント";
+"%d points" = "%dポイント";
+"%d level" = "%dレベル";
+"%d levels" = "%dレベル";
+"%d undo" = "%d元に戻し";
+"%d undos" = "%d元に戻し";
+"%d minute" = "%d分";
+"%d minutes" = "%d分";
+"%d hour" = "%d時間";
+"%d hours" = "%d時間";
+"%d day" = "%d日";
+"%d days" = "%d日";
+"%d week" = "%d週間";
+"%d weeks" = "%d週間";
+"%d month" = "%dヶ月";
+"%d months" = "%dヶ月";
+"%d year" = "%d年";
+"%d years" = "%d年";
+"%d achievement" = "%d実績";
+"%d achievements" = "%d実績";
+"%d player" = "%dプレイヤー";
+"%d players" = "%dプレイヤー";
+"%d game" = "%dゲーム";
+"%d games" = "%dゲーム";
+
+/* Notifications */
+"Enable Notifications" = "通知を有効にする";
+"Daily Reminder" = "毎日のリマインダー";
+"New Achievement" = "新しい実績";
+"Level Up" = "レベルアップ";
+"Special Event" = "特別イベント";
+"Notification Settings" = "通知設定";
+"Push Notifications" = "プッシュ通知";
+"Email Notifications" = "メール通知";
+"Notification Preferences" = "通知設定";
+
+/* Tutorial */
+"Welcome to Block Smash!" = "ブロックスマッシュへようこそ！";
+"Tap to Start" = "タップして開始";
+"Drag blocks to match" = "ブロックをドラッグしてマッチ";
+"Match 3 or more" = "3つ以上をマッチ";
+"Clear blocks to score" = "ブロックをクリアしてスコア";
+"Complete levels" = "レベルを完了";
+"Earn achievements" = "実績を獲得";
+"Skip Tutorial" = "チュートリアルをスキップ";
+"Next" = "次へ";
+"Previous" = "前へ";
+"Got it!" = "分かりました！"; 

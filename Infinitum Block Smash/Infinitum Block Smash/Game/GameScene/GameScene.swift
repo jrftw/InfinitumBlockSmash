@@ -218,10 +218,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             trayNode = TrayNode(trayHeight: trayHeight, trayWidth: trayWidth)
             addChild(trayNode)
         }
-        // Configure view for better performance
-        view.preferredFramesPerSecond = gameState.targetFPS
+        // Configure view for better performance with thermal awareness
+        let fpsManager = FPSManager.shared
+        let thermalAwareFPS = fpsManager.getThermalAwareFPS()
+        view.preferredFramesPerSecond = thermalAwareFPS
         view.ignoresSiblingOrder = true
         view.allowsTransparency = true
+        
+        Logger.shared.debug("[Thermal] Set FPS to \(thermalAwareFPS) (base: \(fpsManager.getDisplayFPS(for: fpsManager.targetFPS)))", category: .debugGameScene)
+        
         // Set the frame size in GameState
         gameState.frameSize = size
         // Setup scene components
@@ -266,6 +271,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             name: Notification.Name.gameOver,
             object: nil
         )
+        
+        // Start thermal state monitoring
+        startThermalStateMonitoring()
     }
     deinit {
         Logger.shared.debug("GameScene deinit called", category: .debugGameScene)
@@ -324,18 +332,32 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     // Add method to manage background animations
     private func setBackgroundAnimationsActive(_ active: Bool) {
+        // Check thermal state before enabling animations
+        let fpsManager = FPSManager.shared
+        let shouldPauseForThermal = fpsManager.thermalState == .serious || fpsManager.thermalState == .critical
+        let shouldPauseForBattery = fpsManager.batteryLevel < 0.2 || fpsManager.isLowPowerMode
+        
+        let shouldPause = shouldPauseForThermal || shouldPauseForBattery
+        
         // Pause/resume background color animation
         if let backgroundNode = childNode(withName: "backgroundNode") {
-            if active {
+            if active && !shouldPause {
                 backgroundNode.isPaused = false
             } else {
                 backgroundNode.isPaused = true
+                if shouldPauseForThermal {
+                    Logger.shared.debug("[Thermal] Background animations paused due to thermal state: \(fpsManager.thermalState)", category: .debugGameScene)
+                }
+                if shouldPauseForBattery {
+                    Logger.shared.debug("[Battery] Background animations paused due to battery conditions", category: .debugGameScene)
+                }
             }
         }
+        
         // Pause/resume particle effects
         enumerateChildNodes(withName: "//") { node, _ in
             if let emitter = node as? SKEmitterNode {
-                emitter.isPaused = !active
+                emitter.isPaused = shouldPause
             }
         }
     }
@@ -496,10 +518,26 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // No-op: Score/level handled by SwiftUI overlay
     }
     private func setupParticles() {
+        let adaptiveQuality = AdaptiveQualityManager.shared
+        
+        // Check if background animations should be enabled
+        guard adaptiveQuality.shouldEnableBackgroundAnimations() else {
+            Logger.shared.debug("[Quality] Background particles disabled due to quality settings", category: .debugGameScene)
+            return
+        }
+        
         if let particles = SKEmitterNode(fileNamed: "BackgroundParticles") {
             particles.position = CGPoint(x: size.width/2, y: size.height/2)
             particles.zPosition = -1
+            
+            // Apply quality intensity
+            let intensity = adaptiveQuality.getAnimationIntensity()
+            particles.particleBirthRate *= intensity
+            particles.particleAlpha *= intensity
+            
             addChild(particles)
+            
+            Logger.shared.debug("[Quality] Background particles enabled with intensity: \(String(format: "%.2f", intensity))", category: .debugGameScene)
         }
     }
     private func drawBlock(_ block: Block, at position: CGPoint) {
@@ -1203,9 +1241,20 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         playHaptic(style: .medium)
     }
     func playComboAnimation(at positions: [CGPoint]) {
+        let adaptiveQuality = AdaptiveQualityManager.shared
+        
+        // Check if particles should be enabled
+        guard adaptiveQuality.shouldEnableParticles() else {
+            // Play audio and haptic feedback without particles
+            AudioManager.shared.playLevelCompleteSound()
+            playHaptic(style: .heavy)
+            return
+        }
+        
         cleanupParticleEffects()
         let remainingSlots = maxParticleEmitters - activeParticleEmitters.count
         let positionsToAnimate = Array(positions.prefix(remainingSlots))
+        
         for pos in positionsToAnimate {
             let particles = NodePool.shared.getParticleEmitter()
             
@@ -1218,10 +1267,18 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 x: CGFloat(pos.x) * GameConstants.blockSize - CGFloat(GameConstants.gridSize) * GameConstants.blockSize/2,
                 y: CGFloat(pos.y) * GameConstants.blockSize - CGFloat(GameConstants.gridSize) * GameConstants.blockSize/2
             )
-            // Optimize particle emitter
+            
+            // Optimize particle emitter with quality settings
             optimizeParticleEmitter(particles)
+            
+            // Apply quality intensity
+            let intensity = adaptiveQuality.getParticleIntensity()
+            particles.particleBirthRate *= intensity
+            particles.particleAlpha *= intensity
+            
             gridNode.addChild(particles)
             activeParticleEmitters.append(particles)
+            
             let wait = SKAction.wait(forDuration: 0.5)
             let remove = SKAction.run { [weak self] in
                 particles.removeFromParent()
@@ -1236,6 +1293,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
             particles.run(SKAction.sequence([wait, remove]))
         }
+        
         AudioManager.shared.playLevelCompleteSound()
         playHaptic(style: .heavy)
     }
@@ -1651,34 +1709,89 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
     }
     private func optimizeParticleEmitter(_ emitter: SKEmitterNode) {
-        // Reduce particle count significantly
-        emitter.particleBirthRate = min(emitter.particleBirthRate, 25) // Reduced from 50
-        // Reduce lifetime
-        emitter.particleLifetime = min(emitter.particleLifetime, 0.8) // Reduced from 1.0
-        // Reduce particle size
+        let fpsManager = FPSManager.shared
+        
+        // Determine reduction factor based on thermal and battery conditions
+        var reductionFactor: CGFloat = 1.0
+        
+        // Apply thermal state adjustments
+        switch fpsManager.thermalState {
+        case .critical:
+            reductionFactor = 0.2 // Reduce by 80% for critical thermal state
+        case .serious:
+            reductionFactor = 0.4 // Reduce by 60% for serious thermal state
+        case .fair:
+            reductionFactor = 0.7 // Reduce by 30% for fair thermal state
+        case .nominal:
+            reductionFactor = 0.8 // Reduce by 20% for nominal thermal state
+        @unknown default:
+            reductionFactor = 0.8
+        }
+        
+        // Apply battery level adjustments
+        if fpsManager.batteryLevel < 0.1 { // Below 10%
+            reductionFactor *= 0.3
+        } else if fpsManager.batteryLevel < 0.2 { // Below 20%
+            reductionFactor *= 0.5
+        } else if fpsManager.batteryLevel < 0.3 { // Below 30%
+            reductionFactor *= 0.7
+        }
+        
+        // Apply low power mode adjustment
+        if fpsManager.isLowPowerMode {
+            reductionFactor *= 0.6
+        }
+        
+        // Apply device-specific adjustments
+        let deviceSimulator = DeviceSimulator.shared
+        if deviceSimulator.isLowEndDevice() {
+            reductionFactor *= 0.7 // Additional reduction for low-end devices
+        }
+        
+        // Apply the reduction factor to particle properties
+        emitter.particleBirthRate = min(emitter.particleBirthRate * reductionFactor, 15) // Max 15 particles per second
+        emitter.particleLifetime = min(emitter.particleLifetime * reductionFactor, 0.5) // Max 0.5 seconds
         emitter.particleSize = CGSize(
-            width: min(emitter.particleSize.width, 6), // Reduced from 10
-            height: min(emitter.particleSize.height, 6) // Reduced from 10
+            width: min(emitter.particleSize.width * reductionFactor, 4), // Max 4x4 pixels
+            height: min(emitter.particleSize.height * reductionFactor, 4)
         )
-        // Reduce alpha
-        emitter.particleAlpha = min(emitter.particleAlpha, 0.6) // Reduced from 0.8
-        // Reduce speed
-        emitter.particleSpeed = min(emitter.particleSpeed, 60) // Reduced from 100
-        // Reduce acceleration
-        emitter.particleSpeedRange = min(emitter.particleSpeedRange, 30) // Reduced from 50
-        // Reduce emission angle
-        emitter.emissionAngleRange = min(emitter.emissionAngleRange, .pi / 6) // Reduced from pi/4
-        // Reduce maximum particles
-        emitter.numParticlesToEmit = min(emitter.numParticlesToEmit, 20) // Add limit
+        emitter.particleAlpha = min(emitter.particleAlpha * reductionFactor, 0.4) // Max 40% opacity
+        emitter.particleSpeed = min(emitter.particleSpeed * reductionFactor, 40) // Max 40 speed
+        emitter.particleSpeedRange = min(emitter.particleSpeedRange * reductionFactor, 20) // Max 20 speed range
+        emitter.emissionAngleRange = min(emitter.emissionAngleRange * reductionFactor, .pi / 8) // Max pi/8 angle range
+        emitter.numParticlesToEmit = min(emitter.numParticlesToEmit, Int(10 * reductionFactor)) // Max 10 particles total
+        
+        // Log optimization if significant reduction was applied
+        if reductionFactor < 0.5 {
+            Logger.shared.debug("[Particles] Applied aggressive optimization (factor: \(String(format: "%.2f", reductionFactor))) due to thermal/battery conditions", category: .debugGameScene)
+        }
     }
     private func addParticleEffect(at position: CGPoint) {
+        let adaptiveQuality = AdaptiveQualityManager.shared
+        
+        // Check if particles should be enabled
+        guard adaptiveQuality.shouldEnableParticles() else {
+            return
+        }
+        
         cleanupParticleEffects()
         guard activeParticleEmitters.count < maxParticleEmitters else { return }
+        
         let emitter = NodePool.shared.getParticleEmitter()
         emitter.position = position
         emitter.zPosition = 100
+        
+        // Optimize particle emitter with quality settings
+        optimizeParticleEmitter(emitter)
+        
+        // Apply quality intensity
+        let intensity = adaptiveQuality.getParticleIntensity()
+        emitter.particleBirthRate *= intensity
+        emitter.particleAlpha *= intensity
+        
         addChild(emitter)
         activeParticleEmitters.append(emitter)
+        
         let wait = SKAction.wait(forDuration: emitter.particleLifetime + 0.1)
         let remove = SKAction.run { [weak self] in
             emitter.removeFromParent()
@@ -2003,6 +2116,102 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 return false
             }
             return true
+        }
+    }
+    
+    // MARK: - Thermal State Monitoring
+    
+    private func startThermalStateMonitoring() {
+        // Check thermal state every 5 seconds
+        Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            self?.checkAndAdjustForThermalState()
+        }
+        
+        // Observe quality settings changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleQualitySettingsChange),
+            name: .qualitySettingsDidChange,
+            object: nil
+        )
+    }
+    
+    @objc private func handleQualitySettingsChange(_ notification: Notification) {
+        guard let settings = notification.userInfo?["settings"] as? AdaptiveQualityManager.QualitySettings else { return }
+        
+        // Apply quality settings
+        applyAdaptiveQualitySettings(settings)
+    }
+    
+    private func applyAdaptiveQualitySettings(_ settings: AdaptiveQualityManager.QualitySettings) {
+        // Update FPS
+        if let view = self.view {
+            let fpsManager = FPSManager.shared
+            let thermalAwareFPS = min(settings.maxFPS, fpsManager.getThermalAwareFPS())
+            view.preferredFramesPerSecond = thermalAwareFPS
+            
+            Logger.shared.debug("[Quality] Applied quality settings: \(settings.maxFPS) FPS, particles: \(settings.enableParticles), animations: \(settings.enableBackgroundAnimations)", category: .debugGameScene)
+        }
+        
+        // Update background animations
+        setBackgroundAnimationsActive(settings.enableBackgroundAnimations)
+        
+        // Update particle effects
+        updateParticleEffectsForQuality(settings)
+    }
+    
+    private func updateParticleEffectsForQuality(_ settings: AdaptiveQualityManager.QualitySettings) {
+        // Disable all particle effects if particles are disabled
+        if !settings.enableParticles {
+            cleanupParticleEffects()
+            return
+        }
+        
+        // Update existing particle emitters with new intensity
+        activeParticleEmitters.forEach { emitter in
+            emitter.particleBirthRate *= settings.particleIntensity
+            emitter.particleAlpha *= settings.particleIntensity
+        }
+    }
+    
+    private func checkAndAdjustForThermalState() {
+        let fpsManager = FPSManager.shared
+        
+        // Check if performance should be reduced
+        if fpsManager.shouldReducePerformance {
+            // Adjust FPS if needed
+            if let view = self.view {
+                let thermalAwareFPS = fpsManager.getThermalAwareFPS()
+                if view.preferredFramesPerSecond != thermalAwareFPS {
+                    view.preferredFramesPerSecond = thermalAwareFPS
+                    Logger.shared.debug("[Thermal] Adjusted FPS to \(thermalAwareFPS) due to thermal/battery conditions", category: .debugGameScene)
+                }
+            }
+            
+            // Pause background animations if needed
+            setBackgroundAnimationsActive(true)
+            
+            // Log thermal state if it's serious or critical
+            if fpsManager.thermalState == .serious || fpsManager.thermalState == .critical {
+                Logger.shared.debug("[Thermal] High thermal state detected: \(fpsManager.thermalState). Performance reduced.", category: .debugGameScene)
+            }
+            
+            // Log battery conditions if low
+            if fpsManager.batteryLevel < 0.2 {
+                Logger.shared.debug("[Battery] Low battery detected: \(Int(fpsManager.batteryLevel * 100))%. Performance reduced.", category: .debugGameScene)
+            }
+        } else {
+            // Restore normal performance if conditions have improved
+            if let view = self.view {
+                let normalFPS = fpsManager.getDisplayFPS(for: fpsManager.targetFPS)
+                if view.preferredFramesPerSecond != normalFPS {
+                    view.preferredFramesPerSecond = normalFPS
+                    Logger.shared.debug("[Thermal] Restored FPS to \(normalFPS) - thermal/battery conditions improved", category: .debugGameScene)
+                }
+            }
+            
+            // Resume background animations
+            setBackgroundAnimationsActive(true)
         }
     }
 }

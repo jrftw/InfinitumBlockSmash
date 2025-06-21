@@ -1,3 +1,21 @@
+/* Common */
+"OK" = "ОК";
+"Cancel" = "Отмена";
+"Save" = "Сохранить";
+"Delete" = "Удалить";
+"Edit" = "Редактировать";
+"Done" = "Готово";
+"Loading..." = "Загрузка...";
+"Error" = "Ошибка";
+"Success" = "Успех";
+"Warning" = "Предупреждение";
+"Info" = "Информация";
+
+/* Language Selection */
+"Language" = "Язык";
+"Language Changed" = "Язык изменен";
+"Please restart the app for the language change to take effect." = "Пожалуйста, перезапустите приложение, чтобы изменения языка вступили в силу.";
+
 /* Settings View */
 "Game Settings" = "Настройки игры";
 "System Theme" = "Системная тема";
@@ -13,4 +31,170 @@
 "Placement Precision" = "Точность размещения";
 "Block Drag Position" = "Позиция перетаскивания блока";
 "Lower = More Precise" = "Ниже = Точнее";
-"Reset" = "Сбросить"; 
+"Reset" = "Сбросить";
+"Sound Effects" = "Звуковые эффекты";
+"Music" = "Музыка";
+"Vibration" = "Вибрация";
+"Notifications" = "Уведомления";
+"Privacy" = "Конфиденциальность";
+"Terms of Service" = "Условия использования";
+"About" = "О приложении";
+"Version" = "Версия";
+"Contact Support" = "Связаться с поддержкой";
+"Rate App" = "Оценить приложение";
+"Share App" = "Поделиться приложением";
+
+/* Game View */
+"Score" = "Счёт";
+"Level" = "Уровень";
+"Undo Last Move" = "Отменить последний ход";
+"Watch Ad for Undo" = "Посмотреть рекламу для отмены";
+"Undos: %d" = "Отмены: %d";
+"Need: %d" = "Нужно: %d";
+"Level High: %d" = "Рекорд уровня: %d";
+"All-Time High: %d" = "Абсолютный рекорд: %d";
+"Pause" = "Пауза";
+"Resume" = "Продолжить";
+"Restart" = "Начать заново";
+"Quit" = "Выйти";
+"Next Level" = "Следующий уровень";
+"Level Complete!" = "Уровень пройден!";
+"New High Score!" = "Новый рекорд!";
+"Combo: %dx" = "Комбо: %dx";
+"Perfect!" = "Отлично!";
+"Great!" = "Отлично!";
+"Good!" = "Хорошо!";
+
+/* Game Over */
+"Game Over" = "Игра окончена";
+"Final Score" = "Финальный счёт";
+"Level Reached" = "Достигнутый уровень";
+"Continue" = "Продолжить";
+"Try Again" = "Попробовать снова";
+"Main Menu" = "Главное меню";
+"Share Score" = "Поделиться счётом";
+"View Leaderboard" = "Посмотреть таблицу лидеров";
+"New Record!" = "Новый рекорд!";
+"Best Score: %d" = "Лучший счёт: %d";
+"Time Played: %@" = "Время игры: %@";
+
+/* Achievements */
+"Achievements" = "Достижения";
+"Total Points" = "Всего очков";
+"Leaderboard" = "Таблица лидеров";
+"All" = "Все";
+"Score" = "Счёт";
+"Level" = "Уровень";
+"Clearing" = "Очистка";
+"Combo" = "Комбо";
+"Special" = "Особые";
+"Daily" = "Ежедневные";
+"Achievement Unlocked!" = "Достижение разблокировано!";
+"%d pts" = "%d очков";
+"Progress: %d/%d (%d%%)" = "Прогресс: %d/%d (%d%%)";
+"Locked Achievement" = "Заблокированное достижение";
+"Complete to unlock" = "Завершите для разблокировки";
+"View Details" = "Посмотреть детали";
+"Recent Achievements" = "Недавние достижения";
+"Achievement Progress" = "Прогресс достижений";
+
+/* Store & Subscriptions */
+"Store" = "Магазин";
+"Subscriptions" = "Подписки";
+"Premium" = "Премиум";
+"Elite" = "Элит";
+"Monthly" = "Ежемесячно";
+"Yearly" = "Ежегодно";
+"Best Value" = "Лучшая цена";
+"Subscribe" = "Подписаться";
+"Restore Purchases" = "Восстановить покупки";
+"Terms & Conditions" = "Условия использования";
+"Privacy Policy" = "Политика конфиденциальности";
+"Subscription Benefits" = "Преимущества подписки";
+"Current Plan" = "Текущий план";
+"Expires: %@" = "Истекает: %@";
+"Active" = "Активна";
+"Expired" = "Истекла";
+"Trial" = "Пробная";
+
+/* Authentication */
+"Sign In" = "Войти";
+"Sign Up" = "Зарегистрироваться";
+"Sign Out" = "Выйти";
+"Email" = "Электронная почта";
+"Password" = "Пароль";
+"Forgot Password?" = "Забыли пароль?";
+"Reset Password" = "Сбросить пароль";
+"Username" = "Имя пользователя";
+"Confirm Password" = "Подтвердить пароль";
+"Create Account" = "Создать аккаунт";
+"Already have an account?" = "Уже есть аккаунт?";
+"Don't have an account?" = "Нет аккаунта?";
+"Continue with Apple" = "Продолжить с Apple";
+"Continue with Google" = "Продолжить с Google";
+"Continue as Guest" = "Продолжить как гость";
+
+/* Date/Time Formatting */
+"Today" = "Сегодня";
+"Yesterday" = "Вчера";
+"Last Week" = "На прошлой неделе";
+"Last Month" = "В прошлом месяце";
+"Just Now" = "Только что";
+"%d minutes ago" = "%d минут назад";
+"%d hours ago" = "%d часов назад";
+"%d days ago" = "%d дней назад";
+"%d weeks ago" = "%d недель назад";
+"%d months ago" = "%d месяцев назад";
+"%d years ago" = "%d лет назад";
+"Date: %@" = "Дата: %@";
+"Time: %@" = "Время: %@";
+
+/* Pluralization */
+"%d point" = "%d очко";
+"%d points" = "%d очков";
+"%d level" = "%d уровень";
+"%d levels" = "%d уровней";
+"%d undo" = "%d отмена";
+"%d undos" = "%d отмен";
+"%d minute" = "%d минута";
+"%d minutes" = "%d минут";
+"%d hour" = "%d час";
+"%d hours" = "%d часов";
+"%d day" = "%d день";
+"%d days" = "%d дней";
+"%d week" = "%d неделя";
+"%d weeks" = "%d недель";
+"%d month" = "%d месяц";
+"%d months" = "%d месяцев";
+"%d year" = "%d год";
+"%d years" = "%d лет";
+"%d achievement" = "%d достижение";
+"%d achievements" = "%d достижений";
+"%d player" = "%d игрок";
+"%d players" = "%d игроков";
+"%d game" = "%d игра";
+"%d games" = "%d игр";
+
+/* Notifications */
+"Enable Notifications" = "Включить уведомления";
+"Daily Reminder" = "Ежедневное напоминание";
+"New Achievement" = "Новое достижение";
+"Level Up" = "Повышение уровня";
+"Special Event" = "Особое событие";
+"Notification Settings" = "Настройки уведомлений";
+"Push Notifications" = "Push-уведомления";
+"Email Notifications" = "Уведомления по email";
+"Notification Preferences" = "Предпочтения уведомлений";
+
+/* Tutorial */
+"Welcome to Block Smash!" = "Добро пожаловать в Block Smash!";
+"Tap to Start" = "Нажмите, чтобы начать";
+"Drag blocks to match" = "Перетаскивайте блоки для совпадения";
+"Match 3 or more" = "Совместите 3 или больше";
+"Clear blocks to score" = "Очищайте блоки для получения очков";
+"Complete levels" = "Проходите уровни";
+"Earn achievements" = "Получайте достижения";
+"Skip Tutorial" = "Пропустить обучение";
+"Next" = "Далее";
+"Previous" = "Назад";
+"Got it!" = "Понятно!"; 

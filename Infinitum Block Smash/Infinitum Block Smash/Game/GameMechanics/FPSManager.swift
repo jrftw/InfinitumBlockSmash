@@ -18,6 +18,8 @@
  * - Battery optimization and power management
  * - Performance analytics and reporting
  * - Adaptive performance scaling
+ * - Thermal state monitoring and response
+ * - Battery level awareness and optimization
  * 
  * MAJOR DEPENDENCIES:
  * - DeviceSimulator.swift: Device simulation and testing
@@ -32,7 +34,7 @@
  * - 30 FPS: Standard performance mode
  * - 60 FPS: Smooth gameplay mode
  * - 120 FPS: High refresh rate mode (ProMotion)
- * - Unlimited: Maximum device refresh rate
+ * - Unlimited: Maximum device refresh rate (limited by thermal/battery)
  * - Adaptive: Dynamic FPS based on conditions
  * 
  * DEVICE CAPABILITIES:
@@ -50,6 +52,7 @@
  * - Thermal throttling monitoring
  * - Memory pressure assessment
  * - Battery level consideration
+ * - Thermal state monitoring
  * 
  * ADAPTIVE OPTIMIZATION:
  * - Dynamic FPS adjustment
@@ -58,6 +61,7 @@
  * - Battery optimization
  * - Performance scaling
  * - Quality vs performance balance
+ * - Thermal state-based adjustments
  * 
  * DEVICE SIMULATION:
  * - Simulated device capabilities
@@ -82,6 +86,7 @@
  * - Cooling optimization
  * - Thermal warning systems
  * - Proactive performance adjustment
+ * - Real-time thermal state tracking
  * 
  * MEMORY MANAGEMENT:
  * - Memory pressure monitoring
@@ -98,11 +103,12 @@
  * - Thermal management transparency
  * - Performance customization options
  * - Adaptive quality settings
+ * - Proactive overheating prevention
  * 
  * ARCHITECTURE ROLE:
  * This service acts as the performance optimization coordinator,
  * ensuring smooth gameplay across all device types while managing
- * system resources efficiently.
+ * system resources efficiently and preventing device overheating.
  * 
  * THREADING CONSIDERATIONS:
  * - Real-time performance monitoring
@@ -117,6 +123,7 @@
  * - Settings management
  * - Analytics and tracking
  * - System resource management
+ * - Thermal state monitoring
  */
 
 import Foundation
@@ -141,6 +148,15 @@ class FPSManager: ObservableObject {
     private let maxFrameTimeHistory = 60 // Keep last 60 frames for calculation
     private var lastFrameTime: CFTimeInterval = 0
     @Published private(set) var currentFPS: Int = 0
+    
+    // Thermal and battery monitoring
+    @Published private(set) var thermalState: ProcessInfo.ThermalState = .nominal
+    @Published private(set) var batteryLevel: Float = 1.0
+    @Published private(set) var isLowPowerMode: Bool = false
+    @Published private(set) var shouldReducePerformance: Bool = false
+    
+    // Performance monitoring timer
+    private var performanceTimer: Timer?
     
     private init() {
         // Get device's maximum refresh rate with simulation support
@@ -168,8 +184,8 @@ class FPSManager: ObservableObject {
             options.append(120)
         }
         
-        // Add unlimited option (0) if device supports ProMotion
-        if maxRefreshRate > 60 {
+        // Add unlimited option (0) only for high-end devices with good thermal management
+        if maxRefreshRate > 60 && !deviceSimulator.isLowEndDevice() {
             options.append(0)
         }
         
@@ -205,6 +221,136 @@ class FPSManager: ObservableObject {
             print("[FPSManager] Available FPS options: \(availableFPSOptions)")
             print("[FPSManager] Target FPS: \(targetFPS)")
         }
+        
+        // Start thermal and battery monitoring
+        startThermalAndBatteryMonitoring()
+    }
+    
+    deinit {
+        performanceTimer?.invalidate()
+        NotificationCenter.default.removeObserver(self)
+    }
+    
+    // MARK: - Thermal and Battery Monitoring
+    
+    private func startThermalAndBatteryMonitoring() {
+        // Enable battery monitoring
+        UIDevice.current.isBatteryMonitoringEnabled = true
+        
+        // Initial state
+        updateThermalState()
+        updateBatteryState()
+        
+        // Start periodic monitoring
+        performanceTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            self?.updateThermalState()
+            self?.updateBatteryState()
+            self?.updatePerformanceRecommendations()
+        }
+        
+        // Observe thermal state changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(thermalStateDidChange),
+            name: ProcessInfo.thermalStateDidChangeNotification,
+            object: nil
+        )
+        
+        // Observe battery state changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(batteryStateDidChange),
+            name: UIDevice.batteryStateDidChangeNotification,
+            object: nil
+        )
+        
+        // Observe low power mode changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(lowPowerModeDidChange),
+            name: NSNotification.Name.NSProcessInfoPowerStateDidChange,
+            object: nil
+        )
+    }
+    
+    private func updateThermalState() {
+        let newThermalState = ProcessInfo.processInfo.thermalState
+        if newThermalState != thermalState {
+            thermalState = newThermalState
+            print("[FPSManager] Thermal state changed to: \(thermalStateDescription(newThermalState))")
+        }
+    }
+    
+    private func updateBatteryState() {
+        let newBatteryLevel = UIDevice.current.batteryLevel
+        if newBatteryLevel != batteryLevel {
+            batteryLevel = newBatteryLevel
+            print("[FPSManager] Battery level: \(Int(batteryLevel * 100))%")
+        }
+        
+        let newLowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
+        if newLowPowerMode != isLowPowerMode {
+            isLowPowerMode = newLowPowerMode
+            print("[FPSManager] Low power mode: \(newLowPowerMode)")
+        }
+    }
+    
+    private func updatePerformanceRecommendations() {
+        let shouldReduce = shouldReducePerformanceForThermalOrBattery()
+        if shouldReduce != shouldReducePerformance {
+            shouldReducePerformance = shouldReduce
+            if shouldReduce {
+                print("[FPSManager] Performance reduction recommended due to thermal/battery conditions")
+            } else {
+                print("[FPSManager] Performance reduction no longer needed")
+            }
+        }
+    }
+    
+    @objc private func thermalStateDidChange() {
+        updateThermalState()
+        updatePerformanceRecommendations()
+    }
+    
+    @objc private func batteryStateDidChange() {
+        updateBatteryState()
+        updatePerformanceRecommendations()
+    }
+    
+    @objc private func lowPowerModeDidChange() {
+        updateBatteryState()
+        updatePerformanceRecommendations()
+    }
+    
+    private func thermalStateDescription(_ state: ProcessInfo.ThermalState) -> String {
+        switch state {
+        case .nominal: return "Nominal"
+        case .fair: return "Fair"
+        case .serious: return "Serious"
+        case .critical: return "Critical"
+        @unknown default: return "Unknown"
+        }
+    }
+    
+    // MARK: - Performance Reduction Logic
+    
+    private func shouldReducePerformanceForThermalOrBattery() -> Bool {
+        // Reduce performance for serious or critical thermal state
+        if thermalState == .serious || thermalState == .critical {
+            return true
+        }
+        
+        // Reduce performance for low battery
+        if batteryLevel < 0.2 { // Below 20%
+            return true
+        }
+        
+        // Reduce performance in low power mode
+        if isLowPowerMode {
+            return true
+        }
+        
+        return false
     }
     
     func setTargetFPS(_ fps: Int) {
@@ -353,6 +499,71 @@ class FPSManager: ObservableObject {
         } else {
             return getDisplayFPS(for: targetFPS)
         }
+    }
+    
+    // MARK: - Thermal and Battery Aware FPS
+    
+    /// Get FPS adjusted for thermal and battery conditions
+    func getThermalAwareFPS() -> Int {
+        let baseFPS = getDisplayFPS(for: targetFPS)
+        
+        // Apply thermal state adjustments
+        switch thermalState {
+        case .critical:
+            return max(30, baseFPS / 2) // Reduce by 50%, minimum 30 FPS
+        case .serious:
+            return max(30, Int(Double(baseFPS) * 0.7)) // Reduce by 30%, minimum 30 FPS
+        case .fair:
+            return max(30, Int(Double(baseFPS) * 0.85)) // Reduce by 15%, minimum 30 FPS
+        case .nominal:
+            break // No reduction needed
+        @unknown default:
+            break
+        }
+        
+        // Apply battery level adjustments
+        if batteryLevel < 0.1 { // Below 10%
+            return max(30, baseFPS / 2)
+        } else if batteryLevel < 0.2 { // Below 20%
+            return max(30, Int(Double(baseFPS) * 0.7))
+        } else if batteryLevel < 0.3 { // Below 30%
+            return max(30, Int(Double(baseFPS) * 0.85))
+        }
+        
+        // Apply low power mode adjustment
+        if isLowPowerMode {
+            return max(30, Int(Double(baseFPS) * 0.8))
+        }
+        
+        return baseFPS
+    }
+    
+    /// Get performance recommendations based on current conditions
+    func getPerformanceRecommendations() -> [String] {
+        var recommendations: [String] = []
+        
+        switch thermalState {
+        case .critical:
+            recommendations.append("Critical thermal state detected. Performance reduced to prevent overheating.")
+        case .serious:
+            recommendations.append("High thermal state detected. Consider reducing graphics quality.")
+        case .fair:
+            recommendations.append("Moderate thermal state. Monitor device temperature.")
+        case .nominal:
+            break
+        @unknown default:
+            break
+        }
+        
+        if batteryLevel < 0.2 {
+            recommendations.append("Low battery detected. Performance optimized for battery life.")
+        }
+        
+        if isLowPowerMode {
+            recommendations.append("Low power mode enabled. Performance reduced to save battery.")
+        }
+        
+        return recommendations
     }
 }
 

@@ -1,3 +1,21 @@
+/* Common */
+"OK" = "确定";
+"Cancel" = "取消";
+"Save" = "保存";
+"Delete" = "删除";
+"Edit" = "编辑";
+"Done" = "完成";
+"Loading..." = "加载中...";
+"Error" = "错误";
+"Success" = "成功";
+"Warning" = "警告";
+"Info" = "信息";
+
+/* Language Selection */
+"Language" = "语言";
+"Language Changed" = "语言已更改";
+"Please restart the app for the language change to take effect." = "请重启应用以使语言更改生效。";
+
 /* Settings View */
 "Game Settings" = "游戏设置";
 "System Theme" = "系统主题";
@@ -13,4 +31,170 @@
 "Placement Precision" = "放置精度";
 "Block Drag Position" = "方块拖动位置";
 "Lower = More Precise" = "越低越精确";
-"Reset" = "重置"; 
+"Reset" = "重置";
+"Sound Effects" = "音效";
+"Music" = "音乐";
+"Vibration" = "振动";
+"Notifications" = "通知";
+"Privacy" = "隐私";
+"Terms of Service" = "服务条款";
+"About" = "关于";
+"Version" = "版本";
+"Contact Support" = "联系支持";
+"Rate App" = "评价应用";
+"Share App" = "分享应用";
+
+/* Game View */
+"Score" = "分数";
+"Level" = "等级";
+"Undo Last Move" = "撤销上一步";
+"Watch Ad for Undo" = "观看广告撤销";
+"Undos: %d" = "撤销次数: %d";
+"Need: %d" = "需要: %d";
+"Level High: %d" = "等级最高分: %d";
+"All-Time High: %d" = "历史最高分: %d";
+"Pause" = "暂停";
+"Resume" = "继续";
+"Restart" = "重新开始";
+"Quit" = "退出";
+"Next Level" = "下一关";
+"Level Complete!" = "关卡完成！";
+"New High Score!" = "新纪录！";
+"Combo: %dx" = "连击: %dx";
+"Perfect!" = "完美！";
+"Great!" = "很棒！";
+"Good!" = "不错！";
+
+/* Game Over */
+"Game Over" = "游戏结束";
+"Final Score" = "最终分数";
+"Level Reached" = "达到等级";
+"Continue" = "继续";
+"Try Again" = "再试一次";
+"Main Menu" = "主菜单";
+"Share Score" = "分享分数";
+"View Leaderboard" = "查看排行榜";
+"New Record!" = "新纪录！";
+"Best Score: %d" = "最高分: %d";
+"Time Played: %@" = "游戏时间: %@";
+
+/* Achievements */
+"Achievements" = "成就";
+"Total Points" = "总分数";
+"Leaderboard" = "排行榜";
+"All" = "全部";
+"Score" = "分数";
+"Level" = "等级";
+"Clearing" = "消除";
+"Combo" = "连击";
+"Special" = "特殊";
+"Daily" = "每日";
+"Achievement Unlocked!" = "成就解锁！";
+"%d pts" = "%d 分";
+"Progress: %d/%d (%d%%)" = "进度: %d/%d (%d%%)";
+"Locked Achievement" = "锁定成就";
+"Complete to unlock" = "完成以解锁";
+"View Details" = "查看详情";
+"Recent Achievements" = "最近成就";
+"Achievement Progress" = "成就进度";
+
+/* Store & Subscriptions */
+"Store" = "商店";
+"Subscriptions" = "订阅";
+"Premium" = "高级版";
+"Elite" = "精英版";
+"Monthly" = "月付";
+"Yearly" = "年付";
+"Best Value" = "最超值";
+"Subscribe" = "订阅";
+"Restore Purchases" = "恢复购买";
+"Terms & Conditions" = "条款和条件";
+"Privacy Policy" = "隐私政策";
+"Subscription Benefits" = "订阅福利";
+"Current Plan" = "当前计划";
+"Expires: %@" = "到期: %@";
+"Active" = "活跃";
+"Expired" = "已过期";
+"Trial" = "试用";
+
+/* Authentication */
+"Sign In" = "登录";
+"Sign Up" = "注册";
+"Sign Out" = "退出登录";
+"Email" = "邮箱";
+"Password" = "密码";
+"Forgot Password?" = "忘记密码？";
+"Reset Password" = "重置密码";
+"Username" = "用户名";
+"Confirm Password" = "确认密码";
+"Create Account" = "创建账户";
+"Already have an account?" = "已有账户？";
+"Don't have an account?" = "没有账户？";
+"Continue with Apple" = "使用 Apple 继续";
+"Continue with Google" = "使用 Google 继续";
+"Continue as Guest" = "以访客身份继续";
+
+/* Date/Time Formatting */
+"Today" = "今天";
+"Yesterday" = "昨天";
+"Last Week" = "上周";
+"Last Month" = "上月";
+"Just Now" = "刚刚";
+"%d minutes ago" = "%d 分钟前";
+"%d hours ago" = "%d 小时前";
+"%d days ago" = "%d 天前";
+"%d weeks ago" = "%d 周前";
+"%d months ago" = "%d 个月前";
+"%d years ago" = "%d 年前";
+"Date: %@" = "日期: %@";
+"Time: %@" = "时间: %@";
+
+/* Pluralization */
+"%d point" = "%d 分";
+"%d points" = "%d 分";
+"%d level" = "%d 级";
+"%d levels" = "%d 级";
+"%d undo" = "%d 撤销";
+"%d undos" = "%d 撤销";
+"%d minute" = "%d 分钟";
+"%d minutes" = "%d 分钟";
+"%d hour" = "%d 小时";
+"%d hours" = "%d 小时";
+"%d day" = "%d 天";
+"%d days" = "%d 天";
+"%d week" = "%d 周";
+"%d weeks" = "%d 周";
+"%d month" = "%d 个月";
+"%d months" = "%d 个月";
+"%d year" = "%d 年";
+"%d years" = "%d 年";
+"%d achievement" = "%d 成就";
+"%d achievements" = "%d 成就";
+"%d player" = "%d 玩家";
+"%d players" = "%d 玩家";
+"%d game" = "%d 游戏";
+"%d games" = "%d 游戏";
+
+/* Notifications */
+"Enable Notifications" = "启用通知";
+"Daily Reminder" = "每日提醒";
+"New Achievement" = "新成就";
+"Level Up" = "升级";
+"Special Event" = "特殊活动";
+"Notification Settings" = "通知设置";
+"Push Notifications" = "推送通知";
+"Email Notifications" = "邮件通知";
+"Notification Preferences" = "通知偏好";
+
+/* Tutorial */
+"Welcome to Block Smash!" = "欢迎来到方块消除！";
+"Tap to Start" = "点击开始";
+"Drag blocks to match" = "拖拽方块进行匹配";
+"Match 3 or more" = "匹配3个或更多";
+"Clear blocks to score" = "消除方块得分";
+"Complete levels" = "完成关卡";
+"Earn achievements" = "获得成就";
+"Skip Tutorial" = "跳过教程";
+"Next" = "下一步";
+"Previous" = "上一步";
+"Got it!" = "明白了！"; 

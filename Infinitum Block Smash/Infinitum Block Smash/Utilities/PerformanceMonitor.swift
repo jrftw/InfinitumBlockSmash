@@ -30,6 +30,40 @@ class PerformanceMonitor: ObservableObject {
     private var cpuTimer: Timer?
     private var networkTimer: Timer?
     
+    // Memory logging control
+    private var lastLoggedMemoryLevel: MemoryLevel = .normal
+    private var lastMemoryLogTime: CFTimeInterval = 0
+    private let memoryLogCooldown: CFTimeInterval = 300.0 // 5 minutes between logs for same level
+    
+    // Memory level enum for tracking
+    private enum MemoryLevel: Int {
+        case normal = 0
+        case elevated = 1
+        case warning = 2
+        case critical = 3
+        case extreme = 4
+        
+        var threshold: Double {
+            switch self {
+            case .normal: return 0.0
+            case .elevated: return 0.3
+            case .warning: return 0.4
+            case .critical: return 0.55
+            case .extreme: return 0.65
+            }
+        }
+        
+        var description: String {
+            switch self {
+            case .normal: return "Normal"
+            case .elevated: return "Elevated"
+            case .warning: return "Warning"
+            case .critical: return "Critical"
+            case .extreme: return "Extreme"
+            }
+        }
+    }
+    
     private init() {
         setupDisplayLink()
         startMemoryMonitoring()
@@ -106,11 +140,10 @@ class PerformanceMonitor: ObservableObject {
             DispatchQueue.main.async { [weak self] in
                 self?.memoryUsage = newMemoryUsage
                 self?.performanceMetrics["memory"] = newMemoryUsage
+                
+                // Check if memory usage has changed significantly and should be logged
+                self?.checkAndLogMemoryUsage(newMemoryUsage)
             }
-            
-            #if DEBUG
-            print("[PerformanceMonitor] Memory updated: \(String(format: "%.1f", newMemoryUsage))MB")
-            #endif
         } else {
             #if DEBUG
             print("[PerformanceMonitor] Failed to get memory info: \(kr)")
@@ -246,5 +279,54 @@ class PerformanceMonitor: ObservableObject {
     /// Get memory monitoring interval
     func getMemoryMonitoringInterval() -> TimeInterval {
         return MemoryConfig.getIntervals().memoryCheck
+    }
+    
+    /// Manually check and log current memory usage (for debugging)
+    func checkMemoryUsageNow() {
+        updateMemoryUsage()
+    }
+    
+    private func determineMemoryLevel(for usage: Double) -> MemoryLevel {
+        // Get total device memory to calculate percentage
+        let totalMemory = Double(ProcessInfo.processInfo.physicalMemory) / 1024.0 / 1024.0 // Convert to MB
+        let memoryPercentage = usage / totalMemory
+        
+        if memoryPercentage < MemoryLevel.elevated.threshold {
+            return .normal
+        } else if memoryPercentage < MemoryLevel.warning.threshold {
+            return .elevated
+        } else if memoryPercentage < MemoryLevel.critical.threshold {
+            return .warning
+        } else if memoryPercentage < MemoryLevel.extreme.threshold {
+            return .critical
+        } else {
+            return .extreme
+        }
+    }
+    
+    private func checkAndLogMemoryUsage(_ usage: Double) {
+        let currentTime = CACurrentMediaTime()
+        let newLevel = determineMemoryLevel(for: usage)
+        
+        // Only log if:
+        // 1. Memory level has changed to a higher level, OR
+        // 2. Memory level has improved (returned to normal), OR
+        // 3. We're at a concerning level (warning or higher) and enough time has passed
+        let shouldLog = (newLevel != lastLoggedMemoryLevel && newLevel.rawValue > lastLoggedMemoryLevel.rawValue) ||
+                       (newLevel == .normal && lastLoggedMemoryLevel != .normal) ||
+                       (newLevel.rawValue >= MemoryLevel.warning.rawValue && currentTime - lastMemoryLogTime > memoryLogCooldown)
+        
+        if shouldLog {
+            #if DEBUG
+            if newLevel == .normal && lastLoggedMemoryLevel != .normal {
+                print("[PerformanceMonitor] Memory usage returned to normal - \(String(format: "%.1f", usage))MB")
+            } else {
+                print("[PerformanceMonitor] Memory usage is \(newLevel.description) - \(String(format: "%.1f", usage))MB")
+            }
+            #endif
+            
+            lastLoggedMemoryLevel = newLevel
+            lastMemoryLogTime = currentTime
+        }
     }
 } 
