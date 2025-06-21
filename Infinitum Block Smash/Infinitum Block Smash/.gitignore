@@ -74,6 +74,8 @@ node_modules/
 
 ## User settings
 xcuserdata/
+*.xcuserstate
+UserInterfaceState.xcuserstate
 
 ## compatibility with Xcode 8 and earlier (ignoring not required starting Xcode 9)
 *.xcscmblueprint
@@ -145,7 +147,7 @@ Dependencies/
 # It is recommended to not store the screenshots in the git repo.
 # Instead, use fastlane to re-generate the screenshots whenever they are needed.
 # For more information about the recommended setup visit:
-# https://docs.fastlane.tools/best-practices/source-control/#source-control
+# https://docs.fastlane.tools/best-practices/source-control/
 
 fastlane/report.xml
 fastlane/Preview.html
@@ -159,5 +161,102 @@ fastlane/test_output
 
 iOSInjectionProject/
 
-# Firebase Functions
-firebase-functions/
+# Firebase Functions - Exclude from iOS build
+Services/
+firebase.json
+.firebaserc
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build conflict prevention - Exclude configuration files that cause multiple command conflicts
+.editorconfig
+.eslintrc
+.jshintrc
+.npmignore
+.eslintrc.js
+.eslintrc.json
+.jshintrc.json
+.editorconfig.json
+.nycrc
+.travis.yml
+FUNDING.yml
+
+# Exclude all node_modules configuration files from build
+**/node_modules/**/.editorconfig
+**/node_modules/**/.eslintrc
+**/node_modules/**/.jshintrc
+**/node_modules/**/.npmignore
+**/node_modules/**/.eslintrc.js
+**/node_modules/**/.eslintrc.json
+**/node_modules/**/.jshintrc.json
+**/node_modules/**/.editorconfig.json
+**/node_modules/**/.nycrc
+**/node_modules/**/.travis.yml
+**/node_modules/**/FUNDING.yml
+
+# Exclude all node_modules JavaScript files and documentation
+**/node_modules/**/*.js
+**/node_modules/**/*.md
+**/node_modules/**/*.txt
+**/node_modules/**/*.yml
+**/node_modules/**/*.yaml
+**/node_modules/**/*.json
+**/node_modules/**/*.xml
+**/node_modules/**/*.html
+**/node_modules/**/*.css
+**/node_modules/**/*.scss
+**/node_modules/**/*.less
+**/node_modules/**/*.ts
+**/node_modules/**/*.tsx
+
+# Exclude specific problematic files from node_modules
+**/node_modules/**/CHANGELOG.md
+**/node_modules/**/CHANGES.md
+**/node_modules/**/CONTRIBUTING.md
+**/node_modules/**/HISTORY.md
+**/node_modules/**/History.md
+**/node_modules/**/LICENSE
+**/node_modules/**/LICENSE-MIT.txt
+**/node_modules/**/BaseOutputBuilder.js
+**/node_modules/**/BufferSource.js
+**/node_modules/**/CharsSymbol.js
+**/node_modules/**/EntitiesParser.js
+**/node_modules/**/JsArrBuilder.js
+**/node_modules/**/JsMinArrBuilder.js
+**/node_modules/**/JsObjBuilder.js
+
+# Exclude entire node_modules directories from build
+**/node_modules/
+**/Services/**/node_modules/
+**/functions/**/node_modules/
+**/firebase-functions/**/node_modules/
+
+# Exclude package files that might be copied
+package.json
+package-lock.json
+yarn.lock
+**/Services/**/package.json
+**/Services/**/package-lock.json
+**/functions/**/package.json
+**/functions/**/package-lock.json
+**/firebase-functions/**/package.json
+**/firebase-functions/**/package-lock.json

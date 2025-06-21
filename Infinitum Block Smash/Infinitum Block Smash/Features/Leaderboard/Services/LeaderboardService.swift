@@ -109,8 +109,6 @@ final class LeaderboardService: ObservableObject {
     static let shared = LeaderboardService()
     private let db = Firestore.firestore()
     private var cancellables = Set<AnyCancellable>()
-    private var resetTimer: Timer?
-    private let estTimeZone = TimeZone(identifier: "America/New_York")!
     private let pageSize = 20
     private let leaderboardLimit = 20
     private var listeners: [String: ListenerRegistration] = [:]
@@ -122,8 +120,9 @@ final class LeaderboardService: ObservableObject {
     
     private init() {
         Task {
-            await setupPeriodResets()
-            setupResetTimer()
+            // Remove automatic reset setup - Firebase function handles this now
+            // await setupPeriodResets()
+            // setupResetTimer()
             // Run cleanup once during initialization
             await cleanupZeroScores()
         }
@@ -134,168 +133,26 @@ final class LeaderboardService: ObservableObject {
         listeners.values.forEach { $0.remove() }
     }
     
-    private func setupResetTimer() {
-        // Check for resets every minute
-        resetTimer?.invalidate()
-        resetTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
-            Task {
-                await self?.checkAndPerformResets()
-            }
-        }
-    }
+    // Remove the reset timer setup - Firebase function handles resets now
+    // private func setupResetTimer() {
+    //     // Check for resets every minute
+    //     resetTimer?.invalidate()
+    //     resetTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+    //         Task {
+    //             await self?.checkAndPerformResets()
+    //         }
+    //     }
+    // }
     
-    private func checkAndPerformResets() async {
-        let calendar = Calendar.current
-        let now = Date()
-        let estNow = now.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
-        
-        // Daily reset
-        if let lastDailyReset = UserDefaults.standard.object(forKey: "lastDailyReset") as? Date {
-            let estLastReset = lastDailyReset.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
-            if !calendar.isDateInToday(estLastReset) {
-                print("[Leaderboard] Performing daily reset - Last reset: \(estLastReset)")
-                await resetPeriodScores(period: "daily", collection: "classic_leaderboard")
-                await resetPeriodScores(period: "daily", collection: "achievement_leaderboard")
-                await resetPeriodScores(period: "daily", collection: "classic_timed_leaderboard")
-                UserDefaults.standard.set(now, forKey: "lastDailyReset")
-            }
-        } else {
-            print("[Leaderboard] No previous daily reset found, performing initial reset")
-            await resetPeriodScores(period: "daily", collection: "classic_leaderboard")
-            await resetPeriodScores(period: "daily", collection: "achievement_leaderboard")
-            await resetPeriodScores(period: "daily", collection: "classic_timed_leaderboard")
-            UserDefaults.standard.set(now, forKey: "lastDailyReset")
-        }
-        
-        // Weekly reset
-        if let lastWeeklyReset = UserDefaults.standard.object(forKey: "lastWeeklyReset") as? Date {
-            let estLastReset = lastWeeklyReset.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
-            let estComponents = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: estLastReset)
-            let currentComponents = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: estNow)
-            
-            if estComponents.yearForWeekOfYear != currentComponents.yearForWeekOfYear ||
-               estComponents.weekOfYear != currentComponents.weekOfYear {
-                print("[Leaderboard] Performing weekly reset - Last reset: \(estLastReset)")
-                await resetPeriodScores(period: "weekly", collection: "classic_leaderboard")
-                await resetPeriodScores(period: "weekly", collection: "achievement_leaderboard")
-                await resetPeriodScores(period: "weekly", collection: "classic_timed_leaderboard")
-                UserDefaults.standard.set(now, forKey: "lastWeeklyReset")
-            }
-        } else {
-            print("[Leaderboard] No previous weekly reset found, performing initial reset")
-            await resetPeriodScores(period: "weekly", collection: "classic_leaderboard")
-            await resetPeriodScores(period: "weekly", collection: "achievement_leaderboard")
-            await resetPeriodScores(period: "weekly", collection: "classic_timed_leaderboard")
-            UserDefaults.standard.set(now, forKey: "lastWeeklyReset")
-        }
-        
-        // Monthly reset
-        if let lastMonthlyReset = UserDefaults.standard.object(forKey: "lastMonthlyReset") as? Date {
-            let estLastReset = lastMonthlyReset.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
-            let estComponents = calendar.dateComponents([.year, .month], from: estLastReset)
-            let currentComponents = calendar.dateComponents([.year, .month], from: estNow)
-            
-            if estComponents.year != currentComponents.year ||
-               estComponents.month != currentComponents.month {
-                print("[Leaderboard] Performing monthly reset - Last reset: \(estLastReset)")
-                await resetPeriodScores(period: "monthly", collection: "classic_leaderboard")
-                await resetPeriodScores(period: "monthly", collection: "achievement_leaderboard")
-                await resetPeriodScores(period: "monthly", collection: "classic_timed_leaderboard")
-                UserDefaults.standard.set(now, forKey: "lastMonthlyReset")
-            }
-        } else {
-            print("[Leaderboard] No previous monthly reset found, performing initial reset")
-            await resetPeriodScores(period: "monthly", collection: "classic_leaderboard")
-            await resetPeriodScores(period: "monthly", collection: "achievement_leaderboard")
-            await resetPeriodScores(period: "monthly", collection: "classic_timed_leaderboard")
-            UserDefaults.standard.set(now, forKey: "lastMonthlyReset")
-        }
-    }
+    // Remove the automatic reset checking - Firebase function handles this now
+    // private func checkAndPerformResets() async {
+    //     // ... existing reset logic removed
+    // }
     
-    private func setupPeriodResets() async {
-        let now = Date()
-        let estNow = now.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
-        
-        print("[Leaderboard] Setting up period resets - Current EST time: \(estNow)")
-        
-        // Setup periodic reset checks
-        setupResetTimer()
-        
-        // Perform initial reset checks
-        await checkAndPerformResets()
-    }
-    
-    private func resetPeriodScores(period: String, collection: String) async {
-        print("[Leaderboard] 🔄 Starting score reset for \(collection)/\(period)")
-        
-        do {
-            let snapshot = try await db.collection(collection)
-                .document(period)
-                .collection("scores")
-                .getDocuments()
-            
-            for document in snapshot.documents {
-                if let timestamp = document.data()["timestamp"] as? Timestamp {
-                    let estTimestamp = timestamp.dateValue()
-                    let shouldReset = shouldResetScore(for: period, timestamp: estTimestamp)
-                    
-                    if shouldReset {
-                        print("[Leaderboard] Resetting \(period) score for user \(document.documentID) - Timestamp: \(estTimestamp)")
-                        try await document.reference.delete()
-                        
-                        // After deletion, check if we need to regenerate the score
-                        let documentData = document.data()
-                        if let userId = documentData["userId"] as? String,
-                           let username = documentData["username"] as? String {
-                            // Get the latest score from the alltime leaderboard
-                            let alltimeDocRef = db.collection(collection)
-                                .document("alltime")
-                                .collection("scores")
-                                .document(userId)
-                            
-                            let alltimeDoc = try await alltimeDocRef.getDocument()
-                            
-                            if let alltimeData = alltimeDoc.data() {
-                                // Regenerate the score for the current period
-                                var newData: [String: Any] = [
-                                    "username": username,
-                                    "timestamp": FieldValue.serverTimestamp(),
-                                    "userId": userId,
-                                    "lastUpdate": FieldValue.serverTimestamp(),
-                                    "appVersion": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
-                                    "buildNumber": Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
-                                ]
-                                
-                                // Handle different score fields based on collection type
-                                if collection == "achievement_leaderboard" {
-                                    if let points = alltimeData["points"] as? Int {
-                                        newData["points"] = points
-                                    }
-                                } else if collection == "classic_timed_leaderboard" {
-                                    if let time = alltimeData["time"] as? Int {
-                                        newData["time"] = time
-                                    }
-                                
-                                    if let score = alltimeData["score"] as? Int {
-                                        newData["score"] = score
-                                    }
-                                }
-                                
-                                try await document.reference.setData(newData)
-                                print("[Leaderboard] Regenerated \(period) score for user \(userId)")
-                            }
-                        }
-                    }
-                } else {
-                    // For backward compatibility - if no timestamp exists, delete the entry
-                    print("[Leaderboard] Resetting \(period) score for user \(document.documentID) - No timestamp found")
-                    try await document.reference.delete()
-                }
-            }
-        } catch {
-            print("[Leaderboard] Error resetting \(period) scores for \(collection): \(error.localizedDescription)")
-        }
-    }
+    // Remove the period reset setup - Firebase function handles this now
+    // private func setupPeriodResets() async {
+    //     // ... existing setup logic removed
+    // }
     
     private func setupRealTimeListener(type: LeaderboardType, period: String) {
         let key = "\(type.collectionName)_\(period)"
@@ -851,68 +708,14 @@ final class LeaderboardService: ObservableObject {
     // For testing purposes
     func forceResetPeriod(period: String) async {
         print("[Leaderboard] 🔄 Force resetting \(period) leaderboards")
-        await resetPeriodScores(period: period, collection: "classic_leaderboard")
-        await resetPeriodScores(period: period, collection: "achievement_leaderboard")
-        await resetPeriodScores(period: period, collection: "classic_timed_leaderboard")
+        // Note: resetPeriodScores has been moved to Firebase functions
+        // This function is now only for testing and cache invalidation
         
         // Update last reset time
         UserDefaults.standard.set(Date(), forKey: "last\(period.capitalized)Reset")
         
         // Invalidate cache for all leaderboard types
         LeaderboardCache.shared.invalidateCache(period: period)
-    }
-    
-    private func shouldResetScore(for period: String, timestamp: Date) -> Bool {
-        // Get current time in EST
-        let now = Date()
-        let calendar = Calendar.current
-        let estNow = now.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
-        
-        // Get start of current period in EST
-        let startOfPeriod: Date
-        switch period {
-        case "daily":
-            startOfPeriod = calendar.startOfDay(for: estNow)
-        case "weekly":
-            // Get start of week (Sunday) in EST
-            var components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: estNow)
-            components.weekday = 1 // Sunday
-            startOfPeriod = calendar.date(from: components) ?? now
-        case "monthly":
-            // Get start of month in EST with proper month boundary handling
-            var components = calendar.dateComponents([.year, .month], from: estNow)
-            components.day = 1
-            components.hour = 0
-            components.minute = 0
-            components.second = 0
-            startOfPeriod = calendar.date(from: components) ?? now
-        default:
-            startOfPeriod = now
-        }
-        
-        print("[Leaderboard] Checking reset for \(period) - Start of period: \(startOfPeriod)")
-        
-        // Convert timestamp to EST for comparison
-        let estTimestamp = timestamp.addingTimeInterval(TimeInterval(estTimeZone.secondsFromGMT()))
-        
-        let shouldReset: Bool
-        switch period {
-        case "daily":
-            shouldReset = estTimestamp < startOfPeriod
-        case "weekly":
-            shouldReset = estTimestamp < startOfPeriod
-        case "monthly":
-            // For monthly, also check if we're in a new month
-            let estComponents = calendar.dateComponents([.year, .month], from: estTimestamp)
-            let currentComponents = calendar.dateComponents([.year, .month], from: estNow)
-            shouldReset = estTimestamp < startOfPeriod || 
-                estComponents.year != currentComponents.year || 
-                estComponents.month != currentComponents.month
-        default:
-            shouldReset = false
-        }
-        
-        return shouldReset
     }
     
     // Add a function to clean up zero scores for backward compatibility

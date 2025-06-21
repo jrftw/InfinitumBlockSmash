@@ -13,6 +13,19 @@ struct ClassicTimedGameView: View {
     @AppStorage("showStatsOverlay") private var showStatsOverlay = false
     @AppStorage("showFPS") private var showFPS = false
     @AppStorage("showMemory") private var showMemory = false
+    @AppStorage("showFrame") private var showFrame = false
+    @AppStorage("showCPU") private var showCPU = false
+    @AppStorage("showNetwork") private var showNetwork = false
+    @AppStorage("showInput") private var showInput = false
+    @AppStorage("showResolution") private var showResolution = false
+    @AppStorage("showPing") private var showPing = false
+    @AppStorage("showBitrate") private var showBitrate = false
+    @AppStorage("showJitter") private var showJitter = false
+    @AppStorage("showDecode") private var showDecode = false
+    @AppStorage("showPacketLoss") private var showPacketLoss = false
+    @AppStorage("showTemperature") private var showTemperature = false
+    @AppStorage("showDetailedTemperature") private var showDetailedTemperature = false
+    @AppStorage("temperatureUnit") private var temperatureUnit = "Celsius"
     @State private var showingSaveWarning = false
     
     // MARK: - Initializers
@@ -131,7 +144,7 @@ struct ClassicTimedGameView: View {
                     }
                 }
             scoreLevelBar
-            if showStatsOverlay && (showFPS || showMemory) {
+            if showStatsOverlay && (showFPS || showMemory || showFrame || showCPU || showNetwork || showInput || showResolution || showPing || showBitrate || showJitter || showDecode || showPacketLoss || showTemperature) {
                 StatsOverlayView(gameState: gameState)
             }
             Spacer()
@@ -338,9 +351,12 @@ private struct StatsOverlayView: View {
     @AppStorage("showJitter") private var showJitter = false
     @AppStorage("showDecode") private var showDecode = false
     @AppStorage("showPacketLoss") private var showPacketLoss = false
+    @AppStorage("showTemperature") private var showTemperature = false
+    @AppStorage("showDetailedTemperature") private var showDetailedTemperature = false
+    @AppStorage("temperatureUnit") private var temperatureUnit = "Celsius"
     
     private var hasAnyStatsEnabled: Bool {
-        showFPS || showMemory || showFrame || showCPU || showNetwork || showInput || showResolution || showPing || showBitrate || showJitter || showDecode || showPacketLoss
+        showFPS || showMemory || showFrame || showCPU || showNetwork || showInput || showResolution || showPing || showBitrate || showJitter || showDecode || showPacketLoss || showTemperature
     }
     
     var body: some View {
@@ -410,6 +426,19 @@ private struct StatsOverlayView: View {
                             }
                         }
                     }
+                    
+                    // Temperature Row
+                    if showTemperature {
+                        HStack(spacing: 8) {
+                            if showDetailedTemperature {
+                                StatText("Temp: \(performanceMonitor.getDetailedTemperatureDescription())", color: performanceMonitor.getThermalStateColor())
+                            } else {
+                                StatText("Temp: \(performanceMonitor.getThermalStateDescription())", color: performanceMonitor.getThermalStateColor())
+                            }
+                            
+                            StatText(performanceMonitor.getThermalStatePercentageString(), color: performanceMonitor.getThermalStateColor())
+                        }
+                    }
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
@@ -425,14 +454,16 @@ private struct StatsOverlayView: View {
 
 private struct StatText: View {
     let text: String
+    let color: Color
     
-    init(_ text: String) {
+    init(_ text: String, color: Color = .white) {
         self.text = text
+        self.color = color
     }
     
     var body: some View {
         Text(text)
             .font(.system(size: 12, weight: .medium, design: .monospaced))
-            .foregroundColor(.white)
+            .foregroundColor(color)
     }
 } 

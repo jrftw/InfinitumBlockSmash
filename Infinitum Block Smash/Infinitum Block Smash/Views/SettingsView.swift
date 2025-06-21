@@ -494,6 +494,9 @@ private struct StatsForNerdsSection: View {
     @AppStorage("showJitter") private var showJitter = false
     @AppStorage("showDecode") private var showDecode = false
     @AppStorage("showPacketLoss") private var showPacketLoss = false
+    @AppStorage("showTemperature") private var showTemperature = false
+    @AppStorage("showDetailedTemperature") private var showDetailedTemperature = false
+    @AppStorage("temperatureUnit") private var temperatureUnit = "Celsius"
     @AppStorage("username") private var username = ""
     @AppStorage("userID") private var userID = ""
     @AppStorage("isGuest") private var isGuest = false
@@ -525,6 +528,8 @@ private struct StatsForNerdsSection: View {
         if showJitter { count += 1 }
         if showDecode { count += 1 }
         if showPacketLoss { count += 1 }
+        if showTemperature { count += 1 }
+        if showDetailedTemperature { count += 1 }
         return count
     }
     
@@ -532,7 +537,7 @@ private struct StatsForNerdsSection: View {
         if toggle.wrappedValue {
             return true // Can always turn off
         } else {
-            return activeToggleCount < 4 // Can only turn on if under limit
+            return activeToggleCount < 6 // Can only turn on if under limit
         }
     }
     
@@ -580,6 +585,38 @@ private struct StatsForNerdsSection: View {
         return (true, "Can write")
     }
     
+    // Helper function to get thermal state color
+    private func getThermalStateColor(_ state: ProcessInfo.ThermalState) -> Color {
+        switch state {
+        case .nominal:
+            return .green
+        case .fair:
+            return .yellow
+        case .serious:
+            return .orange
+        case .critical:
+            return .red
+        @unknown default:
+            return .gray
+        }
+    }
+    
+    // Helper function to get thermal state description
+    private func getThermalStateDescription(_ state: ProcessInfo.ThermalState) -> String {
+        switch state {
+        case .nominal:
+            return "Good"
+        case .fair:
+            return "Mild"
+        case .serious:
+            return "Bad"
+        case .critical:
+            return "Critical"
+        @unknown default:
+            return "Unknown"
+        }
+    }
+    
     var body: some View {
         Section(header: Text("Stats for Nerds")) {
             Toggle("Show Stats Overlay", isOn: $showStatsOverlay)
@@ -604,6 +641,21 @@ private struct StatsForNerdsSection: View {
                     
                     Toggle("Show Input Latency", isOn: $showInput)
                         .disabled(!canToggle($showInput))
+                    
+                    Toggle("Show Temperature", isOn: $showTemperature)
+                        .disabled(!canToggle($showTemperature))
+                    
+                    if showTemperature {
+                        Toggle("Show Detailed Temperature", isOn: $showDetailedTemperature)
+                            .disabled(!canToggle($showDetailedTemperature))
+                        
+                        Picker("Temperature Unit", selection: $temperatureUnit) {
+                            Text("Celsius").tag("Celsius")
+                            Text("Fahrenheit").tag("Fahrenheit")
+                        }
+                        .pickerStyle(SegmentedPickerStyle())
+                        .padding(.leading, 20)
+                    }
                 }
                 
                 // Display Metrics
@@ -632,19 +684,25 @@ private struct StatsForNerdsSection: View {
                 
                 // Toggle count indicator
                 HStack {
-                    Text("Active toggles: \(activeToggleCount)/4")
+                    Text("Active toggles: \(activeToggleCount)/6")
                         .font(.caption)
-                        .foregroundColor(activeToggleCount >= 4 ? .orange : .secondary)
+                        .foregroundColor(activeToggleCount >= 6 ? .orange : .secondary)
                     
                     Spacer()
                     
-                    if activeToggleCount >= 4 {
+                    if activeToggleCount >= 6 {
                         Text("Max reached")
                             .font(.caption)
                             .foregroundColor(.orange)
                     }
                 }
                 .padding(.vertical, 4)
+                
+                // Note about optimal settings
+                Text("Note: On some devices, 3 toggles may provide optimal performance")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .padding(.bottom, 4)
                 
                 // Current values display
                 VStack(alignment: .leading, spacing: 8) {
@@ -749,6 +807,45 @@ private struct StatsForNerdsSection: View {
                         Text("Low-End Device: \(DeviceSimulator.shared.isLowEndDevice() ? "Yes" : "No")")
                             .font(.caption)
                             .foregroundColor(.secondary)
+                        
+                        // Temperature display with color coding
+                        HStack {
+                            Text("Temperature: \(getThermalStateDescription(fpsManager.thermalState))")
+                                .font(.caption)
+                                .foregroundColor(getThermalStateColor(fpsManager.thermalState))
+                            
+                            Spacer()
+                            
+                            Text("(\(fpsManager.thermalStateDescription(fpsManager.thermalState)))")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        // Detailed temperature info
+                        HStack {
+                            Text("Detailed: \(PerformanceMonitor.shared.getDetailedTemperatureDescription())")
+                                .font(.caption)
+                                .foregroundColor(PerformanceMonitor.shared.getThermalStateColor())
+                            
+                            Spacer()
+                            
+                            Text("\(PerformanceMonitor.shared.getThermalStatePercentageString())")
+                                .font(.caption)
+                                .foregroundColor(PerformanceMonitor.shared.getThermalStateColor())
+                        }
+                        
+                        // Estimated temperature info
+                        HStack {
+                            Text("Est. Temp: \(PerformanceMonitor.shared.getTemperatureString(unit: temperatureUnit))")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            Spacer()
+                            
+                            Text("(iOS limitation)")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
                         
                         // PerformanceMonitor debug info
                         Text("Memory Monitor Active: \(PerformanceMonitor.shared.isMemoryMonitoringActive() ? "Yes" : "No")")

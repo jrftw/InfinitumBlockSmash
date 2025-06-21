@@ -145,6 +145,12 @@ struct GameView: View {
     @State private var adErrorMessage = ""
     @State private var adRetryCount = 0
     @State private var isAdRetrying = false
+    @AppStorage("showJitter") private var showJitter = false
+    @AppStorage("showDecode") private var showDecode = false
+    @AppStorage("showPacketLoss") private var showPacketLoss = false
+    @AppStorage("showTemperature") private var showTemperature = false
+    @AppStorage("showDetailedTemperature") private var showDetailedTemperature = false
+    @AppStorage("temperatureUnit") private var temperatureUnit = "Celsius"
     
     private enum SettingsAction {
         case resumeGame
@@ -849,9 +855,12 @@ private struct StatsOverlayView: View {
     @AppStorage("showJitter") private var showJitter = false
     @AppStorage("showDecode") private var showDecode = false
     @AppStorage("showPacketLoss") private var showPacketLoss = false
+    @AppStorage("showTemperature") private var showTemperature = false
+    @AppStorage("showDetailedTemperature") private var showDetailedTemperature = false
+    @AppStorage("temperatureUnit") private var temperatureUnit = "Celsius"
     
     private var hasAnyStatsEnabled: Bool {
-        showFPS || showMemory || showFrame || showCPU || showNetwork || showInput || showResolution || showPing || showBitrate || showJitter || showDecode || showPacketLoss
+        showFPS || showMemory || showFrame || showCPU || showNetwork || showInput || showResolution || showPing || showBitrate || showJitter || showDecode || showPacketLoss || showTemperature
     }
     
     var body: some View {
@@ -921,6 +930,19 @@ private struct StatsOverlayView: View {
                             }
                         }
                     }
+                    
+                    // Temperature Row
+                    if showTemperature {
+                        HStack(spacing: 8) {
+                            if showDetailedTemperature {
+                                StatText("Temp: \(performanceMonitor.getDetailedTemperatureDescription())", color: performanceMonitor.getThermalStateColor())
+                            } else {
+                                StatText("Temp: \(performanceMonitor.getThermalStateDescription())", color: performanceMonitor.getThermalStateColor())
+                            }
+                            
+                            StatText(performanceMonitor.getThermalStatePercentageString(), color: performanceMonitor.getThermalStateColor())
+                        }
+                    }
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
@@ -936,14 +958,16 @@ private struct StatsOverlayView: View {
 
 private struct StatText: View {
     let text: String
+    let color: Color
     
-    init(_ text: String) {
+    init(_ text: String, color: Color = .white) {
         self.text = text
+        self.color = color
     }
     
     var body: some View {
         Text(text)
             .font(.system(size: 12, weight: .medium, design: .monospaced))
-            .foregroundColor(.white)
+            .foregroundColor(color)
     }
 }

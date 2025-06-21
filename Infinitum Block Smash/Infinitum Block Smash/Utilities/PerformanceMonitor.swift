@@ -1,6 +1,7 @@
 import Foundation
 import QuartzCore
 import UIKit
+import SwiftUI
 
 class PerformanceMonitor: ObservableObject {
     static let shared = PerformanceMonitor()
@@ -19,6 +20,7 @@ class PerformanceMonitor: ObservableObject {
     @Published private(set) var cpuUsage: Double = 0
     @Published private(set) var networkLatency: Double = 0
     @Published private(set) var inputLatency: Double = 0
+    @Published private(set) var thermalState: ProcessInfo.ThermalState = .nominal
     
     private let maxHistorySize = 100 // Keep last 100 FPS readings
     private var lastFrameTimestamp: CFTimeInterval = 0
@@ -69,11 +71,13 @@ class PerformanceMonitor: ObservableObject {
         startMemoryMonitoring()
         startCPUMonitoring()
         startNetworkMonitoring()
+        startThermalMonitoring()
         
         // Perform immediate initial updates
         updateMemoryUsage()
         updateCPUUsage()
         updateNetworkLatency()
+        updateThermalState()
     }
     
     deinit {
@@ -108,6 +112,21 @@ class PerformanceMonitor: ObservableObject {
         networkTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             self?.updateNetworkLatency()
         }
+    }
+    
+    private func startThermalMonitoring() {
+        // Update thermal state every 2 seconds
+        Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            self?.updateThermalState()
+        }
+        
+        // Observe thermal state changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(thermalStateDidChange),
+            name: ProcessInfo.thermalStateDidChangeNotification,
+            object: nil
+        )
     }
     
     private func stopAllTimers() {
@@ -328,5 +347,129 @@ class PerformanceMonitor: ObservableObject {
             lastLoggedMemoryLevel = newLevel
             lastMemoryLogTime = currentTime
         }
+    }
+    
+    private func updateThermalState() {
+        let newThermalState = ProcessInfo.processInfo.thermalState
+        if newThermalState != thermalState {
+            DispatchQueue.main.async { [weak self] in
+                self?.thermalState = newThermalState
+                self?.performanceMetrics["thermal_state"] = Double(newThermalState.rawValue)
+            }
+        }
+    }
+    
+    @objc private func thermalStateDidChange() {
+        updateThermalState()
+    }
+    
+    // MARK: - Thermal State Helpers
+    
+    /// Get color for thermal state display
+    func getThermalStateColor() -> Color {
+        switch thermalState {
+        case .nominal:
+            return .green
+        case .fair:
+            return .yellow
+        case .serious:
+            return .orange
+        case .critical:
+            return .red
+        @unknown default:
+            return .gray
+        }
+    }
+    
+    /// Get description for thermal state display
+    func getThermalStateDescription() -> String {
+        switch thermalState {
+        case .nominal:
+            return "Good"
+        case .fair:
+            return "Mild"
+        case .serious:
+            return "Bad"
+        case .critical:
+            return "Critical"
+        @unknown default:
+            return "Unknown"
+        }
+    }
+    
+    /// Get detailed temperature description
+    func getDetailedTemperatureDescription() -> String {
+        switch thermalState {
+        case .nominal:
+            return "Good (Normal)"
+        case .fair:
+            return "Mild (Warm)"
+        case .serious:
+            return "Bad (Hot)"
+        case .critical:
+            return "Critical (Overheating)"
+        @unknown default:
+            return "Unknown"
+        }
+    }
+    
+    /// Get estimated temperature in Celsius
+    func getTemperatureCelsius() -> Double {
+        switch thermalState {
+        case .nominal:
+            return 25.0 // Normal room temperature
+        case .fair:
+            return 35.0 // Warm
+        case .serious:
+            return 45.0 // Hot
+        case .critical:
+            return 55.0 // Very hot
+        @unknown default:
+            return 30.0
+        }
+    }
+    
+    /// Get estimated temperature in Fahrenheit
+    func getTemperatureFahrenheit() -> Double {
+        let celsius = getTemperatureCelsius()
+        return (celsius * 9/5) + 32
+    }
+    
+    /// Get temperature string based on unit preference
+    func getTemperatureString(unit: String) -> String {
+        let temp: Double
+        let unitSymbol: String
+        
+        switch unit {
+        case "Fahrenheit":
+            temp = getTemperatureFahrenheit()
+            unitSymbol = "°F"
+        default: // Celsius
+            temp = getTemperatureCelsius()
+            unitSymbol = "°C"
+        }
+        
+        return String(format: "~%.0f%@", temp, unitSymbol) // Added ~ to indicate estimate
+    }
+    
+    /// Get thermal state percentage (0-100) based on thermal state
+    func getThermalStatePercentage() -> Int {
+        switch thermalState {
+        case .nominal:
+            return 25 // 0-25% range
+        case .fair:
+            return 50 // 26-50% range
+        case .serious:
+            return 75 // 51-75% range
+        case .critical:
+            return 100 // 76-100% range
+        @unknown default:
+            return 30
+        }
+    }
+    
+    /// Get thermal state percentage string
+    func getThermalStatePercentageString() -> String {
+        return "\(getThermalStatePercentage())%"
     }
 } 

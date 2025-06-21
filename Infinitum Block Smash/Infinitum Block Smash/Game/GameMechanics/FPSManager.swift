@@ -322,7 +322,7 @@ class FPSManager: ObservableObject {
         updatePerformanceRecommendations()
     }
     
-    private func thermalStateDescription(_ state: ProcessInfo.ThermalState) -> String {
+    func thermalStateDescription(_ state: ProcessInfo.ThermalState) -> String {
         switch state {
         case .nominal: return "Nominal"
         case .fair: return "Fair"
