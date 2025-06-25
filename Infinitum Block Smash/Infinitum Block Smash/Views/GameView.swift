@@ -384,21 +384,7 @@ struct GameView: View {
             }
         }
         .onDisappear {
-            Task {
-                await gameState.cleanup()
-            }
-            
-            // Remove specific observers instead of removing all
-            if let observer = saveWarningObserver {
-                NotificationCenter.default.removeObserver(observer)
-                saveWarningObserver = nil
-            }
-            if let observer = gameOverObserver {
-                NotificationCenter.default.removeObserver(observer)
-                gameOverObserver = nil
-            }
-            
-            achievementTimer?.invalidate()
+            cleanup()
         }
         .onChange(of: adManager.adLoadFailed) { failed in
             if failed {
@@ -833,6 +819,31 @@ struct GameView: View {
         .padding()
         .background(Color.black.opacity(0.7))
         .cornerRadius(12)
+    }
+    
+    private func cleanup() {
+        Logger.shared.debug("GameView cleanup called", category: .debug)
+        
+        // Remove observers
+        if let observer = saveWarningObserver {
+            NotificationCenter.default.removeObserver(observer)
+            saveWarningObserver = nil
+        }
+        if let observer = gameOverObserver {
+            NotificationCenter.default.removeObserver(observer)
+            gameOverObserver = nil
+        }
+        
+        // Invalidate timers
+        achievementTimer?.invalidate()
+        achievementTimer = nil
+        
+        // Perform comprehensive cleanup
+        Task {
+            await GameCleanupManager.cleanupGameplaySession()
+        }
+        
+        Logger.shared.debug("GameView cleanup completed", category: .debug)
     }
 }
 

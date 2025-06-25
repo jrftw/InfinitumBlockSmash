@@ -68,20 +68,74 @@ import SpriteKit
 struct GameSceneProvider: View {
     @ObservedObject var gameState: GameState
     @State private var scene: GameScene? = nil
+    @State private var isSceneActive = false
     
     var body: some View {
         let width = UIScreen.main.bounds.width
         let height = UIScreen.main.bounds.height
         let sceneSize = CGSize(width: width, height: height)
+        
         SpriteView(scene: scene ?? GameScene(size: sceneSize, gameState: gameState))
             .ignoresSafeArea()
             .onAppear {
                 Logger.shared.debug("GameSceneProvider onAppear", category: .debugGameProvider)
+                
+                // Perform cleanup before creating new scene
+                Task {
+                    await GameCleanupManager.cleanupForSceneTransition()
+                }
+                
                 if scene == nil {
                     let newScene = GameScene(size: sceneSize, gameState: gameState)
                     newScene.scaleMode = .aspectFill
                     scene = newScene
+                    isSceneActive = true
+                    
+                    Logger.shared.debug("New GameScene created", category: .debugGameProvider)
                 }
             }
+            .onDisappear {
+                Logger.shared.debug("GameSceneProvider onDisappear", category: .debugGameProvider)
+                
+                // Cleanup scene when view disappears
+                Task {
+                    await cleanupScene()
+                }
+            }
+            .onChange(of: gameState.isGameOver) { isGameOver in
+                if isGameOver {
+                    Logger.shared.debug("Game over detected, preparing cleanup", category: .debugGameProvider)
+                    
+                    // Perform cleanup when game ends
+                    Task {
+                        await GameCleanupManager.cleanupGameplaySession()
+                    }
+                }
+            }
+    }
+    
+    // MARK: - Private Methods
+    
+    private func cleanupScene() async {
+        Logger.shared.debug("Cleaning up GameScene", category: .debugGameProvider)
+        
+        guard let currentScene = scene else {
+            Logger.shared.debug("No scene to cleanup", category: .debugGameProvider)
+            return
+        }
+        
+        // Perform scene-specific cleanup
+        await currentScene.prepareForSceneTransition()
+        
+        // Clear scene reference
+        await MainActor.run {
+            scene = nil
+            isSceneActive = false
+        }
+        
+        // Perform comprehensive cleanup
+        await GameCleanupManager.cleanupForSceneTransition()
+        
+        Logger.shared.debug("GameScene cleanup completed", category: .debugGameProvider)
     }
 } 

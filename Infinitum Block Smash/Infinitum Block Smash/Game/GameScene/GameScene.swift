@@ -341,15 +341,71 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             gameOverObserver = nil
         }
         
-        // Cleanup
-        gridNode?.children.forEach { cleanupNode($0) }
-        trayNode?.children.forEach { cleanupNode($0) }
-        particleEmitter?.removeFromParent()
-        glowNode?.removeFromParent()
-        // Cleanup all particle emitters
-        activeParticleEmitters.forEach { cleanupNode($0) }
-        activeParticleEmitters.removeAll()
-        // Local pooling functions removed - now using NodePool.shared for all pooling operations
+        // Comprehensive cleanup with autorelease pools
+        autoreleasepool {
+            // Cleanup all children nodes
+            children.forEach { node in
+                node.removeAllActions()
+                node.removeAllChildren()
+                node.removeFromParent()
+            }
+            
+            // Cleanup specific nodes
+            gridNode?.children.forEach { cleanupNode($0) }
+            trayNode?.children.forEach { cleanupNode($0) }
+            particleEmitter?.removeFromParent()
+            glowNode?.removeFromParent()
+            
+            // Cleanup all particle emitters
+            activeParticleEmitters.forEach { cleanupNode($0) }
+            activeParticleEmitters.removeAll()
+            
+            // Cleanup placed block nodes
+            placedBlockNodes.values.forEach { cleanupNode($0) }
+            placedBlockNodes.removeAll()
+            
+            // Cleanup cached nodes
+            cachedNodes.values.forEach { cleanupNode($0) }
+            cachedNodes.removeAll()
+            
+            // Cleanup block nodes
+            blockNodes.forEach { cleanupNode($0) }
+            blockNodes.removeAll()
+            
+            // Cleanup temporary nodes
+            if let preview = previewNode {
+                preview.removeAllActions()
+                preview.removeAllChildren()
+                preview.removeFromParent()
+                previewNode = nil
+            }
+            if let drag = dragNode {
+                drag.removeAllActions()
+                drag.removeAllChildren()
+                drag.removeFromParent()
+                dragNode = nil
+            }
+            if let hint = hintHighlight {
+                hint.removeAllActions()
+                hint.removeAllChildren()
+                hint.removeFromParent()
+                hintHighlight = nil
+            }
+            
+            // Clear texture caches
+            activeTextures.removeAll()
+            gradientTextureCache.removeAll()
+            textureCache.removeAll()
+            
+            // Clear active nodes
+            activeNodes.forEach { node in
+                node.removeAllActions()
+                node.removeAllChildren()
+                node.removeFromParent()
+            }
+            activeNodes.removeAll()
+        }
+        
         // Clear any cached images
         autoreleasepool {
             gridNode = nil
@@ -357,8 +413,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             particleEmitter = nil
             glowNode = nil
         }
+        
         // Clear node pools
         NodePool.shared.clearAllPools()
+        
+        // Force texture cleanup
+        Task {
+            await SKTexture.preload([])
+            await SKTextureAtlas.preloadTextureAtlases([])
+        }
+        
+        Logger.shared.debug("GameScene deinit completed - all resources cleaned up", category: .debugGameScene)
     }
     private func setupScene() {
         // Set up physics world
@@ -2014,7 +2079,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         activeParticleEmitters.removeAll()
         // Local pooling functions removed - now using NodePool.shared for all pooling operations
     }
-    private func prepareForSceneTransition() async {
+    func prepareForSceneTransition() async {
         // Stop all animations
         setBackgroundAnimationsActive(false)
         // Remove all particle effects

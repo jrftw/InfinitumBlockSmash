@@ -243,37 +243,25 @@ final class NodePool {
     }
     
     func clearAllPools() {
-        Logger.shared.log("Clearing all node pools", category: .systemMemory, level: .warning)
+        Logger.shared.log("Clearing all node pools", category: .systemMemory, level: .info)
         
-        // Clear all pools completely
-        blockNodePool.forEach { node in
-            node.removeAllActions()
-            node.removeAllChildren()
-            node.removeFromParent()
-        }
+        // Clear all pools
         blockNodePool.removeAll()
-        
-        particleEmitterPool.forEach { emitter in
-            emitter.removeAllActions()
-            emitter.particleBirthRate = 0
-            emitter.removeFromParent()
-        }
         particleEmitterPool.removeAll()
-        
-        highlightNodePool.forEach { node in
-            node.removeAllActions()
-            node.removeAllChildren()
-            node.removeFromParent()
-        }
         highlightNodePool.removeAll()
-        
-        previewNodePool.forEach { node in
-            node.removeAllActions()
-            node.removeAllChildren()
-            node.removeFromParent()
-        }
         previewNodePool.removeAll()
         
         Logger.shared.log("All node pools cleared", category: .systemMemory, level: .info)
+    }
+    
+    /// Get pool status for diagnostics
+    func getPoolStatus() -> String {
+        return """
+        Pool Status:
+        - Block Nodes: \(blockNodePool.count)/\(maxPoolSize)
+        - Particle Emitters: \(particleEmitterPool.count)/\(maxPoolSize)
+        - Highlight Nodes: \(highlightNodePool.count)/\(maxPoolSize)
+        - Preview Nodes: \(previewNodePool.count)/\(maxPoolSize)
+        """
     }
 } 

@@ -830,4 +830,21 @@ final class MemorySystem {
     
     // MARK: - Private Properties
     private var isDebugLoggingEnabled: Bool = true
+    
+    /// Get memory statistics for diagnostics
+    func getMemoryStats() -> String {
+        let (used, total) = getMemoryUsage()
+        let ratio = used / total
+        let status = checkMemoryStatus()
+        
+        return """
+        Memory Stats:
+        - Used: \(String(format: "%.1f", used))MB
+        - Total: \(String(format: "%.1f", total))MB
+        - Ratio: \(String(format: "%.1f", ratio * 100))%
+        - Status: \(status)
+        - Cache Hits: \(cacheHits)
+        - Cache Misses: \(cacheMisses)
+        """
+    }
 }

@@ -207,13 +207,15 @@ struct ClassicTimedGameView: View {
             }
         }
         .onDisappear {
-            UserDefaults.standard.set(false, forKey: "isTimedMode")
-            Task {
-                await gameState.cleanup()
-            }
+            Logger.shared.debug("ClassicTimedGameView onDisappear", category: .debug)
             
-            // Remove observer
-            NotificationCenter.default.removeObserver(self)
+            // Stop the timer
+            timedState.stopTimer()
+            
+            // Perform comprehensive cleanup
+            Task {
+                await GameCleanupManager.cleanupGameplaySession()
+            }
         }
         .onChange(of: gameState.levelComplete) { isComplete in
             if isComplete {

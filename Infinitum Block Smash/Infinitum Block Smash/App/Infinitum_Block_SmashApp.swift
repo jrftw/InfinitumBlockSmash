@@ -112,8 +112,15 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
         }
     }
     
-    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
-        // First, configure Firebase
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        print("[App] Application did finish launching")
+        
+        // Start memory diagnostics monitoring
+        #if DEBUG
+        MemoryDiagnostics.start()
+        #endif
+        
+        // Configure Firebase
         FirebaseApp.configure()
         #if DEBUG
         print("[Firebase] Successfully configured Firebase")
@@ -554,21 +561,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
             
             // Force stop all intensive operations
             Task {
-                // Clear all caches immediately
-                URLCache.shared.removeAllCachedResponses()
-                
-                // Clear texture caches
-                await SKTextureAtlas.preloadTextureAtlases([])
-                await SKTexture.preload([])
-                
-                // Clear memory leak detector data
-                MemoryLeakDetector.shared.performEmergencyCleanup()
-                
-                // Clear node pools
-                NodePool.shared.clearAllPools()
-                
-                // Clear memory system cache
-                MemorySystem.shared.clearAllCaches()
+                // Perform comprehensive cleanup using GameCleanupManager
+                await GameCleanupManager.emergencyCleanup()
                 
                 print("[App] Thermal emergency cleanup completed")
             }
@@ -578,21 +572,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
             
             // Perform emergency memory cleanup
             Task {
-                // Clear all caches
-                URLCache.shared.removeAllCachedResponses()
-                
-                // Clear texture caches
-                await SKTextureAtlas.preloadTextureAtlases([])
-                await SKTexture.preload([])
-                
-                // Clear memory leak detector data
-                MemoryLeakDetector.shared.performEmergencyCleanup()
-                
-                // Clear node pools
-                NodePool.shared.clearAllPools()
-                
-                // Clear memory system cache
-                MemorySystem.shared.clearAllCaches()
+                // Perform comprehensive cleanup using GameCleanupManager
+                await GameCleanupManager.emergencyCleanup()
                 
                 print("[App] Emergency memory cleanup completed")
             }

@@ -80,7 +80,8 @@ struct LeaderboardView: View {
         Picker("Leaderboard Type", selection: $selectedType) {
             Text("High Scores").tag(LeaderboardType.score)
             Text("Achievements").tag(LeaderboardType.achievement)
-            Text("Timed").tag(LeaderboardType.timed)
+           /* Text("Timed").tag(LeaderboardType.timed)*/
+            // Leave the Timed hidden until further notice.
         }
         .pickerStyle(SegmentedPickerStyle())
         .padding()

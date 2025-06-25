@@ -125,15 +125,7 @@ struct DebugLogsView: View {
                     Button(action: {
                         Task {
                             print("[Debug] High memory detected - performing immediate cleanup")
-                            PerformanceMonitor.shared.emergencyStop()
-                            MemorySystem.shared.performThermalEmergencyCleanup()
-                            MemoryLeakDetector.shared.performEmergencyCleanup()
-                            NodePool.shared.clearAllPools()
-                            URLCache.shared.removeAllCachedResponses()
-                            
-                            await SKTexture.preload([])
-                            await SKTextureAtlas.preloadTextureAtlases([])
-                            
+                            await GameCleanupManager.emergencyCleanup()
                             print("[Debug] High memory cleanup completed")
                         }
                     }) {
@@ -217,6 +209,44 @@ struct DebugLogsView: View {
                 }) {
                     Label("Detect Memory Leaks", systemImage: "magnifyingglass")
                         .foregroundColor(.orange)
+                }
+            }
+            
+            // Add memory diagnostics section
+            Section(header: Text("Memory Diagnostics")) {
+                Button(action: {
+                    Task {
+                        let report = await MemoryDiagnostics.getReport()
+                        print("[Debug] Memory Report:")
+                        print(report)
+                    }
+                }) {
+                    Label("Generate Memory Report", systemImage: "doc.text")
+                }
+                
+                Button(action: {
+                    MemoryDiagnostics.snapshot(description: "Manual debug snapshot")
+                    print("[Debug] Memory snapshot taken")
+                }) {
+                    Label("Take Memory Snapshot", systemImage: "camera")
+                }
+                
+                Button(action: {
+                    Task {
+                        await GameCleanupManager.cleanupGameplaySession()
+                        print("[Debug] Gameplay session cleanup completed")
+                    }
+                }) {
+                    Label("Cleanup Gameplay Session", systemImage: "trash")
+                }
+                
+                Button(action: {
+                    Task {
+                        await GameCleanupManager.cleanupForSceneTransition()
+                        print("[Debug] Scene transition cleanup completed")
+                    }
+                }) {
+                    Label("Cleanup Scene Transition", systemImage: "arrow.triangle.2.circlepath")
                 }
             }
         }
