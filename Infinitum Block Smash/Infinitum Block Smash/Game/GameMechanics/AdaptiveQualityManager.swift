@@ -86,8 +86,8 @@ class AdaptiveQualityManager: ObservableObject {
     // MARK: - Quality Monitoring
     
     private func startQualityMonitoring() {
-        // Update quality settings every 2 seconds (reduced from 3 seconds for faster response)
-        qualityUpdateTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+        // Update quality settings every 5 seconds (increased from 2 seconds to save battery)
+        qualityUpdateTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             self?.updateQualitySettings()
         }
     }

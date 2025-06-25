@@ -714,8 +714,8 @@ struct GameView: View {
     }
     
     private func setupAchievementTracking() {
-        // Start a timer to check achievement progress
-        achievementTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
+        // Start a timer to check achievement progress - reduced frequency to save battery
+        achievementTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { _ in // Increased from 5.0 to 15.0
             Task {
                 await checkAchievementProgress()
             }

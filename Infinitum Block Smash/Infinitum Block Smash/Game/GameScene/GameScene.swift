@@ -310,14 +310,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Configure scene
         backgroundColor = SKColor(hex: "#1a1a2e")
         scaleMode = .aspectFit
-        // Add subtle background animation
+        // Add subtle background animation - reduced frequency to save battery
         let backgroundNode = SKSpriteNode(color: .clear, size: size)
         backgroundNode.position = CGPoint(x: size.width/2, y: size.height/2)
         backgroundNode.name = "backgroundNode"  // Add name for reference
         addChild(backgroundNode)
         let backgroundAnimation = SKAction.sequence([
-            SKAction.colorize(with: SKColor(hex: "#16213e"), colorBlendFactor: 1.0, duration: 2.0),
-            SKAction.colorize(with: SKColor(hex: "#1a1a2e"), colorBlendFactor: 1.0, duration: 2.0)
+            SKAction.colorize(with: SKColor(hex: "#16213e"), colorBlendFactor: 1.0, duration: 4.0), // Increased from 2.0 to 4.0
+            SKAction.colorize(with: SKColor(hex: "#1a1a2e"), colorBlendFactor: 1.0, duration: 4.0)  // Increased from 2.0 to 4.0
         ])
         backgroundNode.run(SKAction.repeatForever(backgroundAnimation))
         // Setup memory warning label
@@ -412,9 +412,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let padding: CGFloat = 2
         let gridBackground = SKShapeNode(rectOf: CGSize(width: totalWidth + padding, height: totalHeight + padding))
         let theme = ThemeManager.shared.getCurrentTheme()
-        // Make grid background transparent instead of using theme background color
+        // Make grid background completely transparent
         gridBackground.fillColor = .clear
         gridBackground.strokeColor = .clear
+        gridBackground.alpha = 0.0
         gridBackground.position = CGPoint(x: 0, y: 0)
         gridBackground.zPosition = -2
         gridBackground.name = "gridBackground"
@@ -439,17 +440,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             let x = -totalWidth / 2 + CGFloat(i) * blockSize
             let y = -totalHeight / 2 + CGFloat(i) * blockSize
             // Vertical line
-            let verticalLine = SKShapeNode(rectOf: CGSize(width: 1, height: totalHeight))
+            let verticalLine = SKShapeNode(rectOf: CGSize(width: 0.5, height: totalHeight))
             verticalLine.fillColor = SKColor.from(theme.colors.secondary)
-            verticalLine.alpha = 0.2
+            verticalLine.alpha = 0.1
             verticalLine.position = CGPoint(x: x, y: 0)
             verticalLine.zPosition = 2
             verticalLine.name = "gridLine"
             gridNode.addChild(verticalLine)
             // Horizontal line
-            let horizontalLine = SKShapeNode(rectOf: CGSize(width: totalWidth, height: 1))
+            let horizontalLine = SKShapeNode(rectOf: CGSize(width: totalWidth, height: 0.5))
             horizontalLine.fillColor = SKColor.from(theme.colors.secondary)
-            horizontalLine.alpha = 0.2
+            horizontalLine.alpha = 0.1
             horizontalLine.position = CGPoint(x: 0, y: y)
             horizontalLine.zPosition = 2
             horizontalLine.name = "gridLine"
@@ -1367,7 +1368,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // MARK: - Memory Management
     private func setupMemoryManagement() async {
         // Start periodic memory monitoring with significantly reduced frequency
-        Timer.scheduledTimer(withTimeInterval: MemoryConfig.getIntervals().memoryCheck * 3, repeats: true) { [weak self] _ in
+        Timer.scheduledTimer(withTimeInterval: MemoryConfig.getIntervals().memoryCheck * 5, repeats: true) { [weak self] _ in // Increased from 3x to 5x
             Task { @MainActor [weak self] in
                 await self?.checkAndCleanupMemory()
             }
@@ -1642,14 +1643,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func updateTheme() {
         // Get the current theme
         let theme = ThemeManager.shared.getCurrentTheme()
-        // Update grid appearance
+        // Keep grid background transparent - don't set it to theme background color
         if let gridBackground = gridNode.childNode(withName: "gridBackground") as? SKShapeNode {
-            gridBackground.fillColor = SKColor.from(theme.colors.background)
+            gridBackground.fillColor = .clear
+            gridBackground.strokeColor = .clear
+            gridBackground.alpha = 0.0
         }
         // Update grid lines
         gridNode.children.forEach { node in
             if node.name == "gridLine", let line = node as? SKShapeNode {
                 line.fillColor = SKColor.from(theme.colors.secondary)
+                line.alpha = 0.1 // Keep grid lines very transparent
             }
         }
         // Update debug border if present
@@ -2123,8 +2127,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // MARK: - Thermal State Monitoring
     
     private func startThermalStateMonitoring() {
-        // Check thermal state every 5 seconds
-        Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+        // Check thermal state every 10 seconds (increased from 5 seconds to save battery)
+        Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in // Increased from 5.0 to 10.0
             self?.checkAndAdjustForThermalState()
         }
         

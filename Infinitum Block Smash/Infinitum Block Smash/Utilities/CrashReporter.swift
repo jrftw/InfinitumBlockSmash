@@ -213,38 +213,19 @@ class CrashReporter {
     }
     
     private func startMemoryLogging() {
-        memoryLogTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+        // Start memory logging timer - reduced frequency to save battery
+        memoryLogTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { [weak self] _ in // Increased from 5.0 to 15.0
             Task { @MainActor in
-                let (used, total) = MemorySystem.shared.getMemoryUsage()
-                let ratio = used / total
-                let status = MemorySystem.shared.checkMemoryStatus()
-                let cacheStats = MemorySystem.shared.getCacheStats()
-                
-                let memoryLog = """
-                Memory Status: \(status)
-                Memory Usage: \(String(format: "%.1f", used))MB / \(String(format: "%.1f", total))MB (\(String(format: "%.1f", ratio * 100))%)
-                Cache Stats: Hits: \(cacheStats.hits), Misses: \(cacheStats.misses)
-                """
-                
-                self?.log("[Memory] \(memoryLog)")
+                self?.logMemoryUsage()
             }
         }
     }
     
     private func startGameplayLogging() {
-        gameplayLogTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+        // Start gameplay logging timer - reduced frequency to save battery
+        gameplayLogTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in // Increased from 10.0 to 30.0
             Task { @MainActor in
-                if let gameAnalytics = self?.analyticsManager.gameAnalytics {
-                    let gameplayLog = """
-                    Session Duration: \(String(format: "%.1f", gameAnalytics.averageSessionDuration))s
-                    Average Score: \(String(format: "%.1f", gameAnalytics.averageScorePerLevel))
-                    Blocks/Minute: \(String(format: "%.1f", gameAnalytics.averageBlocksPerMinute))
-                    Average Chain: \(String(format: "%.1f", gameAnalytics.averageChainLength))
-                    FPS: \(String(format: "%.1f", gameAnalytics.averageFPS))
-                    """
-                    
-                    self?.log("[Gameplay] \(gameplayLog)")
-                }
+                self?.logGameplayMetrics()
             }
         }
     }
@@ -346,5 +327,38 @@ class CrashReporter {
     deinit {
         memoryLogTimer?.invalidate()
         gameplayLogTimer?.invalidate()
+    }
+    
+    private func logMemoryUsage() {
+        Task { @MainActor in
+            let (used, total) = MemorySystem.shared.getMemoryUsage()
+            let ratio = used / total
+            let status = MemorySystem.shared.checkMemoryStatus()
+            let cacheStats = MemorySystem.shared.getCacheStats()
+            
+            let memoryLog = """
+            Memory Status: \(status)
+            Memory Usage: \(String(format: "%.1f", used))MB / \(String(format: "%.1f", total))MB (\(String(format: "%.1f", ratio * 100))%)
+            Cache Stats: Hits: \(cacheStats.hits), Misses: \(cacheStats.misses)
+            """
+            
+            self.log("[Memory] \(memoryLog)")
+        }
+    }
+    
+    private func logGameplayMetrics() {
+        Task { @MainActor in
+            if let gameAnalytics = self.analyticsManager.gameAnalytics {
+                let gameplayLog = """
+                Session Duration: \(String(format: "%.1f", gameAnalytics.averageSessionDuration))s
+                Average Score: \(String(format: "%.1f", gameAnalytics.averageScorePerLevel))
+                Blocks/Minute: \(String(format: "%.1f", gameAnalytics.averageBlocksPerMinute))
+                Average Chain: \(String(format: "%.1f", gameAnalytics.averageChainLength))
+                FPS: \(String(format: "%.1f", gameAnalytics.averageFPS))
+                """
+                
+                self.log("[Gameplay] \(gameplayLog)")
+            }
+        }
     }
 } 

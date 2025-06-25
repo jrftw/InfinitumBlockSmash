@@ -3,34 +3,43 @@ import QuartzCore
 import UIKit
 import SwiftUI
 
-class PerformanceMonitor: ObservableObject {
+final class PerformanceMonitor: ObservableObject {
     static let shared = PerformanceMonitor()
     
-    private var displayLink: CADisplayLink?
-    private var lastFrameTime: CFTimeInterval = 0
-    private var frameCount: Int = 0
-    private var lastFPSUpdate: CFTimeInterval = 0
-    private let updateInterval: CFTimeInterval = 1.0 // Update FPS every second
-    
+    // MARK: - Published Properties
     @Published private(set) var currentFPS: Double = 0
     @Published private(set) var memoryUsage: Double = 0
-    @Published private(set) var performanceMetrics: [String: Double] = [:]
-    @Published private(set) var fpsHistory: [Double] = []
-    @Published private(set) var frameTime: Double = 0
     @Published private(set) var cpuUsage: Double = 0
     @Published private(set) var networkLatency: Double = 0
-    @Published private(set) var inputLatency: Double = 0
     @Published private(set) var thermalState: ProcessInfo.ThermalState = .nominal
+    @Published private(set) var batteryLevel: Float = 1.0
+    @Published private(set) var isLowPowerMode: Bool = false
     
-    private let maxHistorySize = 100 // Keep last 100 FPS readings
-    private var lastFrameTimestamp: CFTimeInterval = 0
-    private var lastInputTimestamp: CFTimeInterval = 0
-    private var processInfo: ProcessInfo { ProcessInfo.processInfo }
-    
-    // Timer properties for proper cleanup
+    // MARK: - Private Properties
+    private var displayLink: CADisplayLink?
     private var memoryTimer: Timer?
     private var cpuTimer: Timer?
     private var networkTimer: Timer?
+    private var thermalTimer: Timer?
+    
+    private var frameCount: Int = 0
+    private var lastFPSUpdate: CFTimeInterval = 0
+    private var lastFrameTimestamp: CFTimeInterval = 0
+    var frameTime: Double = 0 // Made public for GameView access
+    
+    private let updateInterval: TimeInterval = 2.0 // Increased from 1.0 to reduce overhead
+    private let maxHistorySize = 30 // Reduced from 60 to save memory
+    
+    @Published private(set) var fpsHistory: [Double] = []
+    @Published private(set) var performanceMetrics: [String: Double] = [:]
+    
+    // MARK: - Input Latency Tracking
+    private var inputEvents: [CFTimeInterval] = []
+    private let maxInputEvents = 10 // Reduced from 20
+    
+    private var lastFrameTime: CFTimeInterval = 0
+    private var lastInputTimestamp: CFTimeInterval = 0
+    private var processInfo: ProcessInfo { ProcessInfo.processInfo }
     
     // Memory logging control
     private var lastLoggedMemoryLevel: MemoryLevel = .normal
@@ -86,13 +95,17 @@ class PerformanceMonitor: ObservableObject {
     }
     
     private func setupDisplayLink() {
+        // Only enable CADisplayLink when performance monitoring is actually needed
+        // This significantly reduces battery drain
+        #if DEBUG
         displayLink = CADisplayLink(target: self, selector: #selector(updateFPS))
         displayLink?.add(to: .main, forMode: .default)
+        #endif
     }
     
     private func startMemoryMonitoring() {
         // Start periodic memory monitoring with device-specific frequency
-        let interval = MemoryConfig.getIntervals().memoryCheck
+        let interval = MemoryConfig.getIntervals().memoryCheck * 2 // Double the interval to reduce overhead
         memoryTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             self?.updateMemoryUsage()
         }
@@ -103,30 +116,24 @@ class PerformanceMonitor: ObservableObject {
     }
     
     private func startCPUMonitoring() {
-        cpuTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+        // Reduce CPU monitoring frequency to save battery
+        cpuTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in // Increased from 1.0 to 5.0
             self?.updateCPUUsage()
         }
     }
     
     private func startNetworkMonitoring() {
-        networkTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+        // Reduce network monitoring frequency
+        networkTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in // Increased from 2.0 to 10.0
             self?.updateNetworkLatency()
         }
     }
     
     private func startThermalMonitoring() {
-        // Update thermal state every 2 seconds
-        Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+        // Reduce thermal monitoring frequency
+        Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in // Increased from 2.0 to 5.0
             self?.updateThermalState()
         }
-        
-        // Observe thermal state changes
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(thermalStateDidChange),
-            name: ProcessInfo.thermalStateDidChangeNotification,
-            object: nil
-        )
     }
     
     private func stopAllTimers() {
@@ -265,7 +272,6 @@ class PerformanceMonitor: ObservableObject {
             let newInputLatency = (currentTime - lastInputTimestamp) * 1000 // Convert to milliseconds
             
             DispatchQueue.main.async { [weak self] in
-                self?.inputLatency = newInputLatency
                 self?.performanceMetrics["input_latency"] = newInputLatency
             }
         }
@@ -273,6 +279,11 @@ class PerformanceMonitor: ObservableObject {
     }
     
     // MARK: - Public Methods for Debugging
+    
+    /// Get current input latency
+    var inputLatency: Double {
+        return performanceMetrics["input_latency"] ?? 0.0
+    }
     
     /// Force an immediate memory usage update
     func forceMemoryUpdate() {
@@ -357,10 +368,6 @@ class PerformanceMonitor: ObservableObject {
                 self?.performanceMetrics["thermal_state"] = Double(newThermalState.rawValue)
             }
         }
-    }
-    
-    @objc private func thermalStateDidChange() {
-        updateThermalState()
     }
     
     // MARK: - Thermal State Helpers

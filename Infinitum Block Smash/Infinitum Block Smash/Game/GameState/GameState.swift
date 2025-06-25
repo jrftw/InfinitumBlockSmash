@@ -2232,18 +2232,46 @@ final class GameState: ObservableObject {
         userDefaults.set(highestLevel, forKey: levelKey)
         userDefaults.set(Date(), forKey: "lastSaveTime")
         
-        // Save offline queue
-        if let queueData = try? JSONEncoder().encode(offlineChangesQueue) {
+        // Save offline queue with error handling
+        do {
+            let queueData = try JSONEncoder().encode(offlineChangesQueue)
             userDefaults.set(queueData, forKey: offlineQueueKey)
+        } catch {
+            print("[GameState] Error encoding offline queue: \(error.localizedDescription)")
+            // If encoding fails, clear the queue to prevent corruption
+            offlineChangesQueue = []
+            userDefaults.removeObject(forKey: offlineQueueKey)
         }
         
         userDefaults.synchronize()
     }
 
     private func loadOfflineQueue() {
-        if let queueData = userDefaults.data(forKey: offlineQueueKey),
-           let queue = try? JSONDecoder().decode([OfflineQueueEntry].self, from: queueData) {
-            offlineChangesQueue = queue
+        do {
+            if let queueData = userDefaults.data(forKey: offlineQueueKey) {
+                let queue = try JSONDecoder().decode([OfflineQueueEntry].self, from: queueData)
+                // Validate the queue data
+                let validEntries = queue.filter { entry in
+                    // Basic validation - ensure timestamp is not in the future and not too old
+                    let now = Date()
+                    let oneYearAgo = Calendar.current.date(byAdding: .year, value: -1, to: now) ?? now
+                    return entry.timestamp <= now && entry.timestamp >= oneYearAgo
+                }
+                offlineChangesQueue = validEntries
+                print("[GameState] Loaded \(validEntries.count) valid offline queue entries")
+                
+                // If we filtered out invalid entries, save the cleaned queue
+                if validEntries.count != queue.count {
+                    print("[GameState] Filtered out \(queue.count - validEntries.count) invalid offline queue entries")
+                    saveStatisticsToUserDefaults()
+                }
+            }
+        } catch {
+            print("[GameState] Error loading offline queue: \(error.localizedDescription)")
+            // Clear corrupted queue data
+            offlineChangesQueue = []
+            userDefaults.removeObject(forKey: offlineQueueKey)
+            print("[GameState] Cleared corrupted offline queue data")
         }
     }
 
@@ -2254,20 +2282,39 @@ final class GameState: ObservableObject {
         // Load offline queue
         loadOfflineQueue()
         
+        // Check if queue is empty after loading
+        guard !offlineChangesQueue.isEmpty else {
+            print("[GameState] Offline queue is empty, nothing to sync")
+            return
+        }
+        
         // Sort queue by timestamp to ensure chronological order
         offlineChangesQueue.sort { $0.timestamp < $1.timestamp }
         
+        // Create a copy of the queue to avoid modification during iteration
+        let queueToProcess = offlineChangesQueue
+        offlineChangesQueue.removeAll()
+        
+        print("[GameState] Syncing \(queueToProcess.count) offline queue entries")
+        
         // Try to sync each queued change
-        for entry in offlineChangesQueue {
+        for (index, entry) in queueToProcess.enumerated() {
             do {
+                print("[GameState] Syncing entry \(index + 1)/\(queueToProcess.count)")
                 try await FirebaseManager.shared.saveGameProgress(entry.progress)
-                offlineChangesQueue.removeFirst()
-                saveStatisticsToUserDefaults()
+                // Successfully synced - don't add back to queue
+                print("[GameState] Successfully synced queued progress entry \(index + 1)")
             } catch {
-                print("[GameState] Error syncing queued progress: \(error.localizedDescription)")
+                print("[GameState] Error syncing queued progress entry \(index + 1): \(error.localizedDescription)")
+                // Failed to sync - add back to queue for retry
+                offlineChangesQueue.append(entry)
                 throw error // Propagate the error
             }
         }
+        
+        // Save the updated queue (should be empty if all synced successfully)
+        saveStatisticsToUserDefaults()
+        print("[GameState] Completed offline queue sync - \(offlineChangesQueue.count) entries remaining")
     }
 
     // Add conflict resolution method

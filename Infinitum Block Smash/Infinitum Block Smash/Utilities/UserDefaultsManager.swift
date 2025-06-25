@@ -33,11 +33,7 @@ class UserDefaultsManager: ObservableObject {
     
     private init() {
         // Start periodic flush timer
-        writeTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                await self?.flushPendingWrites()
-            }
-        }
+        startWriteTimer()
     }
     
     deinit {
@@ -144,8 +140,10 @@ class UserDefaultsManager: ObservableObject {
     
     // MARK: - Private Methods
     
-    private func flushPendingWrites() async {
-        await performBackgroundSynchronization()
+    private func flushPendingWrites() {
+        Task { @MainActor in
+            await performBackgroundSynchronization()
+        }
     }
     
     @MainActor
@@ -167,6 +165,15 @@ class UserDefaultsManager: ObservableObject {
                 UserDefaults.standard.removePersistentDomain(forName: domainName)
                 UserDefaults.standard.synchronize()
                 continuation.resume()
+            }
+        }
+    }
+    
+    private func startWriteTimer() {
+        // Reduce write frequency to save battery
+        writeTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in // Increased from 1.0 to 5.0
+            Task { @MainActor in
+                self?.flushPendingWrites()
             }
         }
     }

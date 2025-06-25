@@ -241,8 +241,8 @@ class FPSManager: ObservableObject {
         updateThermalState()
         updateBatteryState()
         
-        // Start periodic monitoring
-        performanceTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+        // Start periodic monitoring - reduced frequency to save battery
+        performanceTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in // Increased from 2.0 to 5.0
             self?.updateThermalState()
             self?.updateBatteryState()
             self?.updatePerformanceRecommendations()
