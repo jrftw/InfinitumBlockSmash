@@ -68,11 +68,8 @@ async function performPeriodReset(period: string) {
         if (timestamp && shouldResetScore(period, timestamp)) {
           console.log(`[Leaderboard] Resetting ${period} score for user ${doc.id}`);
           
-          // Delete the old entry
+          // Delete the old entry - NO REGENERATION
           batch.delete(doc.ref);
-          
-          // Regenerate from alltime data
-          await regenerateScoreFromAlltime(type, period, doc.id, data, batch);
           resetCount++;
         }
         processedCount++;
@@ -131,77 +128,5 @@ function shouldResetScore(period: string, timestamp: Date): boolean {
              
     default:
       return false;
-  }
-}
-
-/**
- * Regenerates a score from the alltime leaderboard data
- * @param {string} type - The leaderboard type
- * @param {string} period - The period to regenerate
- * @param {string} userId - The user ID
- * @param {any} oldData - The old score data
- * @param {admin.firestore.WriteBatch} batch - The batch to add operations to
- */
-async function regenerateScoreFromAlltime(
-  type: string, 
-  period: string, 
-  userId: string, 
-  oldData: any, 
-  batch: admin.firestore.WriteBatch
-) {
-  try {
-    // Get the alltime score for this user
-    const alltimeDoc = await db.collection(type)
-      .doc("alltime")
-      .collection("scores")
-      .doc(userId)
-      .get();
-
-    if (alltimeDoc.exists) {
-      const alltimeData = alltimeDoc.data();
-      
-      // Create new data with current timestamp
-      const newData: any = {
-        username: oldData.username || alltimeData?.username,
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        userId: userId,
-        lastUpdate: admin.firestore.FieldValue.serverTimestamp(),
-        appVersion: oldData.appVersion || "1.0",
-        buildNumber: oldData.buildNumber || "1"
-      };
-
-      // Copy the appropriate score field based on leaderboard type
-      if (type === "achievement_leaderboard") {
-        if (alltimeData?.points) {
-          newData.points = alltimeData.points;
-        }
-      } else if (type === "classic_timed_leaderboard") {
-        if (alltimeData?.time) {
-          newData.time = alltimeData.time;
-        }
-        if (alltimeData?.score) {
-          newData.score = alltimeData.score;
-        }
-      } else {
-        // classic_leaderboard
-        if (alltimeData?.score) {
-          newData.score = alltimeData.score;
-        }
-      }
-
-      // Add the new entry to the batch
-      const docRef = db.collection(type)
-        .doc(period)
-        .collection("scores")
-        .doc(userId);
-        
-      batch.set(docRef, newData);
-      
-      console.log(`[Leaderboard] Regenerated ${period} score for user ${userId} in ${type}`);
-    } else {
-      console.log(`[Leaderboard] No alltime data found for user ${userId} in ${type} - skipping regeneration`);
-    }
-  } catch (error) {
-    console.error(`[Leaderboard] Error regenerating score for ${userId} in ${type}/${period}:`, error);
   }
 } 

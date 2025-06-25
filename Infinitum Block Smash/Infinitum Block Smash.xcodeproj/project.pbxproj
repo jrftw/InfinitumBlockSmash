@@ -377,7 +377,7 @@
 				CODE_SIGN_ENTITLEMENTS = "Infinitum Block Smash/Config/Infinitum Block Smash.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = AD7SJSPX55;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "Infinitum Block Smash/App/Info.plist";
@@ -412,7 +412,7 @@
 				CODE_SIGN_ENTITLEMENTS = "Infinitum Block Smash/Config/Infinitum Block Smash.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = AD7SJSPX55;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "Infinitum Block Smash/App/Info.plist";

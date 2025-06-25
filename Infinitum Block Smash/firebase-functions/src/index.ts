@@ -13,10 +13,18 @@ import * as admin from "firebase-admin";
 admin.initializeApp();
 
 // Import functions after initialization
-import {cleanupLeaderboards} from "./leaderboardCleanup";
+import {
+  dailyLeaderboardReset,
+  weeklyLeaderboardReset,
+  monthlyLeaderboardReset,
+  cleanupLeaderboards
+} from "./leaderboardCleanup";
 
 export {
-  cleanupLeaderboards,
+  dailyLeaderboardReset,
+  weeklyLeaderboardReset,
+  monthlyLeaderboardReset,
+  cleanupLeaderboards // Legacy function for backward compatibility
 };
 
 // Start writing functions
