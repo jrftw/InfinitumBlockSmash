@@ -412,8 +412,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let padding: CGFloat = 2
         let gridBackground = SKShapeNode(rectOf: CGSize(width: totalWidth + padding, height: totalHeight + padding))
         let theme = ThemeManager.shared.getCurrentTheme()
-        gridBackground.fillColor = SKColor.from(theme.colors.background)
-        gridBackground.alpha = 0.3
+        // Make grid background transparent instead of using theme background color
+        gridBackground.fillColor = .clear
+        gridBackground.strokeColor = .clear
         gridBackground.position = CGPoint(x: 0, y: 0)
         gridBackground.zPosition = -2
         gridBackground.name = "gridBackground"

@@ -86,8 +86,8 @@ class AdaptiveQualityManager: ObservableObject {
     // MARK: - Quality Monitoring
     
     private func startQualityMonitoring() {
-        // Update quality settings every 3 seconds
-        qualityUpdateTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
+        // Update quality settings every 2 seconds (reduced from 3 seconds for faster response)
+        qualityUpdateTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             self?.updateQualitySettings()
         }
     }
@@ -124,7 +124,7 @@ class AdaptiveQualityManager: ObservableObject {
         // Start with device capability
         var qualityLevel: QualityLevel = .high
         
-        // Apply thermal state adjustments
+        // Apply thermal state adjustments (more aggressive)
         switch fpsManager.thermalState {
         case .critical:
             qualityLevel = .minimal
@@ -138,13 +138,15 @@ class AdaptiveQualityManager: ObservableObject {
             qualityLevel = .medium
         }
         
-        // Apply battery level adjustments
+        // Apply battery level adjustments (more aggressive)
         if fpsManager.batteryLevel < 0.1 { // Below 10%
             qualityLevel = .minimal
         } else if fpsManager.batteryLevel < 0.2 { // Below 20%
             qualityLevel = min(qualityLevel, .low)
         } else if fpsManager.batteryLevel < 0.3 { // Below 30%
             qualityLevel = min(qualityLevel, .medium)
+        } else if fpsManager.batteryLevel < 0.5 { // Below 50% - new threshold
+            qualityLevel = min(qualityLevel, .high)
         }
         
         // Apply low power mode adjustment
@@ -155,6 +157,12 @@ class AdaptiveQualityManager: ObservableObject {
         // Apply device-specific adjustments
         if deviceSimulator.isLowEndDevice() {
             qualityLevel = min(qualityLevel, .medium)
+        }
+        
+        // Apply additional thermal throttling for sustained high temperatures
+        if fpsManager.thermalState == .serious || fpsManager.thermalState == .critical {
+            // Force lower quality for sustained thermal stress
+            qualityLevel = min(qualityLevel, .low)
         }
         
         return qualityLevel
