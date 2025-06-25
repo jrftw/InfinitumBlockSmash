@@ -645,4 +645,25 @@ final class AnalyticsManager: ObservableObject {
             throw error
         }
     }
+    
+    /// Stop monitoring (for thermal emergency mode)
+    func stopMonitoring() {
+        syncTimer?.invalidate()
+        syncTimer = nil
+        print("[GameAnalytics] Monitoring stopped")
+    }
+    
+    /// Start monitoring (for thermal emergency mode)
+    func startMonitoring() {
+        stopMonitoring() // Ensure any existing timer is invalidated
+        
+        // Start sync timer with reduced frequency
+        syncTimer = Timer.scheduledTimer(withTimeInterval: syncInterval, repeats: true) { [weak self] _ in
+            Task {
+                await self?.syncWithFirebase()
+            }
+        }
+        
+        print("[GameAnalytics] Monitoring started")
+    }
 } 

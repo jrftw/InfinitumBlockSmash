@@ -29,6 +29,7 @@ class MemoryLeakDetector {
     private let snapshotInterval: TimeInterval = 60.0 // Take snapshot every 60 seconds (increased from 30)
     private let maxSnapshots = 10 // Keep last 10 snapshots (reduced from 20)
     private var monitoringTimer: Timer?
+    private var isLoggingEnabled: Bool = true
     
     // MARK: - Memory Snapshot
     struct MemorySnapshot {
@@ -132,15 +133,136 @@ class MemoryLeakDetector {
         Logger.shared.log("Emergency memory cleanup completed", category: .systemMemory, level: .info)
     }
     
-    // MARK: - Private Methods
+    /// Stop monitoring (for thermal emergency mode)
+    func stopMonitoring() {
+        monitoringTimer?.invalidate()
+        monitoringTimer = nil
+        print("[MemoryLeakDetector] Monitoring stopped")
+    }
     
-    private func startMonitoring() {
+    /// Start monitoring (for thermal emergency mode)
+    func startMonitoring() {
+        stopMonitoring() // Ensure any existing timer is invalidated
         monitoringTimer = Timer.scheduledTimer(withTimeInterval: snapshotInterval, repeats: true) { [weak self] _ in
             self?.takeMemorySnapshot()
         }
+        print("[MemoryLeakDetector] Monitoring started")
     }
     
+    /// Set logging enabled/disabled for thermal emergency mode
+    func setLoggingEnabled(_ enabled: Bool) {
+        isLoggingEnabled = enabled
+        if !enabled {
+            // Clear any pending logs when disabling
+            memorySnapshots.removeAll()
+        }
+    }
+    
+    /// Enhanced zombie object detection
+    func detectZombieObjects() {
+        Logger.shared.log("Detecting potential zombie objects", category: .systemMemory, level: .warning)
+        
+        // Check for objects that might be accessed after deallocation
+        var zombieCount = 0
+        
+        for (_, weakRef) in trackedObjects {
+            // Check if object is still valid
+            if let obj = weakRef.object as? NSObject {
+                // Check if object has been deallocated but still referenced
+                // Note: We can't directly check for NSZombie in Swift, but we can check for invalid objects
+                if obj.description.contains("deallocated") || obj.description.contains("zombie") {
+                    zombieCount += 1
+                    Logger.shared.log("ZOMBIE DETECTED: \(weakRef.objectType) - \(obj.description)", category: .systemMemory, level: .error)
+                }
+            }
+        }
+        
+        if zombieCount > 0 {
+            Logger.shared.log("Found \(zombieCount) potential zombie objects", category: .systemMemory, level: .error)
+            performEmergencyCleanup()
+        } else {
+            Logger.shared.log("No zombie objects detected", category: .systemMemory, level: .info)
+        }
+    }
+    
+    /// Check for strong reference cycles in closures
+    func detectStrongReferenceCycles() {
+        Logger.shared.log("Detecting strong reference cycles", category: .systemMemory, level: .warning)
+        
+        // Check for common strong reference cycle patterns
+        var cycleCount = 0
+        
+        // Check timer closures
+        for (_, weakRef) in trackedObjects {
+            if weakRef.objectType.contains("Timer") {
+                // Timers are common sources of strong reference cycles
+                cycleCount += 1
+                Logger.shared.log("Potential timer cycle: \(weakRef.objectType) - \(weakRef.object?.description ?? "unknown")", category: .systemMemory, level: .warning)
+            }
+        }
+        
+        // Check notification observers
+        for (_, weakRef) in trackedObjects {
+            if weakRef.objectType.contains("Observer") || weakRef.objectType.contains("Notification") {
+                cycleCount += 1
+                Logger.shared.log("Potential notification cycle: \(weakRef.objectType) - \(weakRef.object?.description ?? "unknown")", category: .systemMemory, level: .warning)
+            }
+        }
+        
+        if cycleCount > 0 {
+            Logger.shared.log("Found \(cycleCount) potential strong reference cycles", category: .systemMemory, level: .warning)
+        } else {
+            Logger.shared.log("No strong reference cycles detected", category: .systemMemory, level: .info)
+        }
+    }
+    
+    /// Comprehensive memory leak detection including zombie objects
+    func performComprehensiveLeakDetection() {
+        Logger.shared.log("Performing comprehensive memory leak detection", category: .systemMemory, level: .info)
+        
+        // Detect zombie objects
+        detectZombieObjects()
+        
+        // Detect strong reference cycles
+        detectStrongReferenceCycles()
+        
+        // Perform regular leak detection
+        takeMemorySnapshot()
+        
+        // Check for unmanaged timers
+        detectUnmanagedTimers()
+    }
+    
+    /// Detect unmanaged timers that might cause leaks
+    func detectUnmanagedTimers() {
+        Logger.shared.log("Detecting unmanaged timers", category: .systemMemory, level: .warning)
+        
+        var unmanagedTimerCount = 0
+        
+        for (_, weakRef) in trackedObjects {
+            if weakRef.objectType.contains("Timer") {
+                if let timer = weakRef.object as? Timer {
+                    // Check if timer is still valid and running
+                    if timer.isValid {
+                        unmanagedTimerCount += 1
+                        Logger.shared.log("Unmanaged timer detected: \(weakRef.objectType) - \(timer.description)", category: .systemMemory, level: .warning)
+                    }
+                }
+            }
+        }
+        
+        if unmanagedTimerCount > 0 {
+            Logger.shared.log("Found \(unmanagedTimerCount) unmanaged timers", category: .systemMemory, level: .warning)
+        } else {
+            Logger.shared.log("No unmanaged timers detected", category: .systemMemory, level: .info)
+        }
+    }
+    
+    // MARK: - Private Methods
+    
     private func takeMemorySnapshot() {
+        guard isLoggingEnabled else { return }
+        
         let (used, _) = getCurrentMemoryUsage()
         let activeObjects = trackedObjects.values.filter { $0.object != nil }.count
         
@@ -238,5 +360,15 @@ extension MemoryLeakDetector {
     /// Track a particle emitter
     func trackParticleEmitter(_ emitter: SKEmitterNode) {
         trackObject(emitter, type: "SKEmitterNode")
+    }
+    
+    /// Track a timer
+    func trackTimer(_ timer: Timer, type: String) {
+        trackObject(timer, type: "Timer_\(type)")
+    }
+    
+    /// Stop tracking a timer
+    func stopTrackingTimer(_ timer: Timer, type: String) {
+        stopTracking(timer, type: "Timer_\(type)")
     }
 } 

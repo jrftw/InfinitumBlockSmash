@@ -108,7 +108,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var levelLabel: SKLabelNode?
     private var memoryWarningLabel: SKLabelNode?
     private var lastMemoryCheck: TimeInterval = 0
-    private let memoryCheckInterval: TimeInterval = MemoryConfig.getIntervals().memoryCheck
+    private let memoryCheckInterval: TimeInterval = {
+        #if targetEnvironment(simulator)
+        return 30.0 // More frequent checks in simulator
+        #else
+        return MemoryConfig.getIntervals().memoryCheck
+        #endif
+    }()
     // Add this property to track hint highlight
     private var hintHighlight: SKNode?
     // Add memory management properties
@@ -117,6 +123,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var cachedNodes: [String: SKNode] = [:]
     // Add theme observation property
     private var themeObserver: NSObjectProtocol?
+    // Observer properties to prevent zombie objects
+    private var memoryWarningObserver: NSObjectProtocol?
+    private var memoryCriticalObserver: NSObjectProtocol?
+    private var themeChangeObserver: NSObjectProtocol?
+    private var gameOverObserver: NSObjectProtocol?
     // MARK: - Object Pooling
     // Removed local pooling properties - now using NodePool.shared
     // MARK: - Texture Management
@@ -239,15 +250,23 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             Logger.shared.debug("Setting GameState delegate", category: .debugGameScene)
             gameState.delegate = self
         }
-        // Add notification observers
-        NotificationCenter.default.addObserver(self,
-                                               selector: #selector(handleMemoryWarningNotification),
-                                               name: .memoryWarning,
-                                               object: nil)
-        NotificationCenter.default.addObserver(self,
-                                               selector: #selector(handleMemoryCriticalNotification),
-                                               name: .memoryCritical,
-                                               object: nil)
+        // Add notification observers with proper storage
+        memoryWarningObserver = NotificationCenter.default.addObserver(
+            forName: .memoryWarning,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleMemoryWarningNotification()
+        }
+        
+        memoryCriticalObserver = NotificationCenter.default.addObserver(
+            forName: .memoryCritical,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleMemoryCriticalNotification()
+        }
+        
         // Start periodic memory cleanup
         Task {
             await setupMemoryManagement()
@@ -255,22 +274,27 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         Logger.shared.debug("Scene setup complete. trayNode in parent: \(trayNode?.parent != nil)", category: .debugGameScene)
         super.didMove(to: view)
         setBackgroundAnimationsActive(true)
+        
         // Set up notification observer for theme changes
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleThemeChange),
-            name: NSNotification.Name("ThemeDidChange"),
-            object: nil
-        )
+        themeChangeObserver = NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("ThemeDidChange"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleThemeChange()
+        }
+        
         // Initial theme setup
         updateTheme()
+        
         // Add observer for game over notification
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleGameOverNotification),
-            name: Notification.Name.gameOver,
-            object: nil
-        )
+        gameOverObserver = NotificationCenter.default.addObserver(
+            forName: Notification.Name.gameOver,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleGameOverNotification()
+        }
         
         // Start thermal state monitoring
         startThermalStateMonitoring()
@@ -282,6 +306,40 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         #if DEBUG
         MemoryLeakDetector.shared.stopTracking(self, type: "GameScene")
         #endif
+        
+        // Invalidate all timers
+        memoryManagementTimer?.invalidate()
+        memoryManagementTimer = nil
+        thermalMonitoringTimer?.invalidate()
+        thermalMonitoringTimer = nil
+        
+        #if DEBUG
+        // Stop tracking timers
+        if let memoryTimer = memoryManagementTimer {
+            MemoryLeakDetector.shared.stopTrackingTimer(memoryTimer, type: "GameScene_Memory")
+        }
+        if let thermalTimer = thermalMonitoringTimer {
+            MemoryLeakDetector.shared.stopTrackingTimer(thermalTimer, type: "GameScene_Thermal")
+        }
+        #endif
+        
+        // Remove specific observers instead of removing all
+        if let observer = memoryWarningObserver {
+            NotificationCenter.default.removeObserver(observer)
+            memoryWarningObserver = nil
+        }
+        if let observer = memoryCriticalObserver {
+            NotificationCenter.default.removeObserver(observer)
+            memoryCriticalObserver = nil
+        }
+        if let observer = themeChangeObserver {
+            NotificationCenter.default.removeObserver(observer)
+            themeChangeObserver = nil
+        }
+        if let observer = gameOverObserver {
+            NotificationCenter.default.removeObserver(observer)
+            gameOverObserver = nil
+        }
         
         // Cleanup
         gridNode?.children.forEach { cleanupNode($0) }
@@ -301,7 +359,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         // Clear node pools
         NodePool.shared.clearAllPools()
-        NotificationCenter.default.removeObserver(self)
     }
     private func setupScene() {
         // Set up physics world
@@ -1366,13 +1423,24 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         gridNode.addChild(containerNode)
     }
     // MARK: - Memory Management
+    private var memoryManagementTimer: Timer?
+    
     private func setupMemoryManagement() async {
+        // Invalidate any existing timer first
+        memoryManagementTimer?.invalidate()
+        
         // Start periodic memory monitoring with significantly reduced frequency
-        Timer.scheduledTimer(withTimeInterval: MemoryConfig.getIntervals().memoryCheck * 5, repeats: true) { [weak self] _ in // Increased from 3x to 5x
+        memoryManagementTimer = Timer.scheduledTimer(withTimeInterval: MemoryConfig.getIntervals().memoryCheck * 5, repeats: true) { [weak self] _ in // Increased from 3x to 5x
             Task { @MainActor [weak self] in
                 await self?.checkAndCleanupMemory()
             }
         }
+        
+        #if DEBUG
+        if let timer = memoryManagementTimer {
+            MemoryLeakDetector.shared.trackTimer(timer, type: "GameScene_Memory")
+        }
+        #endif
     }
     private func checkAndCleanupMemory() async {
         let status = MemorySystem.shared.checkMemoryStatus()
@@ -1525,11 +1593,41 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 lastMemoryCleanup = currentTime
             }
         }
+        
+        // Additional memory check for simulator
+        #if targetEnvironment(simulator)
+        if currentTime - lastMemoryCheck >= memoryCheckInterval {
+            Task { @MainActor in
+                await checkSimulatorMemoryStatus()
+                lastMemoryCheck = currentTime
+            }
+        }
+        #endif
+        
         // Update game state
         Task {
             await gameState.update()
         }
     }
+    
+    #if targetEnvironment(simulator)
+    private func checkSimulatorMemoryStatus() async {
+        let memorySystem = MemorySystem.shared
+        let status = memorySystem.checkMemoryStatus()
+        
+        switch status {
+        case .critical:
+            Logger.shared.debug("[Simulator] Critical memory status detected", category: .debugGameScene)
+            await performAggressiveCleanup()
+        case .warning:
+            Logger.shared.debug("[Simulator] Warning memory status detected", category: .debugGameScene)
+            performNormalCleanup()
+        case .normal:
+            break
+        }
+    }
+    #endif
+    
     private func handleGameOver() {
         // Play fail sound
         AudioManager.shared.playFailSound()
@@ -2126,11 +2224,22 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     // MARK: - Thermal State Monitoring
     
+    private var thermalMonitoringTimer: Timer?
+    
     private func startThermalStateMonitoring() {
-        // Check thermal state every 10 seconds (increased from 5 seconds to save battery)
-        Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in // Increased from 5.0 to 10.0
+        // Invalidate any existing timer first
+        thermalMonitoringTimer?.invalidate()
+        
+        // Check thermal state every 30 seconds (significantly increased to prevent heating)
+        thermalMonitoringTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in // Increased from 10.0 to 30.0
             self?.checkAndAdjustForThermalState()
         }
+        
+        #if DEBUG
+        if let timer = thermalMonitoringTimer {
+            MemoryLeakDetector.shared.trackTimer(timer, type: "GameScene_Thermal")
+        }
+        #endif
         
         // Observe quality settings changes
         NotificationCenter.default.addObserver(

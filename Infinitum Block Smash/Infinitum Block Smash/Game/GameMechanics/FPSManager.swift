@@ -31,10 +31,8 @@
  * - SpriteKit: Game rendering performance
  * 
  * FPS OPTIONS:
- * - 30 FPS: Standard performance mode
+ * - 30 FPS: Standard performance mode (default)
  * - 60 FPS: Smooth gameplay mode
- * - 120 FPS: High refresh rate mode (ProMotion)
- * - Unlimited: Maximum device refresh rate (limited by thermal/battery)
  * - Adaptive: Dynamic FPS based on conditions
  * 
  * DEVICE CAPABILITIES:
@@ -180,21 +178,13 @@ class FPSManager: ObservableObject {
             options.append(60)
         }
         
-        if maxRefreshRate >= 120 {
-            options.append(120)
-        }
-        
-        // Add unlimited option (0) only for high-end devices with good thermal management
-        if maxRefreshRate > 60 && !deviceSimulator.isLowEndDevice() {
-            options.append(0)
-        }
+        // Remove 120 FPS and unlimited options for all devices
+        // Only keep 30 and 60 FPS options
         
         // For low-end devices in simulator, limit options
         if deviceSimulator.isRunningInSimulator() && deviceSimulator.isLowEndDevice() {
-            // Remove unlimited option for low-end devices
-            options = options.filter { $0 != 0 }
-            // Limit to 30 and 60 FPS for low-end devices
-            options = options.filter { $0 <= 60 }
+            // Limit to 30 FPS only for low-end devices
+            options = [30]
             print("[FPSManager] Limited FPS options for low-end device: \(options)")
         }
         
@@ -203,13 +193,16 @@ class FPSManager: ObservableObject {
         
         // Load saved FPS or use default based on device capabilities
         let savedFPS = userDefaults.integer(forKey: targetFPSKey)
-        if savedFPS == 0 || !options.contains(savedFPS) {
-            // Choose appropriate default based on device type
-            if deviceSimulator.isRunningInSimulator() && deviceSimulator.isLowEndDevice() {
-                self.targetFPS = 30 // Default to 30 FPS for low-end devices
-            } else {
-                self.targetFPS = options.first ?? 30
-            }
+        
+        // Migrate old FPS settings (120 FPS or unlimited) to 30 FPS
+        if savedFPS == 120 || savedFPS == 0 {
+            print("[FPSManager] Migrating old FPS setting \(savedFPS) to 30 FPS")
+            userDefaults.set(30, forKey: targetFPSKey)
+            userDefaults.synchronize()
+            self.targetFPS = 30
+        } else if savedFPS == 0 || !options.contains(savedFPS) {
+            // Always default to 30 FPS for all devices
+            self.targetFPS = 30
         } else {
             self.targetFPS = savedFPS
         }
@@ -241,8 +234,8 @@ class FPSManager: ObservableObject {
         updateThermalState()
         updateBatteryState()
         
-        // Start periodic monitoring - reduced frequency to save battery
-        performanceTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in // Increased from 2.0 to 5.0
+        // Start periodic monitoring - significantly reduced frequency to prevent heating
+        performanceTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { [weak self] _ in // Increased from 5.0 to 15.0
             self?.updateThermalState()
             self?.updateBatteryState()
             self?.updatePerformanceRecommendations()
@@ -278,6 +271,34 @@ class FPSManager: ObservableObject {
         if newThermalState != thermalState {
             thermalState = newThermalState
             print("[FPSManager] Thermal state changed to: \(thermalStateDescription(newThermalState))")
+            
+            // Adjust monitoring frequency based on thermal state
+            adjustMonitoringForThermalState(newThermalState)
+        }
+    }
+    
+    private func adjustMonitoringForThermalState(_ state: ProcessInfo.ThermalState) {
+        switch state {
+        case .serious, .critical:
+            // Reduce monitoring frequency when hot
+            performanceTimer?.invalidate()
+            performanceTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in // Very infrequent when hot
+                self?.updateThermalState()
+                self?.updateBatteryState()
+                self?.updatePerformanceRecommendations()
+            }
+            print("[FPSManager] Reduced monitoring frequency due to thermal state: \(state)")
+        case .nominal, .fair:
+            // Normal monitoring frequency
+            performanceTimer?.invalidate()
+            performanceTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { [weak self] _ in
+                self?.updateThermalState()
+                self?.updateBatteryState()
+                self?.updatePerformanceRecommendations()
+            }
+            print("[FPSManager] Normal monitoring frequency restored")
+        @unknown default:
+            break
         }
     }
     
@@ -372,27 +393,11 @@ class FPSManager: ObservableObject {
     }
     
     func getDisplayFPS(for targetFPS: Int) -> Int {
-        let deviceSimulator = DeviceSimulator.shared
-        
-        if deviceSimulator.isRunningInSimulator() {
-            // If unlimited (0) is selected, use device's maximum refresh rate
-            if targetFPS == 0 {
-                return deviceSimulator.getSimulatedMaxFPS()
-            }
-            return targetFPS
-        } else {
-            // If unlimited (0) is selected, use device's maximum refresh rate
-            if targetFPS == 0 {
-                return UIScreen.main.maximumFramesPerSecond
-            }
-            return targetFPS
-        }
+        // Simply return the target FPS since we no longer support unlimited
+        return targetFPS
     }
     
     func getFPSDisplayName(for fps: Int) -> String {
-        if fps == 0 {
-            return "Unlimited"
-        }
         return "\(fps) FPS"
     }
     
@@ -564,6 +569,27 @@ class FPSManager: ObservableObject {
         }
         
         return recommendations
+    }
+    
+    /// Stop monitoring (for thermal emergency mode)
+    func stopMonitoring() {
+        performanceTimer?.invalidate()
+        performanceTimer = nil
+        print("[FPSManager] Monitoring stopped")
+    }
+    
+    /// Start monitoring (for thermal emergency mode)
+    func startMonitoring() {
+        stopMonitoring() // Ensure any existing timer is invalidated
+        
+        // Start performance monitoring with reduced frequency
+        performanceTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { [weak self] _ in // Increased from 5.0 to 15.0
+            self?.updateThermalState()
+            self?.updateBatteryState()
+            self?.updatePerformanceRecommendations()
+        }
+        
+        print("[FPSManager] Monitoring started")
     }
 }
 

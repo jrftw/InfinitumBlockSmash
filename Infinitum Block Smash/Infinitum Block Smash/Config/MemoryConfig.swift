@@ -122,7 +122,7 @@ struct MemoryConfig {
     static func getCacheLimits() -> CacheLimits {
         // Check if running in simulator
         #if targetEnvironment(simulator)
-        return midRangeDeviceCacheLimits
+        return lowEndDeviceCacheLimits // Use low-end limits for simulator
         #else
         // Determine device type based on available memory
         let totalMemory = Double(ProcessInfo.processInfo.physicalMemory) / 1024 / 1024
@@ -134,6 +134,17 @@ struct MemoryConfig {
         } else { // Less than 3GB (low-end)
             return lowEndDeviceCacheLimits
         }
+        #endif
+    }
+    
+    /// Get memory thresholds for current environment
+    static func getMemoryThresholds() -> (warning: Double, critical: Double, extreme: Double) {
+        #if targetEnvironment(simulator)
+        // More aggressive thresholds for simulator
+        return (warning: 0.25, critical: 0.35, extreme: 0.45)
+        #else
+        // Normal thresholds for real devices
+        return (warning: Thresholds.warningLevel, critical: Thresholds.criticalLevel, extreme: Thresholds.extremeLevel)
         #endif
     }
     

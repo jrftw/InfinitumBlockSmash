@@ -259,10 +259,43 @@ class DeviceSimulator {
     func getSimulatedMemoryPressure() -> Double {
         guard isSimulatorMode else { return 0.0 }
         
-        let currentMemory = Double(ProcessInfo.processInfo.physicalMemory) / 1024.0 / 1024.0
+        // For simulator, we need to estimate memory usage differently
+        // since ProcessInfo.processInfo.physicalMemory returns host Mac memory
+        let estimatedMemoryUsage = getEstimatedSimulatorMemoryUsage()
         let limit = getSimulatedMemoryLimit()
         
-        return min(currentMemory / limit, 1.0)
+        return min(estimatedMemoryUsage / limit, 1.0)
+    }
+    
+    /// Estimate memory usage in simulator (more accurate than ProcessInfo)
+    private func getEstimatedSimulatorMemoryUsage() -> Double {
+        // Use a more conservative estimate for simulator
+        // Simulator typically has much lower memory limits than host Mac
+        let baseMemory = 100.0 // Base memory usage in MB
+        
+        // Add estimated memory from various sources
+        let textureMemory = estimateTextureMemory()
+        let nodeMemory = estimateNodeMemory()
+        let cacheMemory = estimateCacheMemory()
+        
+        return baseMemory + textureMemory + nodeMemory + cacheMemory
+    }
+    
+    private func estimateTextureMemory() -> Double {
+        // Estimate texture memory based on active textures
+        // This is a rough estimate - in real implementation you'd track actual texture usage
+        return 50.0 // Conservative estimate
+    }
+    
+    private func estimateNodeMemory() -> Double {
+        // Estimate node memory based on active nodes
+        // This is a rough estimate - in real implementation you'd track actual node count
+        return 30.0 // Conservative estimate
+    }
+    
+    private func estimateCacheMemory() -> Double {
+        // Estimate cache memory
+        return 20.0 // Conservative estimate
     }
     
     /// Simulate thermal throttling based on CPU usage

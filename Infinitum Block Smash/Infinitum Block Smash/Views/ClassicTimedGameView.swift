@@ -436,7 +436,7 @@ private struct StatsOverlayView: View {
                                 StatText("FPS: \(Int(performanceMonitor.currentFPS))")
                             }
                             if showMemory {
-                                StatText("Memory: \(String(format: "%.1f", performanceMonitor.getCurrentMemoryUsage()))MB")
+                                StatText("Memory: \(String(format: "%.1f", getSafeMemoryUsage()))MB")
                             }
                             if showFrame {
                                 StatText("Frame: \(String(format: "%.1f", performanceMonitor.frameTime))ms")
@@ -515,6 +515,31 @@ private struct StatsOverlayView: View {
         .frame(maxWidth: .infinity, alignment: .center)
         .padding(.horizontal, 16)
         .allowsHitTesting(false)
+    }
+    
+    private func getSafeMemoryUsage() -> Double {
+        // Safe memory usage calculation that won't cause crashes
+        var info = mach_task_basic_info()
+        var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size / MemoryLayout<natural_t>.size)
+        
+        let kr: kern_return_t = withUnsafeMutablePointer(to: &info) { infoPtr in
+            infoPtr.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { intPtr in
+                task_info(
+                    mach_task_self_,
+                    task_flavor_t(MACH_TASK_BASIC_INFO),
+                    intPtr,
+                    &count
+                )
+            }
+        }
+        
+        if kr == KERN_SUCCESS {
+            return Double(info.resident_size) / 1024.0 / 1024.0
+        } else {
+            // Fallback calculation
+            let totalMemory = Double(ProcessInfo.processInfo.physicalMemory) / 1024.0 / 1024.0
+            return totalMemory * 0.5
+        }
     }
 }
 

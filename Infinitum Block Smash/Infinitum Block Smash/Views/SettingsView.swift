@@ -441,6 +441,9 @@ private struct StatsForNerdsSection: View {
     @AppStorage("userID") private var userID = ""
     @AppStorage("isGuest") private var isGuest = false
     
+    // State for info popup
+    @State private var showingInfoFor: NerdInfoItem? = nil
+    
     // Cached values for settings display (updated less frequently)
     @State private var cachedMemoryUsage: Double = 0.0
     @State private var cachedFrameTime: Double = 0.0
@@ -477,7 +480,7 @@ private struct StatsForNerdsSection: View {
         if toggle.wrappedValue {
             return true // Can always turn off
         } else {
-            return activeToggleCount < 6 // Can only turn on if under limit
+            return activeToggleCount < 4 // Can only turn on if under limit (changed from 6 to 4)
         }
     }
     
@@ -562,75 +565,449 @@ private struct StatsForNerdsSection: View {
             Toggle("Show Stats Overlay", isOn: $showStatsOverlay)
             
             if showStatsOverlay {
+                // Note about resource management
+                Text("Note: Some stats may default to 0 when the app needs more resources")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .padding(.bottom, 8)
+                
                 // Performance Metrics
                 Group {
-                    Toggle("Show FPS", isOn: $showFPS)
-                        .disabled(!canToggle($showFPS))
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Button(action: {
+                                showingInfoFor = NerdInfoItem(
+                                    id: "fps",
+                                    title: "FPS (Frames Per Second)",
+                                    description: "FPS measures how many frames are rendered per second. Higher FPS means smoother gameplay. Target FPS is your desired frame rate, while Current FPS shows actual performance. Lower FPS can indicate performance issues or thermal throttling."
+                                )
+                            }) {
+                                Image(systemName: "info.circle")
+                                    .foregroundColor(.blue)
+                                    .font(.caption)
+                            }
+                            
+                            Toggle("Show FPS", isOn: $showFPS)
+                                .disabled(!canToggle($showFPS))
+                        }
+                        
+                        if showFPS {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Current FPS: \(fpsManager.getDisplayFPS(for: fpsManager.targetFPS))")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Text("Target FPS: \(fpsManager.getFPSDisplayName(for: fpsManager.targetFPS))")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.leading, 20)
+                        }
+                    }
                     
-                    Toggle("Show Memory Usage", isOn: $showMemory)
-                        .disabled(!canToggle($showMemory))
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Button(action: {
+                                showingInfoFor = NerdInfoItem(
+                                    id: "memory",
+                                    title: "Memory Usage",
+                                    description: "Memory Usage shows how much RAM the app is currently using. Memory Limit indicates your device's maximum available memory. High memory usage can cause performance issues or app crashes. The app may reduce memory usage when resources are limited."
+                                )
+                            }) {
+                                Image(systemName: "info.circle")
+                                    .foregroundColor(.blue)
+                                    .font(.caption)
+                            }
+                            
+                            Toggle("Show Memory Usage", isOn: $showMemory)
+                                .disabled(!canToggle($showMemory))
+                        }
+                        
+                        if showMemory {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Memory Usage: \(String(format: "%.1f", cachedMemoryUsage))MB")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Text("Memory Limit: \(String(format: "%.0f", DeviceSimulator.shared.getSimulatedMemoryLimit()))MB")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.leading, 20)
+                        }
+                    }
                     
-                    Toggle("Show Frame Time", isOn: $showFrame)
-                        .disabled(!canToggle($showFrame))
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Button(action: {
+                                showingInfoFor = NerdInfoItem(
+                                    id: "frame_time",
+                                    title: "Frame Time",
+                                    description: "Frame Time measures how long it takes to render each frame in milliseconds. Lower frame times mean smoother gameplay. 16.67ms = 60 FPS, 33.33ms = 30 FPS. High frame times indicate performance bottlenecks or thermal throttling."
+                                )
+                            }) {
+                                Image(systemName: "info.circle")
+                                    .foregroundColor(.blue)
+                                    .font(.caption)
+                            }
+                            
+                            Toggle("Show Frame Time", isOn: $showFrame)
+                                .disabled(!canToggle($showFrame))
+                        }
+                        
+                        if showFrame {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Frame Time: \(String(format: "%.1f", cachedFrameTime))ms")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.leading, 20)
+                        }
+                    }
                     
-                    Toggle("Show CPU Usage", isOn: $showCPU)
-                        .disabled(!canToggle($showCPU))
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Button(action: {
+                                showingInfoFor = NerdInfoItem(
+                                    id: "cpu",
+                                    title: "CPU Usage",
+                                    description: "CPU Usage shows the percentage of your device's processor being used by the app. Higher usage means more processing power is needed. CPU Cores shows how many processor cores your device has. High CPU usage can cause battery drain and thermal throttling."
+                                )
+                            }) {
+                                Image(systemName: "info.circle")
+                                    .foregroundColor(.blue)
+                                    .font(.caption)
+                            }
+                            
+                            Toggle("Show CPU Usage", isOn: $showCPU)
+                                .disabled(!canToggle($showCPU))
+                        }
+                        
+                        if showCPU {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("CPU Usage: \(String(format: "%.1f", cachedCPUUsage))%")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Text("CPU Cores: \(DeviceSimulator.shared.getSimulatedCPUCores())")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.leading, 20)
+                        }
+                    }
                     
-                    Toggle("Show Network Latency", isOn: $showNetwork)
-                        .disabled(!canToggle($showNetwork))
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Button(action: {
+                                showingInfoFor = NerdInfoItem(
+                                    id: "network_latency",
+                                    title: "Network Latency",
+                                    description: "Network Latency measures the time it takes for data to travel between your device and the server. Lower latency means faster online features like leaderboards and cloud saves. Connection Type shows your current network (WiFi, Cellular, etc.). High latency can cause lag in online features."
+                                )
+                            }) {
+                                Image(systemName: "info.circle")
+                                    .foregroundColor(.blue)
+                                    .font(.caption)
+                            }
+                            
+                            Toggle("Show Network Latency", isOn: $showNetwork)
+                                .disabled(!canToggle($showNetwork))
+                        }
+                        
+                        if showNetwork {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Network Latency: \(String(format: "%.1f", cachedNetworkLatency))ms")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Text("Connection Type: \(NetworkMonitor.shared.connectionType.description)")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.leading, 20)
+                        }
+                    }
                     
-                    Toggle("Show Input Latency", isOn: $showInput)
-                        .disabled(!canToggle($showInput))
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Button(action: {
+                                showingInfoFor = NerdInfoItem(
+                                    id: "input_latency",
+                                    title: "Input Latency",
+                                    description: "Input Latency measures the time between when you touch the screen and when the game responds. Lower input latency means more responsive controls. High input latency can make the game feel sluggish or unresponsive. This is affected by frame rate, CPU usage, and system performance."
+                                )
+                            }) {
+                                Image(systemName: "info.circle")
+                                    .foregroundColor(.blue)
+                                    .font(.caption)
+                            }
+                            
+                            Toggle("Show Input Latency", isOn: $showInput)
+                                .disabled(!canToggle($showInput))
+                        }
+                        
+                        if showInput {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Input Latency: \(String(format: "%.1f", cachedInputLatency))ms")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.leading, 20)
+                        }
+                    }
                     
-                    Toggle("Show Temperature", isOn: $showTemperature)
-                        .disabled(!canToggle($showTemperature))
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Button(action: {
+                                showingInfoFor = NerdInfoItem(
+                                    id: "temperature",
+                                    title: "Temperature",
+                                    description: "Temperature shows your device's thermal state and estimated temperature. Thermal states range from Nominal (good) to Critical (bad). High temperatures cause thermal throttling, reducing performance to protect the device. Estimated temperature is approximate due to iOS limitations."
+                                )
+                            }) {
+                                Image(systemName: "info.circle")
+                                    .foregroundColor(.blue)
+                                    .font(.caption)
+                            }
+                            
+                            Toggle("Show Temperature", isOn: $showTemperature)
+                                .disabled(!canToggle($showTemperature))
+                        }
+                        
+                        if showTemperature {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Temperature: \(getThermalStateDescription(fpsManager.thermalState))")
+                                    .font(.caption)
+                                    .foregroundColor(getThermalStateColor(fpsManager.thermalState))
+                                Text("Est. Temp: \(PerformanceMonitor.shared.getTemperatureString(unit: temperatureUnit))")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.leading, 20)
+                        }
+                    }
                     
                     if showTemperature {
-                        Toggle("Show Detailed Temperature", isOn: $showDetailedTemperature)
-                            .disabled(!canToggle($showDetailedTemperature))
-                        
-                        Picker("Temperature Unit", selection: $temperatureUnit) {
-                            Text("Celsius").tag("Celsius")
-                            Text("Fahrenheit").tag("Fahrenheit")
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Button(action: {
+                                    showingInfoFor = NerdInfoItem(
+                                        id: "detailed_temperature",
+                                        title: "Detailed Temperature",
+                                        description: "Detailed Temperature provides more precise thermal information including percentage values and specific thermal state descriptions. This helps identify when your device is approaching thermal limits that could affect performance."
+                                    )
+                                }) {
+                                    Image(systemName: "info.circle")
+                                        .foregroundColor(.blue)
+                                        .font(.caption)
+                                }
+                                
+                                Toggle("Show Detailed Temperature", isOn: $showDetailedTemperature)
+                                    .disabled(!canToggle($showDetailedTemperature))
+                            }
+                            
+                            if showDetailedTemperature {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Detailed: \(PerformanceMonitor.shared.getDetailedTemperatureDescription())")
+                                        .font(.caption)
+                                        .foregroundColor(PerformanceMonitor.shared.getThermalStateColor())
+                                    Text("\(PerformanceMonitor.shared.getThermalStatePercentageString())")
+                                        .font(.caption)
+                                        .foregroundColor(PerformanceMonitor.shared.getThermalStateColor())
+                                }
+                                .padding(.leading, 20)
+                            }
+                            
+                            Picker("Temperature Unit", selection: $temperatureUnit) {
+                                Text("Celsius").tag("Celsius")
+                                Text("Fahrenheit").tag("Fahrenheit")
+                            }
+                            .pickerStyle(SegmentedPickerStyle())
+                            .padding(.leading, 20)
                         }
-                        .pickerStyle(SegmentedPickerStyle())
-                        .padding(.leading, 20)
                     }
                 }
                 
                 // Display Metrics
                 Group {
-                    Toggle("Show Resolution", isOn: $showResolution)
-                        .disabled(!canToggle($showResolution))
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Button(action: {
+                                showingInfoFor = NerdInfoItem(
+                                    id: "resolution",
+                                    title: "Resolution",
+                                    description: "Resolution shows your device's screen resolution in pixels (width x height). Higher resolutions provide sharper graphics but require more processing power. The app may reduce resolution on lower-end devices to maintain performance."
+                                )
+                            }) {
+                                Image(systemName: "info.circle")
+                                    .foregroundColor(.blue)
+                                    .font(.caption)
+                            }
+                            
+                            Toggle("Show Resolution", isOn: $showResolution)
+                                .disabled(!canToggle($showResolution))
+                        }
+                        
+                        if showResolution {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Resolution: \(cachedResolution)")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.leading, 20)
+                        }
+                    }
                 }
                 
                 // Network Metrics
                 Group {
-                    Toggle("Show Ping (ms)", isOn: $showPing)
-                        .disabled(!canToggle($showPing))
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Button(action: {
+                                showingInfoFor = NerdInfoItem(
+                                    id: "ping",
+                                    title: "Ping",
+                                    description: "Ping measures the round-trip time for data to travel to the server and back. Lower ping means faster response times for online features. Ping is affected by your internet connection quality and distance to servers. High ping can cause delays in leaderboard updates and cloud saves."
+                                )
+                            }) {
+                                Image(systemName: "info.circle")
+                                    .foregroundColor(.blue)
+                                    .font(.caption)
+                            }
+                            
+                            Toggle("Show Ping (ms)", isOn: $showPing)
+                                .disabled(!canToggle($showPing))
+                        }
+                        
+                        if showPing {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Ping: \(String(format: "%.0f", cachedPing))ms")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.leading, 20)
+                        }
+                    }
                     
-                    Toggle("Show Bitrate (Mbps)", isOn: $showBitrate)
-                        .disabled(!canToggle($showBitrate))
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Button(action: {
+                                showingInfoFor = NerdInfoItem(
+                                    id: "bitrate",
+                                    title: "Bitrate",
+                                    description: "Bitrate measures the speed of data transfer in megabits per second (Mbps). Higher bitrates mean faster data upload/download for cloud saves and leaderboard updates. This is limited by your internet connection speed and quality."
+                                )
+                            }) {
+                                Image(systemName: "info.circle")
+                                    .foregroundColor(.blue)
+                                    .font(.caption)
+                            }
+                            
+                            Toggle("Show Bitrate (Mbps)", isOn: $showBitrate)
+                                .disabled(!canToggle($showBitrate))
+                        }
+                        
+                        if showBitrate {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Bitrate: \(String(format: "%.1f", cachedBitrate))Mbps")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.leading, 20)
+                        }
+                    }
                     
-                    Toggle("Show Jitter (ms)", isOn: $showJitter)
-                        .disabled(!canToggle($showJitter))
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Button(action: {
+                                showingInfoFor = NerdInfoItem(
+                                    id: "jitter",
+                                    title: "Jitter",
+                                    description: "Jitter measures the variation in network latency over time. Lower jitter means more consistent network performance. High jitter can cause intermittent connection issues and delays in online features. This is often affected by network congestion and connection stability."
+                                )
+                            }) {
+                                Image(systemName: "info.circle")
+                                    .foregroundColor(.blue)
+                                    .font(.caption)
+                            }
+                            
+                            Toggle("Show Jitter (ms)", isOn: $showJitter)
+                                .disabled(!canToggle($showJitter))
+                        }
+                        
+                        if showJitter {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Jitter: \(String(format: "%.1f", cachedJitter))ms")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.leading, 20)
+                        }
+                    }
                     
-                    Toggle("Show Decode Time (ms)", isOn: $showDecode)
-                        .disabled(!canToggle($showDecode))
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Button(action: {
+                                showingInfoFor = NerdInfoItem(
+                                    id: "decode_time",
+                                    title: "Decode Time",
+                                    description: "Decode Time measures how long it takes to process and decode data received from the network. This includes processing cloud save data, leaderboard information, and other online features. Lower decode times mean faster loading of online content."
+                                )
+                            }) {
+                                Image(systemName: "info.circle")
+                                    .foregroundColor(.blue)
+                                    .font(.caption)
+                            }
+                            
+                            Toggle("Show Decode Time (ms)", isOn: $showDecode)
+                                .disabled(!canToggle($showDecode))
+                        }
+                        
+                        if showDecode {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Decode Time: \(String(format: "%.1f", cachedDecodeTime))ms")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.leading, 20)
+                        }
+                    }
                     
-                    Toggle("Show Packet Loss (%)", isOn: $showPacketLoss)
-                        .disabled(!canToggle($showPacketLoss))
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Button(action: {
+                                showingInfoFor = NerdInfoItem(
+                                    id: "packet_loss",
+                                    title: "Packet Loss",
+                                    description: "Packet Loss shows the percentage of data packets that fail to reach their destination. Lower packet loss means more reliable network connections. High packet loss can cause data corruption, failed cloud saves, or leaderboard sync issues. This is often caused by poor network conditions."
+                                )
+                            }) {
+                                Image(systemName: "info.circle")
+                                    .foregroundColor(.blue)
+                                    .font(.caption)
+                            }
+                            
+                            Toggle("Show Packet Loss (%)", isOn: $showPacketLoss)
+                                .disabled(!canToggle($showPacketLoss))
+                        }
+                        
+                        if showPacketLoss {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Packet Loss: \(String(format: "%.1f", cachedPacketLoss))%")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.leading, 20)
+                        }
+                    }
                 }
                 
                 // Toggle count indicator
                 HStack {
-                    Text("Active toggles: \(activeToggleCount)/6")
+                    Text("Active toggles: \(activeToggleCount)/4")
                         .font(.caption)
-                        .foregroundColor(activeToggleCount >= 6 ? .orange : .secondary)
+                        .foregroundColor(activeToggleCount >= 4 ? .orange : .secondary)
                     
                     Spacer()
                     
-                    if activeToggleCount >= 6 {
+                    if activeToggleCount >= 4 {
                         Text("Max reached")
                             .font(.caption)
                             .foregroundColor(.orange)
@@ -639,75 +1016,18 @@ private struct StatsForNerdsSection: View {
                 .padding(.vertical, 4)
                 
                 // Note about optimal settings
-                Text("Note: On some devices, 3 toggles may provide optimal performance")
+                Text("Note: On some devices, 2-3 toggles may provide optimal performance")
                     .font(.caption2)
                     .foregroundColor(.secondary)
                     .padding(.bottom, 4)
                 
-                // Current values display
+                // System Stats (always visible)
                 VStack(alignment: .leading, spacing: 8) {
-                    // Performance Metrics
-                    Group {
-                        Text("Current FPS: \(fpsManager.getDisplayFPS(for: fpsManager.targetFPS))")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        Text("Target FPS: \(fpsManager.getFPSDisplayName(for: fpsManager.targetFPS))")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        Text("Memory Usage: \(String(format: "%.1f", cachedMemoryUsage))MB")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        Text("Frame Time: \(String(format: "%.1f", cachedFrameTime))ms")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        Text("CPU Usage: \(String(format: "%.1f", cachedCPUUsage))%")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        Text("Input Latency: \(String(format: "%.1f", cachedInputLatency))ms")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
+                    Text("System Information")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.secondary)
                     
-                    // Display Metrics
-                    Group {
-                        Text("Resolution: \(cachedResolution)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    // Network Metrics
-                    Group {
-                        Text("Ping: \(String(format: "%.0f", cachedPing))ms")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        Text("Bitrate: \(String(format: "%.1f", cachedBitrate))Mbps")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        Text("Jitter: \(String(format: "%.1f", cachedJitter))ms")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        Text("Decode Time: \(String(format: "%.1f", cachedDecodeTime))ms")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        Text("Packet Loss: \(String(format: "%.1f", cachedPacketLoss))%")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        Text("Network Latency: \(String(format: "%.1f", cachedNetworkLatency))ms")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    // System Stats
                     Group {
                         let (hits, misses) = MemorySystem.shared.getCacheStats()
                         Text("Cache Stats: \(hits) hits, \(misses) misses")
@@ -724,15 +1044,7 @@ private struct StatsForNerdsSection: View {
                                 .foregroundColor(.red)
                         }
                         
-                        Text("Connection Type: \(NetworkMonitor.shared.connectionType.description)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
                         Text("Device Model: \(DeviceSimulator.shared.getCurrentDeviceModel())")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        Text("Memory Limit: \(String(format: "%.0f", DeviceSimulator.shared.getSimulatedMemoryLimit()))MB")
                             .font(.caption)
                             .foregroundColor(.secondary)
                         
@@ -740,52 +1052,9 @@ private struct StatsForNerdsSection: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                         
-                        Text("CPU Cores: \(DeviceSimulator.shared.getSimulatedCPUCores())")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
                         Text("Low-End Device: \(DeviceSimulator.shared.isLowEndDevice() ? "Yes" : "No")")
                             .font(.caption)
                             .foregroundColor(.secondary)
-                        
-                        // Temperature display with color coding
-                        HStack {
-                            Text("Temperature: \(getThermalStateDescription(fpsManager.thermalState))")
-                                .font(.caption)
-                                .foregroundColor(getThermalStateColor(fpsManager.thermalState))
-                            
-                            Spacer()
-                            
-                            Text("(\(fpsManager.thermalStateDescription(fpsManager.thermalState)))")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        // Detailed temperature info
-                        HStack {
-                            Text("Detailed: \(PerformanceMonitor.shared.getDetailedTemperatureDescription())")
-                                .font(.caption)
-                                .foregroundColor(PerformanceMonitor.shared.getThermalStateColor())
-                            
-                            Spacer()
-                            
-                            Text("\(PerformanceMonitor.shared.getThermalStatePercentageString())")
-                                .font(.caption)
-                                .foregroundColor(PerformanceMonitor.shared.getThermalStateColor())
-                        }
-                        
-                        // Estimated temperature info
-                        HStack {
-                            Text("Est. Temp: \(PerformanceMonitor.shared.getTemperatureString(unit: temperatureUnit))")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            
-                            Spacer()
-                            
-                            Text("(iOS limitation)")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
                         
                         // PerformanceMonitor debug info
                         Text("Memory Monitor Active: \(PerformanceMonitor.shared.isMemoryMonitoringActive() ? "Yes" : "No")")
@@ -805,6 +1074,9 @@ private struct StatsForNerdsSection: View {
                     updateCachedValues()
                 }
             }
+        }
+        .sheet(item: $showingInfoFor) { info in
+            NerdInfoView(info: info)
         }
     }
     
@@ -1026,6 +1298,63 @@ private struct VersionSection: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
+        }
+    }
+}
+
+// MARK: - Info Popup Views
+
+struct NerdInfoItem: Identifiable {
+    let id: String
+    let title: String
+    let description: String
+}
+
+struct NerdInfoView: View {
+    let info: NerdInfoItem
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        if #available(iOS 16.0, *) {
+            NavigationStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        Text(info.description)
+                            .font(.body)
+                            .foregroundColor(.primary)
+                            .padding()
+                    }
+                }
+                .navigationTitle(info.title)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("Done") {
+                            dismiss()
+                        }
+                    }
+                }
+            }
+        } else {
+            NavigationView {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        Text(info.description)
+                            .font(.body)
+                            .foregroundColor(.primary)
+                            .padding()
+                    }
+                }
+                .navigationTitle(info.title)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("Done") {
+                            dismiss()
+                        }
+                    }
+                }
+            }
         }
     }
 }

@@ -86,36 +86,50 @@ class AdaptiveQualityManager: ObservableObject {
     // MARK: - Quality Monitoring
     
     private func startQualityMonitoring() {
-        // Update quality settings every 5 seconds (increased from 2 seconds to save battery)
-        qualityUpdateTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+        // Significantly reduce quality update frequency to prevent heating
+        qualityUpdateTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { [weak self] _ in // Increased from 5.0 to 15.0
             self?.updateQualitySettings()
         }
     }
     
     private func updateQualitySettings() {
         let newQualityLevel = determineOptimalQualityLevel()
-        let newSettings = getQualitySettings(for: newQualityLevel)
         
         if newQualityLevel != currentQualityLevel {
             currentQualityLevel = newQualityLevel
-            Logger.shared.debug("[Quality] Quality level changed to: \(newQualityLevel.rawValue)", category: .systemMemory)
-        }
-        
-        // Update performance reduction status
-        let shouldReduce = fpsManager.shouldReducePerformance
-        if shouldReduce != isPerformanceReduced {
-            isPerformanceReduced = shouldReduce
-            performanceReason = getPerformanceReductionReason()
+            applyQualitySettings(getQualitySettings(for: newQualityLevel))
             
-            if shouldReduce {
-                Logger.shared.debug("[Quality] Performance reduced: \(performanceReason)", category: .systemMemory)
-            } else {
-                Logger.shared.debug("[Quality] Performance restored - conditions improved", category: .systemMemory)
-            }
+            #if DEBUG
+            let reason = getPerformanceReductionReason()
+            print("[AdaptiveQuality] Quality level changed to \(newQualityLevel) due to: \(reason)")
+            #endif
         }
         
-        // Apply quality settings
-        applyQualitySettings(newSettings)
+        // Adjust monitoring frequency based on thermal state
+        adjustMonitoringForThermalState()
+    }
+    
+    private func adjustMonitoringForThermalState() {
+        let thermalState = fpsManager.thermalState
+        
+        switch thermalState {
+        case .serious, .critical:
+            // Reduce monitoring frequency when hot
+            qualityUpdateTimer?.invalidate()
+            qualityUpdateTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in // Very infrequent when hot
+                self?.updateQualitySettings()
+            }
+            print("[AdaptiveQuality] Reduced monitoring frequency due to thermal state: \(thermalState)")
+        case .nominal, .fair:
+            // Normal monitoring frequency
+            qualityUpdateTimer?.invalidate()
+            qualityUpdateTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { [weak self] _ in
+                self?.updateQualitySettings()
+            }
+            print("[AdaptiveQuality] Normal monitoring frequency restored")
+        @unknown default:
+            break
+        }
     }
     
     // MARK: - Quality Level Determination
@@ -320,6 +334,25 @@ class AdaptiveQualityManager: ObservableObject {
     /// Force quality update
     func forceQualityUpdate() {
         updateQualitySettings()
+    }
+    
+    /// Stop monitoring (for thermal emergency mode)
+    func stopMonitoring() {
+        qualityUpdateTimer?.invalidate()
+        qualityUpdateTimer = nil
+        print("[AdaptiveQualityManager] Monitoring stopped")
+    }
+    
+    /// Start monitoring (for thermal emergency mode)
+    func startMonitoring() {
+        stopMonitoring() // Ensure any existing timer is invalidated
+        
+        // Start quality monitoring with reduced frequency
+        qualityUpdateTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { [weak self] _ in // Increased from 5.0 to 15.0
+            self?.updateQualitySettings()
+        }
+        
+        print("[AdaptiveQualityManager] Monitoring started")
     }
 }
 

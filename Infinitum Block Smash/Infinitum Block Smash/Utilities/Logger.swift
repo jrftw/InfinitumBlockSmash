@@ -257,6 +257,14 @@ class Logger {
         logBuffer.removeAll()
     }
     
+    /// Set debug logging enabled/disabled for thermal emergency mode
+    func setDebugEnabled(_ enabled: Bool) {
+        // This will be handled by LoggerConfig, but we can also clear logs when disabling
+        if !enabled {
+            clearLogs()
+        }
+    }
+    
     // MARK: - Convenience Methods
     
     func debug(_ message: String, category: Category = .general, file: String = #file, function: String = #function, line: Int = #line) {

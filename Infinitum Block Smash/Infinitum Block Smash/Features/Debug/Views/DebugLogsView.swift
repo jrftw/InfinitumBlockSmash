@@ -1,5 +1,6 @@
 import SwiftUI
 import MessageUI
+import SpriteKit
 
 struct DebugLogsView: View {
     @State private var logs: String = ""
@@ -94,6 +95,130 @@ struct DebugLogsView: View {
                     Label("Privacy Policy", systemImage: "hand.raised")
                 }
             }
+            
+            Section("Emergency Controls") {
+                HStack {
+                    Text("Thermal State:")
+                    Spacer()
+                    Text(PerformanceMonitor.shared.getThermalStateDetails())
+                        .foregroundColor(PerformanceMonitor.shared.getThermalStateColor())
+                        .fontWeight(.semibold)
+                }
+                
+                HStack {
+                    Text("Emergency Mode:")
+                    Spacer()
+                    Text(PerformanceMonitor.shared.isThermalEmergencyMode ? "Active" : "Inactive")
+                        .foregroundColor(PerformanceMonitor.shared.isThermalEmergencyMode ? .red : .green)
+                        .fontWeight(.semibold)
+                }
+                
+                HStack {
+                    Text("Memory Usage:")
+                    Spacer()
+                    Text("\(String(format: "%.1f", getSafeMemoryUsage()))MB")
+                        .foregroundColor(getSafeMemoryUsage() > 1500 ? .red : .green)
+                        .fontWeight(.semibold)
+                }
+                
+                if getSafeMemoryUsage() > 800 {
+                    Button(action: {
+                        Task {
+                            print("[Debug] High memory detected - performing immediate cleanup")
+                            PerformanceMonitor.shared.emergencyStop()
+                            MemorySystem.shared.performThermalEmergencyCleanup()
+                            MemoryLeakDetector.shared.performEmergencyCleanup()
+                            NodePool.shared.clearAllPools()
+                            URLCache.shared.removeAllCachedResponses()
+                            
+                            await SKTexture.preload([])
+                            await SKTextureAtlas.preloadTextureAtlases([])
+                            
+                            print("[Debug] High memory cleanup completed")
+                        }
+                    }) {
+                        if #available(iOS 16.0, *) {
+                            Label("EMERGENCY: High Memory Cleanup", systemImage: "exclamationmark.triangle")
+                                .foregroundColor(.red)
+                                .fontWeight(.bold)
+                        } else {
+                            Label("EMERGENCY: High Memory Cleanup", systemImage: "exclamationmark.triangle")
+                                .foregroundColor(.red)
+                        }
+                    }
+                }
+                
+                Button(action: {
+                    Task {
+                        print("[Debug] Manual emergency memory cleanup triggered")
+                        MemorySystem.shared.performThermalEmergencyCleanup()
+                        MemoryLeakDetector.shared.performEmergencyCleanup()
+                        NodePool.shared.clearAllPools()
+                        URLCache.shared.removeAllCachedResponses()
+                        
+                        await SKTexture.preload([])
+                        await SKTextureAtlas.preloadTextureAtlases([])
+                        
+                        print("[Debug] Manual emergency cleanup completed")
+                    }
+                }) {
+                    Label("Emergency Memory Cleanup", systemImage: "trash")
+                        .foregroundColor(.red)
+                }
+                
+                Button(action: {
+                    print("[Debug] Manual thermal emergency mode triggered")
+                    PerformanceMonitor.shared.emergencyStop()
+                    print("[Debug] Thermal emergency mode activated")
+                }) {
+                    Label("Activate Thermal Emergency Mode", systemImage: "thermometer.sun")
+                        .foregroundColor(.orange)
+                }
+                
+                Button(action: {
+                    print("[Debug] Manual monitoring restart triggered")
+                    PerformanceMonitor.shared.startMonitoring()
+                    print("[Debug] Monitoring restarted")
+                }) {
+                    Label("Restart Monitoring", systemImage: "play.circle")
+                        .foregroundColor(.green)
+                }
+                
+                Button(action: {
+                    print("[Debug] Manual force stop all timers triggered")
+                    PerformanceMonitor.shared.emergencyStop()
+                    print("[Debug] All timers force stopped")
+                }) {
+                    Label("Force Stop All Timers", systemImage: "stop.circle")
+                        .foregroundColor(.red)
+                }
+                
+                Button(action: {
+                    Task {
+                        print("[Debug] Manual force garbage collection triggered")
+                        autoreleasepool {
+                            URLCache.shared.removeAllCachedResponses()
+                            MemorySystem.shared.clearAllCaches()
+                            NodePool.shared.clearAllPools()
+                        }
+                        print("[Debug] Force garbage collection completed")
+                    }
+                }) {
+                    Label("Force Garbage Collection", systemImage: "arrow.clockwise")
+                        .foregroundColor(.blue)
+                }
+                
+                Button(action: {
+                    Task {
+                        print("[Debug] Comprehensive memory leak detection triggered")
+                        MemoryLeakDetector.shared.performComprehensiveLeakDetection()
+                        print("[Debug] Comprehensive leak detection completed")
+                    }
+                }) {
+                    Label("Detect Memory Leaks", systemImage: "magnifyingglass")
+                        .foregroundColor(.orange)
+                }
+            }
         }
         .navigationTitle("Debug Logs")
         .onAppear {
@@ -104,8 +229,14 @@ struct DebugLogsView: View {
             stopLogUpdates()
         }
         .sheet(isPresented: $showingPrivacyPolicy) {
-            NavigationView {
-                PrivacyPolicyView()
+            if #available(iOS 16.0, *) {
+                NavigationStack {
+                    PrivacyPolicyView()
+                }
+            } else {
+                NavigationView {
+                    PrivacyPolicyView()
+                }
             }
         }
     }
@@ -128,6 +259,31 @@ struct DebugLogsView: View {
     private func stopLogUpdates() {
         logUpdateTimer?.invalidate()
         logUpdateTimer = nil
+    }
+    
+    private func getSafeMemoryUsage() -> Double {
+        // Safe memory usage calculation that won't cause crashes
+        var info = mach_task_basic_info()
+        var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size / MemoryLayout<natural_t>.size)
+        
+        let kr: kern_return_t = withUnsafeMutablePointer(to: &info) { infoPtr in
+            infoPtr.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { intPtr in
+                task_info(
+                    mach_task_self_,
+                    task_flavor_t(MACH_TASK_BASIC_INFO),
+                    intPtr,
+                    &count
+                )
+            }
+        }
+        
+        if kr == KERN_SUCCESS {
+            return Double(info.resident_size) / 1024.0 / 1024.0
+        } else {
+            // Fallback calculation
+            let totalMemory = Double(ProcessInfo.processInfo.physicalMemory) / 1024.0 / 1024.0
+            return totalMemory * 0.5
+        }
     }
 }
 

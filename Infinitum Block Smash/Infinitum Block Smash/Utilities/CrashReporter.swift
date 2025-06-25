@@ -213,8 +213,8 @@ class CrashReporter {
     }
     
     private func startMemoryLogging() {
-        // Start memory logging timer - reduced frequency to save battery
-        memoryLogTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { [weak self] _ in // Increased from 5.0 to 15.0
+        // Start memory logging timer - significantly reduced frequency to prevent heating
+        memoryLogTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in // Increased from 15.0 to 60.0
             Task { @MainActor in
                 self?.logMemoryUsage()
             }
@@ -222,8 +222,8 @@ class CrashReporter {
     }
     
     private func startGameplayLogging() {
-        // Start gameplay logging timer - reduced frequency to save battery
-        gameplayLogTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in // Increased from 10.0 to 30.0
+        // Start gameplay logging timer - significantly reduced frequency to prevent heating
+        gameplayLogTimer = Timer.scheduledTimer(withTimeInterval: 120.0, repeats: true) { [weak self] _ in // Increased from 30.0 to 120.0
             Task { @MainActor in
                 self?.logGameplayMetrics()
             }
@@ -360,5 +360,35 @@ class CrashReporter {
                 self.log("[Gameplay] \(gameplayLog)")
             }
         }
+    }
+    
+    /// Stop monitoring (for thermal emergency mode)
+    func stopMonitoring() {
+        memoryLogTimer?.invalidate()
+        memoryLogTimer = nil
+        gameplayLogTimer?.invalidate()
+        gameplayLogTimer = nil
+        print("[CrashReporter] Monitoring stopped")
+    }
+    
+    /// Start monitoring (for thermal emergency mode)
+    func startMonitoring() {
+        stopMonitoring() // Ensure any existing timers are invalidated
+        
+        // Start memory logging timer - significantly reduced frequency to prevent heating
+        memoryLogTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in // Increased from 15.0 to 60.0
+            Task { @MainActor in
+                self?.logMemoryUsage()
+            }
+        }
+        
+        // Start gameplay logging timer - significantly reduced frequency to prevent heating
+        gameplayLogTimer = Timer.scheduledTimer(withTimeInterval: 120.0, repeats: true) { [weak self] _ in // Increased from 30.0 to 120.0
+            Task { @MainActor in
+                self?.logGameplayMetrics()
+            }
+        }
+        
+        print("[CrashReporter] Monitoring started")
     }
 } 

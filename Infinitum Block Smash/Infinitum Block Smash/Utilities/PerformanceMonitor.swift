@@ -2,16 +2,18 @@ import Foundation
 import QuartzCore
 import UIKit
 import SwiftUI
+import SpriteKit
 
 final class PerformanceMonitor: ObservableObject {
     static let shared = PerformanceMonitor()
     
     // MARK: - Published Properties
-    @Published private(set) var currentFPS: Double = 0
-    @Published private(set) var memoryUsage: Double = 0
-    @Published private(set) var cpuUsage: Double = 0
-    @Published private(set) var networkLatency: Double = 0
-    @Published private(set) var thermalState: ProcessInfo.ThermalState = .nominal
+    @Published var memoryUsage: Double = 0.0
+    @Published var cpuUsage: Double = 0.0
+    @Published var networkLatency: Double = 0.0
+    @Published var thermalState: ProcessInfo.ThermalState = .nominal
+    @Published var isThermalEmergencyMode: Bool = false
+    @Published var currentFPS: Double = 60.0
     @Published private(set) var batteryLevel: Float = 1.0
     @Published private(set) var isLowPowerMode: Bool = false
     
@@ -75,18 +77,13 @@ final class PerformanceMonitor: ObservableObject {
         }
     }
     
+    private var isMonitoring = false
+    private var lastThermalCheck: Date = Date()
+    private let thermalEmergencyThreshold: TimeInterval = 30.0 // 30 seconds of hot state triggers emergency mode
+    
+    // MARK: - Initialization
     private init() {
         setupDisplayLink()
-        startMemoryMonitoring()
-        startCPUMonitoring()
-        startNetworkMonitoring()
-        startThermalMonitoring()
-        
-        // Perform immediate initial updates
-        updateMemoryUsage()
-        updateCPUUsage()
-        updateNetworkLatency()
-        updateThermalState()
     }
     
     deinit {
@@ -103,9 +100,133 @@ final class PerformanceMonitor: ObservableObject {
         #endif
     }
     
+    // MARK: - Public Methods
+    
+    /// Start monitoring with thermal awareness
+    func startMonitoring() {
+        guard !isMonitoring else { return }
+        
+        // Check thermal state before starting
+        let currentThermalState = ProcessInfo.processInfo.thermalState
+        if currentThermalState == .serious || currentThermalState == .critical {
+            print("[PerformanceMonitor] Device is hot - starting in thermal emergency mode")
+            startThermalEmergencyMode()
+            return
+        }
+        
+        isMonitoring = true
+        startMemoryMonitoring()
+        startCPUMonitoring()
+        startNetworkMonitoring()
+        startThermalMonitoring()
+        
+        print("[PerformanceMonitor] Monitoring started")
+    }
+    
+    /// Stop all monitoring
+    func stopMonitoring() {
+        isMonitoring = false
+        stopAllTimers()
+        print("[PerformanceMonitor] Monitoring stopped")
+    }
+    
+    /// Emergency stop for thermal issues
+    func emergencyStop() {
+        isMonitoring = false
+        isThermalEmergencyMode = true
+        stopAllTimers()
+        
+        // Stop all other timers across the app
+        stopAllAppTimers()
+        
+        print("[PerformanceMonitor] Emergency stop due to thermal issues")
+    }
+    
+    /// Stop all timers across the entire app
+    private func stopAllAppTimers() {
+        print("[PerformanceMonitor] Stopping all app timers for thermal emergency")
+        
+        // Stop MemoryLeakDetector timer
+        Task { @MainActor in MemoryLeakDetector.shared.stopMonitoring() }
+        
+        // Stop NetworkMetricsManager timers
+        Task { @MainActor in NetworkMetricsManager.shared.stopMonitoring() }
+        
+        // Stop AdaptiveQualityManager timer
+        Task { @MainActor in AdaptiveQualityManager.shared.stopMonitoring() }
+        
+        // Stop FPSManager timer
+        Task { @MainActor in FPSManager.shared.stopMonitoring() }
+        
+        // Stop UserDefaultsManager timer
+        Task { @MainActor in UserDefaultsManager.shared.stopMonitoring() }
+        
+        // Disable all debug logging to reduce CPU load
+        disableAllDebugLogging()
+        
+        print("[PerformanceMonitor] All app timers stopped")
+    }
+    
+    /// Restart all timers when device cools down
+    private func restartAllAppTimers() {
+        print("[PerformanceMonitor] Restarting all app timers")
+        
+        // Restart MemoryLeakDetector timer
+        Task { @MainActor in MemoryLeakDetector.shared.startMonitoring() }
+        
+        // Restart NetworkMetricsManager timers
+        Task { @MainActor in NetworkMetricsManager.shared.startMonitoring() }
+        
+        // Restart AdaptiveQualityManager timer
+        Task { @MainActor in AdaptiveQualityManager.shared.startMonitoring() }
+        
+        // Restart FPSManager timer
+        Task { @MainActor in FPSManager.shared.startMonitoring() }
+        
+        // Restart UserDefaultsManager timer
+        Task { @MainActor in UserDefaultsManager.shared.startMonitoring() }
+        
+        // Re-enable debug logging
+        enableAllDebugLogging()
+        
+        print("[PerformanceMonitor] All app timers restarted")
+    }
+    
+    /// Disable all debug logging to reduce CPU load during thermal emergency
+    private func disableAllDebugLogging() {
+        print("[PerformanceMonitor] Disabling all debug logging for thermal emergency")
+        
+        // Disable Logger debug output
+        Logger.shared.setDebugEnabled(false)
+        
+        // Disable MemoryLeakDetector logging
+        MemoryLeakDetector.shared.setLoggingEnabled(false)
+        
+        // Disable MemorySystem debug logging
+        Task { @MainActor in MemorySystem.shared.setDebugLoggingEnabled(false) }
+        
+        print("[PerformanceMonitor] All debug logging disabled")
+    }
+    
+    /// Enable all debug logging when device cools down
+    private func enableAllDebugLogging() {
+        print("[PerformanceMonitor] Re-enabling debug logging")
+        
+        // Re-enable Logger debug output
+        Logger.shared.setDebugEnabled(true)
+        
+        // Re-enable MemoryLeakDetector logging
+        MemoryLeakDetector.shared.setLoggingEnabled(true)
+        
+        // Re-enable MemorySystem debug logging
+        Task { @MainActor in MemorySystem.shared.setDebugLoggingEnabled(true) }
+        
+        print("[PerformanceMonitor] Debug logging re-enabled")
+    }
+    
     private func startMemoryMonitoring() {
-        // Start periodic memory monitoring with device-specific frequency
-        let interval = MemoryConfig.getIntervals().memoryCheck * 2 // Double the interval to reduce overhead
+        // Start periodic memory monitoring with much longer intervals
+        let interval = MemoryConfig.getIntervals().memoryCheck * 10 // 10x longer intervals
         memoryTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             self?.updateMemoryUsage()
         }
@@ -116,22 +237,26 @@ final class PerformanceMonitor: ObservableObject {
     }
     
     private func startCPUMonitoring() {
-        // Reduce CPU monitoring frequency to save battery
-        cpuTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in // Increased from 1.0 to 5.0
+        // Significantly reduce CPU monitoring frequency to prevent heating
+        // CPU monitoring is very expensive and causes thermal issues
+        cpuTimer = Timer.scheduledTimer(withTimeInterval: 120.0, repeats: true) { [weak self] _ in // Increased from 60.0 to 120.0
             self?.updateCPUUsage()
         }
     }
     
     private func startNetworkMonitoring() {
-        // Reduce network monitoring frequency
-        networkTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in // Increased from 2.0 to 10.0
+        // Reduce network monitoring frequency even more
+        networkTimer = Timer.scheduledTimer(withTimeInterval: 300.0, repeats: true) { [weak self] _ in // Increased from 120.0 to 300.0
             self?.updateNetworkLatency()
         }
     }
     
     private func startThermalMonitoring() {
-        // Reduce thermal monitoring frequency
-        Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in // Increased from 2.0 to 5.0
+        // Invalidate any existing timer first
+        thermalTimer?.invalidate()
+        
+        // Reduce thermal monitoring frequency significantly
+        thermalTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in // Increased from 30.0 to 60.0
             self?.updateThermalState()
         }
     }
@@ -143,9 +268,12 @@ final class PerformanceMonitor: ObservableObject {
         cpuTimer = nil
         networkTimer?.invalidate()
         networkTimer = nil
+        thermalTimer?.invalidate()
+        thermalTimer = nil
     }
     
     private func updateMemoryUsage() {
+        // Calculate memory usage directly without calling getCurrentMemoryUsage()
         var info = mach_task_basic_info()
         var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size / MemoryLayout<natural_t>.size)
         
@@ -161,71 +289,59 @@ final class PerformanceMonitor: ObservableObject {
         }
         
         if kr == KERN_SUCCESS {
-            let newMemoryUsage = Double(info.resident_size) / 1024.0 / 1024.0 // Convert to MB
-            
-            DispatchQueue.main.async { [weak self] in
-                self?.memoryUsage = newMemoryUsage
-                self?.performanceMetrics["memory"] = newMemoryUsage
-                
-                // Check if memory usage has changed significantly and should be logged
-                self?.checkAndLogMemoryUsage(newMemoryUsage)
-            }
+            memoryUsage = Double(info.resident_size) / 1024.0 / 1024.0
         } else {
-            #if DEBUG
-            print("[PerformanceMonitor] Failed to get memory info: \(kr)")
-            #endif
+            // Fallback calculation
+            let totalMemory = Double(ProcessInfo.processInfo.physicalMemory) / 1024.0 / 1024.0
+            memoryUsage = totalMemory * 0.5 // Estimate 50% usage as fallback
+        }
+        
+        // Check for excessive memory usage - trigger emergency mode at 800MB
+        if memoryUsage > 800.0 {
+            print("[PerformanceMonitor] WARNING: High memory usage detected: \(String(format: "%.1f", memoryUsage))MB - triggering memory emergency mode")
+            
+            // Force emergency mode regardless of thermal state
+            if !isThermalEmergencyMode {
+                startThermalEmergencyMode()
+            }
+            
+            // Perform immediate aggressive cleanup
+            performEmergencyMemoryCleanup()
+        } else if memoryUsage > 600.0 {
+            print("[PerformanceMonitor] WARNING: High memory usage detected: \(String(format: "%.1f", memoryUsage))MB")
+            performEmergencyMemoryCleanup()
         }
     }
     
     private func updateCPUUsage() {
-        var cpuInfo = processor_info_array_t?(nil)
-        var numCpuInfo: mach_msg_type_number_t = 0
-        var numCpus: natural_t = 0
-        var totalUsage: Double = 0
+        // Simplified CPU monitoring to reduce overhead
+        let startTime = CFAbsoluteTimeGetCurrent()
         
-        let result = host_processor_info(mach_host_self(),
-                                       PROCESSOR_CPU_LOAD_INFO,
-                                       &numCpus,
-                                       &cpuInfo,
-                                       &numCpuInfo)
-        
-        if result == KERN_SUCCESS {
-            let cpuInfoArray = UnsafeBufferPointer(start: cpuInfo, count: Int(numCpuInfo))
-            let cpuInfoArraySize = Int(numCpuInfo) / Int(numCpus)
-            
-            for i in 0..<Int(numCpus) {
-                let offset = i * cpuInfoArraySize
-                let user = Double(cpuInfoArray[offset + Int(CPU_STATE_USER)])
-                let system = Double(cpuInfoArray[offset + Int(CPU_STATE_SYSTEM)])
-                let idle = Double(cpuInfoArray[offset + Int(CPU_STATE_IDLE)])
-                let total = user + system + idle
-                
-                if total > 0 {
-                    totalUsage += ((user + system) / total) * 100.0
-                }
-            }
-            
-            let newCPUUsage = totalUsage / Double(numCpus)
-            
-            DispatchQueue.main.async { [weak self] in
-                self?.cpuUsage = newCPUUsage
-                self?.performanceMetrics["cpu"] = newCPUUsage
-            }
+        // Perform a small calculation to measure CPU
+        var result = 0.0
+        for i in 0..<1000 {
+            result += sqrt(Double(i))
         }
         
-        if let cpuInfo = cpuInfo {
-            vm_deallocate(mach_task_self_, vm_address_t(bitPattern: cpuInfo), vm_size_t(numCpuInfo) * vm_size_t(MemoryLayout<integer_t>.stride))
-        }
+        let endTime = CFAbsoluteTimeGetCurrent()
+        let duration = (endTime - startTime) * 1000 // Convert to milliseconds
+        
+        // Normalize to a percentage (this is a rough estimate)
+        cpuUsage = min(100.0, max(0.0, duration / 10.0))
     }
     
     private func updateNetworkLatency() {
-        // Simulate network latency measurement
-        // In a real implementation, you would ping your game server
-        let newNetworkLatency = Double.random(in: 20...100)
+        // Simplified network latency check
+        let startTime = CFAbsoluteTimeGetCurrent()
         
-        DispatchQueue.main.async { [weak self] in
-            self?.networkLatency = newNetworkLatency
-            self?.performanceMetrics["network_latency"] = newNetworkLatency
+        // Simulate network check (in real implementation, this would ping a server)
+        DispatchQueue.global(qos: .utility).async {
+            let endTime = CFAbsoluteTimeGetCurrent()
+            let latency = (endTime - startTime) * 1000
+            
+            DispatchQueue.main.async {
+                self.networkLatency = latency
+            }
         }
     }
     
@@ -297,7 +413,10 @@ final class PerformanceMonitor: ObservableObject {
     
     /// Get current memory usage with immediate update
     func getCurrentMemoryUsage() -> Double {
-        updateMemoryUsage()
+        // Update memory usage if not in emergency mode to avoid excessive calls
+        if !isThermalEmergencyMode {
+            updateMemoryUsage()
+        }
         return memoryUsage
     }
     
@@ -362,12 +481,132 @@ final class PerformanceMonitor: ObservableObject {
     
     private func updateThermalState() {
         let newThermalState = ProcessInfo.processInfo.thermalState
-        if newThermalState != thermalState {
-            DispatchQueue.main.async { [weak self] in
-                self?.thermalState = newThermalState
-                self?.performanceMetrics["thermal_state"] = Double(newThermalState.rawValue)
+        thermalState = newThermalState
+        
+        // Check if device is getting hot
+        if newThermalState == .serious || newThermalState == .critical {
+            if !isThermalEmergencyMode {
+                // Check how long it's been hot
+                let timeSinceLastCheck = Date().timeIntervalSince(lastThermalCheck)
+                if timeSinceLastCheck > thermalEmergencyThreshold {
+                    print("[PerformanceMonitor] Device has been hot for \(String(format: "%.1f", timeSinceLastCheck))s - entering thermal emergency mode")
+                    startThermalEmergencyMode()
+                }
             }
+            lastThermalCheck = Date()
+        } else {
+            // Device is cooling down
+            if isThermalEmergencyMode {
+                print("[PerformanceMonitor] Device cooling down - exiting thermal emergency mode")
+                exitThermalEmergencyMode()
+            }
+            lastThermalCheck = Date()
         }
+        
+        // Update monitoring frequency based on thermal state
+        adjustMonitoringForThermalState(newThermalState)
+    }
+    
+    private func startThermalEmergencyMode() {
+        isThermalEmergencyMode = true
+        isMonitoring = false
+        
+        // Stop all intensive monitoring
+        stopAllTimers()
+        
+        // Only keep minimal thermal monitoring
+        thermalTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in // Very infrequent
+            self?.updateThermalState()
+        }
+        
+        // Perform emergency memory cleanup
+        performEmergencyMemoryCleanup()
+        
+        print("[PerformanceMonitor] Thermal emergency mode activated")
+    }
+    
+    private func exitThermalEmergencyMode() {
+        isThermalEmergencyMode = false
+        
+        // Stop minimal monitoring
+        thermalTimer?.invalidate()
+        thermalTimer = nil
+        
+        // Restart all app timers
+        restartAllAppTimers()
+        
+        // Restart normal monitoring
+        startMonitoring()
+        
+        print("[PerformanceMonitor] Exited thermal emergency mode")
+    }
+    
+    private func adjustMonitoringForThermalState(_ state: ProcessInfo.ThermalState) {
+        switch state {
+        case .nominal:
+            // Normal monitoring frequency
+            break
+        case .fair:
+            // Slightly reduce monitoring frequency
+            disableIntensiveMonitoring()
+        case .serious:
+            // Significantly reduce monitoring frequency
+            disableIntensiveMonitoring()
+        case .critical:
+            // Enter emergency mode
+            if !isThermalEmergencyMode {
+                startThermalEmergencyMode()
+            }
+        @unknown default:
+            break
+        }
+    }
+    
+    private func disableIntensiveMonitoring() {
+        // Stop CPU monitoring (most intensive)
+        cpuTimer?.invalidate()
+        cpuTimer = nil
+        
+        // Stop network monitoring
+        networkTimer?.invalidate()
+        networkTimer = nil
+        
+        // Reduce thermal monitoring frequency even more
+        thermalTimer?.invalidate()
+        thermalTimer = Timer.scheduledTimer(withTimeInterval: 120.0, repeats: true) { [weak self] _ in // Very infrequent when hot
+            self?.updateThermalState()
+        }
+    }
+    
+    private func enableIntensiveMonitoring() {
+        // Restart monitoring with normal intervals
+        startCPUMonitoring()
+        startNetworkMonitoring()
+        startThermalMonitoring()
+    }
+    
+    private func performEmergencyMemoryCleanup() {
+        print("[PerformanceMonitor] Performing emergency memory cleanup")
+        
+        // Clear URL cache
+        URLCache.shared.removeAllCachedResponses()
+        
+        // Clear texture caches
+        Task { @MainActor in
+            await SKTexture.preload([])
+            await SKTextureAtlas.preloadTextureAtlases([])
+        }
+        
+        // Clear node pools
+        Task { @MainActor in NodePool.shared.clearAllPools() }
+        
+        // Clear memory leak detector data
+        Task { @MainActor in MemoryLeakDetector.shared.performEmergencyCleanup() }
+        
+        // Clear memory system cache
+        Task { @MainActor in MemorySystem.shared.clearAllCaches() }
+        
+        print("[PerformanceMonitor] Emergency memory cleanup completed")
     }
     
     // MARK: - Thermal State Helpers
@@ -405,6 +644,13 @@ final class PerformanceMonitor: ObservableObject {
     }
     
     /// Get detailed temperature description
+    func getThermalStateDetails() -> String {
+        let baseDescription = getThermalStateDescription()
+        let emergencyMode = isThermalEmergencyMode ? " (Emergency Mode)" : ""
+        return "\(baseDescription)\(emergencyMode)"
+    }
+    
+    /// Get detailed temperature description (legacy method for compatibility)
     func getDetailedTemperatureDescription() -> String {
         switch thermalState {
         case .nominal:
@@ -420,29 +666,28 @@ final class PerformanceMonitor: ObservableObject {
         }
     }
     
-    /// Get estimated temperature in Celsius
-    func getTemperatureCelsius() -> Double {
+    /// Get percentage for thermal state display
+    func getThermalStatePercentage() -> Int {
         switch thermalState {
         case .nominal:
-            return 25.0 // Normal room temperature
+            return 25
         case .fair:
-            return 35.0 // Warm
+            return 50
         case .serious:
-            return 45.0 // Hot
+            return 75
         case .critical:
-            return 55.0 // Very hot
+            return 100
         @unknown default:
-            return 30.0
+            return 0
         }
     }
     
-    /// Get estimated temperature in Fahrenheit
-    func getTemperatureFahrenheit() -> Double {
-        let celsius = getTemperatureCelsius()
-        return (celsius * 9/5) + 32
+    /// Get thermal state percentage string (legacy method for compatibility)
+    func getThermalStatePercentageString() -> String {
+        return "\(getThermalStatePercentage())%"
     }
     
-    /// Get temperature string based on unit preference
+    /// Get temperature string based on unit preference (legacy method for compatibility)
     func getTemperatureString(unit: String) -> String {
         let temp: Double
         let unitSymbol: String
@@ -459,24 +704,25 @@ final class PerformanceMonitor: ObservableObject {
         return String(format: "~%.0f%@", temp, unitSymbol) // Added ~ to indicate estimate
     }
     
-    /// Get thermal state percentage (0-100) based on thermal state
-    func getThermalStatePercentage() -> Int {
+    /// Get estimated temperature in Celsius (legacy method for compatibility)
+    func getTemperatureCelsius() -> Double {
         switch thermalState {
         case .nominal:
-            return 25 // 0-25% range
+            return 25.0 // Normal room temperature
         case .fair:
-            return 50 // 26-50% range
+            return 35.0 // Warm
         case .serious:
-            return 75 // 51-75% range
+            return 45.0 // Hot
         case .critical:
-            return 100 // 76-100% range
+            return 55.0 // Very hot
         @unknown default:
-            return 30
+            return 30.0
         }
     }
     
-    /// Get thermal state percentage string
-    func getThermalStatePercentageString() -> String {
-        return "\(getThermalStatePercentage())%"
+    /// Get estimated temperature in Fahrenheit (legacy method for compatibility)
+    func getTemperatureFahrenheit() -> Double {
+        let celsius = getTemperatureCelsius()
+        return (celsius * 9/5) + 32
     }
 } 

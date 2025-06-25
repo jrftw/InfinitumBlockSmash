@@ -142,6 +142,8 @@ struct ContentView: View {
     @StateObject private var appOpenManager = AppOpenManager.shared
     @State private var showingDeviceSimulation = false
     @State private var showingDebugManager = false
+    @State private var onlineUsersObserver: NSObjectProtocol?
+    @State private var dailyPlayersObserver: NSObjectProtocol?
     
     var isLoggedIn: Bool {
         !userID.isEmpty && (!username.isEmpty || isGuest)
@@ -481,8 +483,8 @@ struct ContentView: View {
         // Set initial count
         updateOnlineUsersCount()
 
-        // Observe changes
-        NotificationCenter.default.addObserver(
+        // Observe changes with proper observer storage
+        onlineUsersObserver = NotificationCenter.default.addObserver(
             forName: .onlineUsersCountDidChange,
             object: nil,
             queue: .main
@@ -495,8 +497,8 @@ struct ContentView: View {
         // Set initial count
         updateDailyPlayersCount()
 
-        // Observe changes
-        NotificationCenter.default.addObserver(
+        // Observe changes with proper observer storage
+        dailyPlayersObserver = NotificationCenter.default.addObserver(
             forName: .dailyPlayersCountDidChange,
             object: nil,
             queue: .main
@@ -517,7 +519,15 @@ struct ContentView: View {
     }
     
     private func cleanup() {
-        NotificationCenter.default.removeObserver(self)
+        // Remove specific observers instead of removing all
+        if let observer = onlineUsersObserver {
+            NotificationCenter.default.removeObserver(observer)
+            onlineUsersObserver = nil
+        }
+        if let observer = dailyPlayersObserver {
+            NotificationCenter.default.removeObserver(observer)
+            dailyPlayersObserver = nil
+        }
     }
     
     private func updateOnlineUsersCount() {

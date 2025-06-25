@@ -183,9 +183,9 @@ final class MemorySystem {
     static let shared = MemorySystem()
     
     // MARK: — Dynamic Thresholds based on Device Simulation
-    private let warningThreshold: Double = MemoryConfig.Thresholds.warningLevel
-    private let criticalThreshold: Double = MemoryConfig.Thresholds.criticalLevel
-    private let extremeThreshold: Double = MemoryConfig.Thresholds.extremeLevel
+    private let warningThreshold: Double = MemoryConfig.getMemoryThresholds().warning
+    private let criticalThreshold: Double = MemoryConfig.getMemoryThresholds().critical
+    private let extremeThreshold: Double = MemoryConfig.getMemoryThresholds().extreme
     
     // Dynamic memory targets based on device simulation
     private var targetMemoryUsage: Double {
@@ -297,32 +297,15 @@ final class MemorySystem {
         }
     }
     
-    private func handleMemoryPressure() async {
-        let status = checkMemoryStatus()
-        memoryStatusSubject.send(status)
-        
-        switch status {
-        case .critical:
-            await performAggressiveCleanup()
-            // If still critical after cleanup, try one more time
-            if checkMemoryStatus() == .critical {
-                await performAggressiveCleanup()
-            }
-        case .warning:
-            await cleanupMemory()
-        case .normal:
-            break
-        }
-    }
-    
     func getMemoryUsage() -> (used: Double, total: Double) {
         let deviceSimulator = DeviceSimulator.shared
         
         if deviceSimulator.isRunningInSimulator() {
-            // Use simulated memory constraints
-            let currentMemory = Double(ProcessInfo.processInfo.physicalMemory) / 1024.0 / 1024.0
+            // For simulator, use more conservative memory estimation
+            // since ProcessInfo.processInfo.physicalMemory returns host Mac memory
+            let estimatedUsage = getEstimatedSimulatorMemoryUsage()
             let simulatedLimit = deviceSimulator.getSimulatedMemoryLimit()
-            return (currentMemory, simulatedLimit)
+            return (estimatedUsage, simulatedLimit)
         } else {
             // Original logic for real devices
             var info = mach_task_basic_info()
@@ -350,6 +333,49 @@ final class MemorySystem {
             let used = total * 0.5
             return (used, total)
         }
+    }
+    
+    /// Get estimated memory usage for simulator (more accurate than ProcessInfo)
+    private func getEstimatedSimulatorMemoryUsage() -> Double {
+        let deviceSimulator = DeviceSimulator.shared
+        let baseMemory = 80.0 // Base memory usage in MB
+        
+        // Add memory from various sources
+        let textureMemory = estimateTextureMemory()
+        let nodeMemory = estimateNodeMemory()
+        let cacheMemory = estimateCacheMemory()
+        let particleMemory = estimateParticleMemory()
+        
+        let totalEstimated = baseMemory + textureMemory + nodeMemory + cacheMemory + particleMemory
+        
+        // Apply device-specific adjustments
+        if deviceSimulator.isLowEndDevice() {
+            return totalEstimated * 1.2 // Low-end devices use more memory due to less optimization
+        }
+        
+        return totalEstimated
+    }
+    
+    private func estimateTextureMemory() -> Double {
+        // Estimate based on texture cache size and active textures
+        let textureCacheSize = Double(memoryCache.totalCostLimit) / 1024.0 / 1024.0
+        return textureCacheSize * 2.0 // Estimate 2x the cache size for active textures
+    }
+    
+    private func estimateNodeMemory() -> Double {
+        // Estimate based on active nodes (rough estimate)
+        return 25.0 // Conservative estimate for active nodes
+    }
+    
+    private func estimateCacheMemory() -> Double {
+        // Estimate based on memory cache usage
+        let cacheSize = Double(memoryCache.totalCostLimit) / 1024.0 / 1024.0
+        return cacheSize
+    }
+    
+    private func estimateParticleMemory() -> Double {
+        // Estimate particle system memory usage
+        return 15.0 // Conservative estimate for particle effects
     }
     
     // MARK: — Cleanup Triggers
@@ -436,7 +462,8 @@ final class MemorySystem {
         }
     }
     
-    private func performEmergencyCleanup() async {
+    /// Emergency memory cleanup for immediate pressure situations
+    func performEmergencyCleanup() async {
         log("[MemorySystem] Starting emergency cleanup")
         
         autoreleasepool {
@@ -458,6 +485,94 @@ final class MemorySystem {
         }
         
         log("[MemorySystem] Emergency cleanup completed")
+    }
+    
+    /// Ultra-aggressive memory cleanup for thermal emergency situations
+    func performThermalEmergencyCleanup() {
+        log("[MemorySystem] Starting thermal emergency cleanup")
+        
+        // Stop all monitoring immediately
+        monitoringTimer?.invalidate()
+        monitoringTimer = nil
+        
+        // Clear all caches immediately
+        clearAllCaches()
+        memoryCache.removeAllObjects()
+        
+        // Clear URL cache
+        URLCache.shared.removeAllCachedResponses()
+        
+        // Clear texture caches
+        Task {
+            await SKTexture.preload([])
+            await SKTextureAtlas.preloadTextureAtlases([])
+        }
+        
+        // Clear node pools
+        NodePool.shared.clearAllPools()
+        
+        // Clear temporary data
+        clearTemporaryData()
+        
+        // Force garbage collection multiple times
+        for _ in 0..<5 {
+            autoreleasepool {
+                clearAllCaches()
+                memoryCache.removeAllObjects()
+                URLCache.shared.removeAllCachedResponses()
+            }
+        }
+        
+        // Clear all tracked objects in memory leak detector
+        MemoryLeakDetector.shared.performEmergencyCleanup()
+        
+        // Restart minimal monitoring only
+        monitoringTimer = Timer.scheduledTimer(withTimeInterval: 300.0, repeats: true) { [weak self] _ in // Very infrequent - 5 minutes
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                await self.checkAndHandleMemoryStatus()
+            }
+        }
+        
+        log("[MemorySystem] Thermal emergency cleanup completed")
+    }
+    
+    /// Set debug logging enabled/disabled for thermal emergency mode
+    func setDebugLoggingEnabled(_ enabled: Bool) {
+        isDebugLoggingEnabled = enabled
+    }
+    
+    /// Immediate memory cleanup for critical situations
+    func performImmediateCleanup() {
+        log("[MemorySystem] Performing immediate cleanup")
+        
+        // Stop all monitoring timers temporarily
+        monitoringTimer?.invalidate()
+        monitoringTimer = nil
+        
+        // Clear all caches immediately
+        clearAllCaches()
+        memoryCache.removeAllObjects()
+        
+        // Clear URL cache
+        URLCache.shared.removeAllCachedResponses()
+        
+        // Clear texture caches
+        Task {
+            await SKTexture.preload([])
+            await SKTextureAtlas.preloadTextureAtlases([])
+        }
+        
+        // Clear node pools
+        NodePool.shared.clearAllPools()
+        
+        // Clear temporary data
+        clearTemporaryData()
+        
+        // Restart monitoring after cleanup
+        startMemoryMonitoring()
+        
+        log("[MemorySystem] Immediate cleanup completed")
     }
     
     private func performCleanup() async {
@@ -659,6 +774,7 @@ final class MemorySystem {
     
     // MARK: — Logging
     private func log(_ message: String) {
+        guard isDebugLoggingEnabled else { return }
         print(message)
     }
     
@@ -693,4 +809,25 @@ final class MemorySystem {
         monitoringTimer = nil
         pressureSource.cancel()
     }
+    
+    private func handleMemoryPressure() async {
+        let status = checkMemoryStatus()
+        memoryStatusSubject.send(status)
+        
+        switch status {
+        case .critical:
+            await performAggressiveCleanup()
+            // If still critical after cleanup, try one more time
+            if checkMemoryStatus() == .critical {
+                await performAggressiveCleanup()
+            }
+        case .warning:
+            await cleanupMemory()
+        case .normal:
+            break
+        }
+    }
+    
+    // MARK: - Private Properties
+    private var isDebugLoggingEnabled: Bool = true
 }

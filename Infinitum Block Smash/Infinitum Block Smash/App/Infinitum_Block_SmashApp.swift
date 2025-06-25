@@ -76,6 +76,42 @@ import FirebaseDatabase
 
 // MARK: - AppDelegate
 class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNotificationCenterDelegate {
+    // Observer properties to prevent zombie objects
+    private var memoryWarningObserver: NSObjectProtocol?
+    private var appDidBecomeActiveObserver: NSObjectProtocol?
+    private var appWillResignActiveObserver: NSObjectProtocol?
+    private var appDidEnterBackgroundObserver: NSObjectProtocol?
+    private var userDefaultsDidChangeObserver: NSObjectProtocol?
+    private var trackingAuthorizationObserver: NSObjectProtocol?
+    
+    deinit {
+        // Remove all observers to prevent zombie objects
+        if let observer = memoryWarningObserver {
+            NotificationCenter.default.removeObserver(observer)
+            memoryWarningObserver = nil
+        }
+        if let observer = appDidBecomeActiveObserver {
+            NotificationCenter.default.removeObserver(observer)
+            appDidBecomeActiveObserver = nil
+        }
+        if let observer = appWillResignActiveObserver {
+            NotificationCenter.default.removeObserver(observer)
+            appWillResignActiveObserver = nil
+        }
+        if let observer = appDidEnterBackgroundObserver {
+            NotificationCenter.default.removeObserver(observer)
+            appDidEnterBackgroundObserver = nil
+        }
+        if let observer = userDefaultsDidChangeObserver {
+            NotificationCenter.default.removeObserver(observer)
+            userDefaultsDidChangeObserver = nil
+        }
+        if let observer = trackingAuthorizationObserver {
+            NotificationCenter.default.removeObserver(observer)
+            trackingAuthorizationObserver = nil
+        }
+    }
+    
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
         // First, configure Firebase
         FirebaseApp.configure()
@@ -183,16 +219,20 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
         // Configure Crashlytics
         configureCrashlytics()
         
+        // Configure app lifecycle
+        configureAppLifecycle()
+        
         // Configure background tasks
         configureBackgroundTasks()
         
-        // Add memory pressure observer
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleMemoryWarning),
-            name: UIApplication.didReceiveMemoryWarningNotification,
-            object: nil
-        )
+        // Add memory pressure observer with proper storage
+        memoryWarningObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleMemoryWarning()
+        }
         
         // Add auth state listener
         _ = Auth.auth().addStateDidChangeListener { auth, user in
@@ -305,8 +345,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
                 } else {
                     print("[ATT] App not active, will retry when app becomes active")
                     // Schedule the request for when the app becomes active
-                    NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
-                        self.requestTrackingAuthorization()
+                    self.trackingAuthorizationObserver = NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+                        self?.requestTrackingAuthorization()
                     }
                 }
             }
@@ -316,6 +356,51 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
     private func checkNotificationPermissions() {
         // Let NotificationService handle the permission check
         NotificationService.shared.checkNotificationStatus()
+    }
+    
+    private func configureAppLifecycle() {
+        // Observe app lifecycle changes
+        appDidBecomeActiveObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.appDidBecomeActive()
+        }
+        
+        appWillResignActiveObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.willResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.appWillResignActive()
+        }
+        
+        appDidEnterBackgroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.appDidEnterBackground()
+        }
+    }
+    
+    @objc private func appDidBecomeActive() {
+        print("[App] App became active - resuming monitoring")
+        // Resume monitoring when app becomes active
+        PerformanceMonitor.shared.startMonitoring()
+    }
+    
+    @objc private func appWillResignActive() {
+        print("[App] App will resign active - reducing monitoring")
+        // Reduce monitoring when app is about to go to background
+        PerformanceMonitor.shared.stopMonitoring()
+    }
+    
+    @objc private func appDidEnterBackground() {
+        print("[App] App entered background - stopping intensive monitoring")
+        // Stop intensive monitoring when app is in background
+        PerformanceMonitor.shared.stopMonitoring()
     }
     
     private func configureBackgroundTasks() {
@@ -422,7 +507,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
         Crashlytics.crashlytics().setCrashlyticsCollectionEnabled(UserDefaults.standard.bool(forKey: "allowCrashReports"))
         
         // Add observer for when the setting changes
-        NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { _ in
+        userDefaultsDidChangeObserver = NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { _ in
             Crashlytics.crashlytics().setCrashlyticsCollectionEnabled(UserDefaults.standard.bool(forKey: "allowCrashReports"))
         }
         
@@ -458,25 +543,59 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
         // Handle memory warning
         print("[App] Received memory warning")
         
-        // Perform emergency memory cleanup
-        Task {
-            // Clear all caches
-            URLCache.shared.removeAllCachedResponses()
+        // Check thermal state and perform emergency cleanup if needed
+        let thermalState = ProcessInfo.processInfo.thermalState
+        if thermalState == .serious || thermalState == .critical {
+            print("[App] Critical thermal state detected - performing thermal emergency cleanup")
             
-            // Clear texture caches
-            await SKTextureAtlas.preloadTextureAtlases([])
-            await SKTexture.preload([])
+            // Enter thermal emergency mode
+            PerformanceMonitor.shared.emergencyStop()
+            MemorySystem.shared.performThermalEmergencyCleanup()
             
-            // Clear memory leak detector data
-            MemoryLeakDetector.shared.performEmergencyCleanup()
+            // Force stop all intensive operations
+            Task {
+                // Clear all caches immediately
+                URLCache.shared.removeAllCachedResponses()
+                
+                // Clear texture caches
+                await SKTextureAtlas.preloadTextureAtlases([])
+                await SKTexture.preload([])
+                
+                // Clear memory leak detector data
+                MemoryLeakDetector.shared.performEmergencyCleanup()
+                
+                // Clear node pools
+                NodePool.shared.clearAllPools()
+                
+                // Clear memory system cache
+                MemorySystem.shared.clearAllCaches()
+                
+                print("[App] Thermal emergency cleanup completed")
+            }
+        } else {
+            // Perform immediate memory cleanup first
+            MemorySystem.shared.performImmediateCleanup()
             
-            // Clear node pools
-            NodePool.shared.clearAllPools()
-            
-            // Clear memory system cache
-            MemorySystem.shared.clearAllCaches()
-            
-            print("[App] Emergency memory cleanup completed")
+            // Perform emergency memory cleanup
+            Task {
+                // Clear all caches
+                URLCache.shared.removeAllCachedResponses()
+                
+                // Clear texture caches
+                await SKTextureAtlas.preloadTextureAtlases([])
+                await SKTexture.preload([])
+                
+                // Clear memory leak detector data
+                MemoryLeakDetector.shared.performEmergencyCleanup()
+                
+                // Clear node pools
+                NodePool.shared.clearAllPools()
+                
+                // Clear memory system cache
+                MemorySystem.shared.clearAllCaches()
+                
+                print("[App] Emergency memory cleanup completed")
+            }
         }
     }
 }

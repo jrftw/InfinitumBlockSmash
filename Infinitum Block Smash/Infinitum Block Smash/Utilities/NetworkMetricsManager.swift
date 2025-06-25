@@ -19,7 +19,7 @@ class NetworkMetricsManager: ObservableObject {
     
     private init() {
         updateResolution()
-        startMetricsCollection()
+        self.startMonitoring()
     }
     
     deinit {
@@ -35,22 +35,6 @@ class NetworkMetricsManager: ObservableObject {
         let height = Int(bounds.height * scale)
         
         resolution = "\(width) × \(height)"
-    }
-    
-    private func startMetricsCollection() {
-        // Update ping every 2 seconds
-        pingTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            self?.updatePing()
-        }
-        
-        // Update other metrics every 5 seconds
-        metricsTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
-            self?.updateOtherMetrics()
-        }
-        
-        // Initial update
-        updatePing()
-        updateOtherMetrics()
     }
     
     private func stopMetricsCollection() {
@@ -110,5 +94,28 @@ class NetworkMetricsManager: ObservableObject {
     func forceUpdate() {
         updatePing()
         updateOtherMetrics()
+    }
+    
+    /// Stop monitoring (for thermal emergency mode)
+    func stopMonitoring() {
+        stopMetricsCollection()
+        print("[NetworkMetricsManager] Monitoring stopped")
+    }
+    
+    /// Start monitoring (for thermal emergency mode)
+    func startMonitoring() {
+        stopMonitoring() // Ensure any existing timers are invalidated
+        
+        // Start ping monitoring
+        pingTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in // Increased from 2.0 to 30.0
+            self?.updatePing()
+        }
+        
+        // Start metrics monitoring
+        metricsTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in // Increased from 5.0 to 60.0
+            self?.updateOtherMetrics()
+        }
+        
+        print("[NetworkMetricsManager] Monitoring started")
     }
 } 

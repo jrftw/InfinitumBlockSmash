@@ -16,6 +16,7 @@ struct DeviceSimulationDebugView: View {
     
     @State private var showingCleanupAlert = false
     @State private var showingResetAlert = false
+    @State private var showingForceCleanupAlert = false
     
     private let timer = Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()
     
@@ -212,6 +213,38 @@ struct DeviceSimulationDebugView: View {
             }
             
             Button(action: {
+                // Force immediate cleanup
+                MemorySystem.shared.performImmediateCleanup()
+                showingForceCleanupAlert = true
+            }) {
+                HStack {
+                    Image(systemName: "bolt.fill")
+                    Text("Emergency Cleanup")
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.red)
+                .foregroundColor(.white)
+                .cornerRadius(8)
+            }
+            
+            Button(action: {
+                // Thermal emergency cleanup
+                MemorySystem.shared.performThermalEmergencyCleanup()
+                showingForceCleanupAlert = true
+            }) {
+                HStack {
+                    Image(systemName: "thermometer.sun.fill")
+                    Text("Thermal Emergency")
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.orange)
+                .foregroundColor(.white)
+                .cornerRadius(8)
+            }
+            
+            Button(action: {
                 showingResetAlert = true
             }) {
                 HStack {
@@ -220,10 +253,28 @@ struct DeviceSimulationDebugView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding()
-                .background(Color.red)
+                .background(Color.orange)
                 .foregroundColor(.white)
                 .cornerRadius(8)
             }
+        }
+        .alert("Memory Cleanup Complete", isPresented: $showingCleanupAlert) {
+            Button("OK") { }
+        } message: {
+            Text("Memory cleanup has been performed.")
+        }
+        .alert("Emergency Cleanup Complete", isPresented: $showingForceCleanupAlert) {
+            Button("OK") { }
+        } message: {
+            Text("Emergency memory cleanup has been performed.")
+        }
+        .alert("Reset Simulation", isPresented: $showingResetAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Reset", role: .destructive) {
+                deviceSimulationManager.resetSimulation()
+            }
+        } message: {
+            Text("This will reset all simulation settings to default values.")
         }
     }
     

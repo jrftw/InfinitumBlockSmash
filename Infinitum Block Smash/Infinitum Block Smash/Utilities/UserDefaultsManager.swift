@@ -170,12 +170,33 @@ class UserDefaultsManager: ObservableObject {
     }
     
     private func startWriteTimer() {
-        // Reduce write frequency to save battery
-        writeTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in // Increased from 1.0 to 5.0
+        // Significantly reduce write frequency to prevent heating
+        writeTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in // Increased from 5.0 to 30.0
             Task { @MainActor in
                 self?.flushPendingWrites()
             }
         }
+    }
+    
+    /// Stop monitoring (for thermal emergency mode)
+    func stopMonitoring() {
+        writeTimer?.invalidate()
+        writeTimer = nil
+        print("[UserDefaultsManager] Monitoring stopped")
+    }
+    
+    /// Start monitoring (for thermal emergency mode)
+    func startMonitoring() {
+        stopMonitoring() // Ensure any existing timer is invalidated
+        
+        // Significantly reduce write frequency to prevent heating
+        writeTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in // Increased from 5.0 to 30.0
+            Task { @MainActor in
+                self?.flushPendingWrites()
+            }
+        }
+        
+        print("[UserDefaultsManager] Monitoring started")
     }
 }
 
