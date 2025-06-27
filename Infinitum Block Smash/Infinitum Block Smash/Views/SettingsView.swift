@@ -1261,8 +1261,17 @@ private struct InformationSection: View {
 }
 
 private struct UpdateSettingsSection: View {
+    @State private var showingUpdateManagement = false
+    
     var body: some View {
         Section(header: Text("Update Settings")) {
+            NavigationLink(destination: UpdateManagementView()) {
+                HStack {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                    Text("Update Management")
+                }
+            }
+            
             Toggle("Force Public Version", isOn: Binding(
                 get: { ForcePublicVersion.shared.isEnabled },
                 set: { ForcePublicVersion.shared.isEnabled = $0 }

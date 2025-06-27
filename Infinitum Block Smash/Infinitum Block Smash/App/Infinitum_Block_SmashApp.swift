@@ -606,6 +606,9 @@ struct Infinitum_Block_SmashApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var gameState = GameState()
     @StateObject private var startupManager = StartupManager()
+    @StateObject private var versionCheckService = VersionCheckService.shared
+    @StateObject private var remoteConfigService = RemoteConfigService.shared
+    @StateObject private var maintenanceService = MaintenanceService.shared
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("userID") private var userID: String = ""
     @AppStorage("username") private var username: String = ""
@@ -615,12 +618,15 @@ struct Infinitum_Block_SmashApp: App {
         WindowGroup {
             if !startupManager.isReady {
                 LaunchLoadingView()
+            } else if maintenanceService.shouldShowMaintenanceScreen() {
+                // Show maintenance screen
+                MaintenanceScreenView()
             } else if ForcePublicVersion.shared.isEnabled {
                 // Show the public version update prompt
                 PublicVersionUpdateView()
-            } else if VersionCheckService.shared.isUpdateRequired {
+            } else if versionCheckService.isUpdateRequired {
                 // Show the regular update prompt
-                UpdatePromptView(isTestFlight: VersionCheckService.shared.isTestFlight())
+                UpdatePromptView(isTestFlight: versionCheckService.isTestFlight(), isEmergency: false)
             } else {
                 ContentView()
                     .environmentObject(gameState)
@@ -638,41 +644,18 @@ struct Infinitum_Block_SmashApp: App {
         }
         .onChange(of: scenePhase) { newPhase in
             switch newPhase {
-            case .background:
-                // Save game state when app moves to background (local only)
-                Task {
-                    do {
-                        if gameState.canSaveGame() {
-                            try await gameState.saveProgressLocally()
-                            print("[App] Successfully saved game progress locally in background")
-                        } else {
-                            print("[App] Skipping save - game state not suitable for saving")
-                        }
-                    } catch {
-                        print("[App] Error saving game progress in background: \(error.localizedDescription)")
-                    }
-                }
-                // Notify game scene to pause animations
-                NotificationCenter.default.post(name: NSNotification.Name("PauseBackgroundAnimations"), object: nil)
-            case .inactive:
-                // Save game state when app becomes inactive (local only)
-                Task {
-                    do {
-                        if gameState.canSaveGame() {
-                            try await gameState.saveProgressLocally()
-                            print("[App] Successfully saved game progress locally when inactive")
-                        } else {
-                            print("[App] Skipping save - game state not suitable for saving")
-                        }
-                    } catch {
-                        print("[App] Error saving game progress when inactive: \(error.localizedDescription)")
-                    }
-                }
-                // Notify game scene to pause animations
-                NotificationCenter.default.post(name: NSNotification.Name("PauseBackgroundAnimations"), object: nil)
             case .active:
-                // Resume animations
-                NotificationCenter.default.post(name: NSNotification.Name("ResumeBackgroundAnimations"), object: nil)
+                // App became active - check for updates and maintenance
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    maintenanceService.checkMaintenanceStatus()
+                    versionCheckService.checkForUpdates()
+                }
+            case .inactive:
+                // App became inactive
+                break
+            case .background:
+                // App went to background
+                break
             @unknown default:
                 break
             }

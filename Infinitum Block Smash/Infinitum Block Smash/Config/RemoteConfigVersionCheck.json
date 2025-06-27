@@ -1,0 +1,13 @@
+{
+  "force_update_enabled": false,
+  "minimum_required_version": "1.0.8",
+  "update_check_interval_hours": 1.0,
+  "emergency_update_required": false,
+  "update_message": "A new version is available. Please update to continue playing!",
+  "update_title": "Update Required",
+  "maintenance_mode_enabled": false,
+  "maintenance_message": "",
+  "feature_flags": "{}",
+  "debug_mode_enabled": false,
+  "auto_force_update_enabled": true
+}
