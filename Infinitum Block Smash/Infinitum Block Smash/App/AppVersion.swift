@@ -65,8 +65,8 @@
 import Foundation
 
 struct AppVersion {
-    static let version = "1.0.8"
-    static let build = "2"
+    static let version = "1.0.9"
+    static let build = "1"
     
     // Environment detection
     static var isSimulator: Bool {
@@ -166,6 +166,11 @@ struct AppVersion {
     }
     
     static let changelog: [String: [String]] = [
+        
+        "1.0.9 (Build 1)": [
+            "Performance optimizations",
+            "Bug Fixes and Improvements"
+        ],
         
         "1.0.8 (Build 2)": [
             "Performance optimizations",
