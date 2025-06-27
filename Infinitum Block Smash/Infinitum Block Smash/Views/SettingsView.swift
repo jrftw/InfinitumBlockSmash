@@ -1044,6 +1044,21 @@ private struct StatsForNerdsSection: View {
                                 .foregroundColor(.red)
                         }
                         
+                        // Add regenerate entries button
+                        Button("Regenerate Leaderboard Entries") {
+                            Task {
+                                do {
+                                    try await LeaderboardService.shared.regenerateMissingEntries()
+                                    print("[SettingsView] ✅ Successfully regenerated leaderboard entries")
+                                } catch {
+                                    print("[SettingsView] ❌ Failed to regenerate entries: \(error.localizedDescription)")
+                                }
+                            }
+                        }
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                        .padding(.top, 4)
+                        
                         Text("Device Model: \(DeviceSimulator.shared.getCurrentDeviceModel())")
                             .font(.caption)
                             .foregroundColor(.secondary)

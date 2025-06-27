@@ -331,9 +331,12 @@ struct AdditionalInfoFormView: View {
                     }
                 }
             
-            if viewModel.tempAuthProvider == "gamecenter" {
+            if viewModel.tempAuthProvider == "gamecenter" || viewModel.tempAuthProvider == "apple" {
                 TextField("Email", text: $viewModel.email)
                     .textFieldStyle(ModernTextFieldStyle())
+                    .keyboardType(.emailAddress)
+                    .autocapitalization(.none)
+                    .disableAutocorrection(true)
                 
                 SecureField("Password", text: $viewModel.password)
                     .textFieldStyle(ModernTextFieldStyle())
@@ -343,7 +346,9 @@ struct AdditionalInfoFormView: View {
                 viewModel.completeAdditionalInfo()
             }
             .buttonStyle(ModernButtonStyle())
-            .disabled(!ProfanityFilter.isAppropriate(viewModel.username))
+            .disabled(!ProfanityFilter.isAppropriate(viewModel.username) || 
+                     (viewModel.tempAuthProvider == "gamecenter" || viewModel.tempAuthProvider == "apple") && 
+                     (viewModel.email.isEmpty || viewModel.password.isEmpty))
             
             if viewModel.tempAuthProvider != "force_username_change" {
                 Button("Cancel") {

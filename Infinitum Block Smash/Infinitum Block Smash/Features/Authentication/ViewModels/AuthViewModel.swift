@@ -400,9 +400,25 @@ class AuthViewModel: ObservableObject {
                 }
                 
                 if let user = result?.user {
-                    self.tempUserID = user.uid
-                    self.tempAuthProvider = "gamecenter"
-                    self.showAdditionalInfo = true
+                    // Check if user has email and username set
+                    let email = user.email ?? ""
+                    let username = UserDefaults.standard.string(forKey: "username") ?? ""
+                    
+                    if email.isEmpty || username.isEmpty || username == "unknown" {
+                        // User needs to complete profile setup
+                        self.tempUserID = user.uid
+                        self.tempAuthProvider = "gamecenter"
+                        self.showAdditionalInfo = true
+                        print("[AuthViewModel] Game Center user needs to complete profile setup")
+                    } else {
+                        // User is fully set up - complete authentication
+                        self.userID = user.uid
+                        self.storedUsername = username
+                        self.isGuest = false
+                        self.isLoading = false
+                        self.handleSuccessfulAuth()
+                        print("[AuthViewModel] Game Center user successfully authenticated")
+                    }
                 } else {
                     self.isLoading = false
                     self.errorMessage = "Failed to sign in with Game Center"
@@ -420,6 +436,31 @@ class AuthViewModel: ObservableObject {
         guard ProfanityFilter.isAppropriate(username) else {
             errorMessage = "Username contains inappropriate language."
             return
+        }
+        
+        // Require email and password for Game Center and Apple Sign-In users
+        if tempAuthProvider == "gamecenter" || tempAuthProvider == "apple" {
+            guard !email.isEmpty else {
+                errorMessage = "Please enter an email address."
+                return
+            }
+            
+            guard !password.isEmpty else {
+                errorMessage = "Please enter a password."
+                return
+            }
+            
+            // Basic email validation
+            guard email.contains("@") && email.contains(".") else {
+                errorMessage = "Please enter a valid email address."
+                return
+            }
+            
+            // Basic password validation
+            guard password.count >= 6 else {
+                errorMessage = "Password must be at least 6 characters long."
+                return
+            }
         }
         
         isLoading = true
@@ -442,25 +483,22 @@ class AuthViewModel: ObservableObject {
             return
         }
         
-        if !email.isEmpty && !password.isEmpty {
-            let credential = EmailAuthProvider.credential(withEmail: email, password: password)
-            user.link(with: credential) { [weak self] result, error in
-                guard let self = self else { return }
-                
-                if let error = error as NSError? {
-                    self.isLoading = false
-                    if error.code == AuthErrorCode.credentialAlreadyInUse.rawValue {
-                        self.errorMessage = "This email is already associated with another account."
-                    } else {
-                        self.errorMessage = error.localizedDescription
-                    }
-                    return
+        // Email and password are now required for Game Center users
+        let credential = EmailAuthProvider.credential(withEmail: email, password: password)
+        user.link(with: credential) { [weak self] result, error in
+            guard let self = self else { return }
+            
+            if let error = error as NSError? {
+                self.isLoading = false
+                if error.code == AuthErrorCode.credentialAlreadyInUse.rawValue {
+                    self.errorMessage = "This email is already associated with another account."
+                } else {
+                    self.errorMessage = error.localizedDescription
                 }
-                
-                self.finishProfileSetup(user: user)
+                return
             }
-        } else {
-            finishProfileSetup(user: user)
+            
+            self.finishProfileSetup(user: user)
         }
     }
     
@@ -471,25 +509,22 @@ class AuthViewModel: ObservableObject {
             return
         }
         
-        if !email.isEmpty && !password.isEmpty {
-            let credential = EmailAuthProvider.credential(withEmail: email, password: password)
-            user.link(with: credential) { [weak self] result, error in
-                guard let self = self else { return }
-                
-                if let error = error as NSError? {
-                    self.isLoading = false
-                    if error.code == AuthErrorCode.credentialAlreadyInUse.rawValue {
-                        self.errorMessage = "This email is already associated with another account."
-                    } else {
-                        self.errorMessage = error.localizedDescription
-                    }
-                    return
+        // Email and password are now required for Apple Sign-In users
+        let credential = EmailAuthProvider.credential(withEmail: email, password: password)
+        user.link(with: credential) { [weak self] result, error in
+            guard let self = self else { return }
+            
+            if let error = error as NSError? {
+                self.isLoading = false
+                if error.code == AuthErrorCode.credentialAlreadyInUse.rawValue {
+                    self.errorMessage = "This email is already associated with another account."
+                } else {
+                    self.errorMessage = error.localizedDescription
                 }
-                
-                self.finishProfileSetup(user: user)
+                return
             }
-        } else {
-            finishProfileSetup(user: user)
+            
+            self.finishProfileSetup(user: user)
         }
     }
     

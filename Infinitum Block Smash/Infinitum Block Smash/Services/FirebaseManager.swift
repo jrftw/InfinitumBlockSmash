@@ -1376,7 +1376,13 @@ class FirebaseManager: ObservableObject {
     
     // MARK: - Game Progress Methods
     
-    func loadGameProgress() async throws -> GameProgress {
+    func loadGameProgress(for gameState: GameState) async throws -> GameProgress {
+        // STEP 1: BLOCK CLOUD RESTORE IF LOCAL SAVE EXISTS
+        if gameState.didRestoreFromLocal || !gameState.isNewGame {
+            print("[FirebaseManager] Skipping cloud restore – local save is active.")
+            return GameProgress() // Return empty progress or handle as needed
+        }
+        // ... existing code ...
         guard let userId = currentUser?.uid else {
             throw NSError(domain: "FirebaseManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "No user logged in"])
         }
@@ -1497,7 +1503,7 @@ class FirebaseManager: ObservableObject {
         }
     }
     
-    func performInitialDeviceSync() async throws {
+    func performInitialDeviceSync(for gameState: GameState) async throws {
         guard let userId = Auth.auth().currentUser?.uid else {
             throw FirebaseError.notAuthenticated
         }
@@ -1506,7 +1512,7 @@ class FirebaseManager: ObservableObject {
         let localProgress = getCachedGameProgress()
         
         // Get cloud data
-        let cloudProgress = try await loadGameProgress()
+        let cloudProgress = try await loadGameProgress(for: gameState)
         
         // Compare timestamps and merge data
         if let local = localProgress {

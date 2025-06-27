@@ -325,14 +325,13 @@ struct GameView: View {
         .onAppear {
             print("[DEBUG] GameView appeared - Current level: \(gameState.level)")
             
-            // FIXED: Ensure game is properly initialized for new Classic games (but not when resuming)
+            // FIXED: Only ensure proper initialization for new Classic games (not when resuming)
             if !UserDefaults.standard.bool(forKey: "isTimedMode") && !gameState.isResumingGame {
                 print("[DEBUG] Classic mode detected, ensuring proper initialization")
                 gameState.ensureProperInitialization()
+            } else if gameState.isResumingGame {
+                print("[DEBUG] Resuming game - keeping resuming flag active")
             }
-            
-            // Mark game as started to reset resuming flag
-            gameState.markGameAsStarted()
             
             if showTutorial {
                 showingTutorial = true
@@ -652,6 +651,12 @@ struct GameView: View {
     // Update sync function
     private func syncGameData() async {
         guard !UserDefaults.standard.bool(forKey: "isGuest") else { return }
+        
+        // FIXED: Skip Firebase sync if we're resuming a local game
+        if gameState.isResumingGame {
+            print("[GameView] Skip Firebase sync: Local save already restored")
+            return
+        }
         
         // Check network connectivity first
         guard await NetworkMonitor.shared.checkConnection() else {

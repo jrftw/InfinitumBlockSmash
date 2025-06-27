@@ -164,7 +164,6 @@ final class LeaderboardService: ObservableObject {
         let query = db.collection(type.collectionName)
             .document(period)
             .collection("scores")
-            .whereField(type.scoreField, isGreaterThan: 0)  // Only show scores greater than 0
             .order(by: type.scoreField, descending: type.sortOrder == "desc")
             .limit(to: leaderboardLimit)
         
@@ -211,7 +210,7 @@ final class LeaderboardService: ObservableObject {
                 }
                 
                 // Double check that score is greater than 0
-                guard score > 0 else { return nil }
+                guard score >= 0 else { return nil }
                 
                 return FirebaseManager.LeaderboardEntry(
                     id: document.documentID,
@@ -243,6 +242,29 @@ final class LeaderboardService: ObservableObject {
         listeners.removeValue(forKey: key)
     }
     
+    // Add validation function to check user profile completeness
+    private func validateUserProfile() -> Bool {
+        guard let user = Auth.auth().currentUser else {
+            print("[Leaderboard] ❌ No authenticated user")
+            return false
+        }
+        
+        let email = user.email ?? ""
+        let username = UserDefaults.standard.string(forKey: "username") ?? ""
+        
+        if email.isEmpty {
+            print("[Leaderboard] ❌ User email not set")
+            return false
+        }
+        
+        if username.isEmpty || username == "unknown" {
+            print("[Leaderboard] ❌ User username not set")
+            return false
+        }
+        
+        return true
+    }
+    
     func updateLeaderboard(score: Int, level: Int? = nil, time: TimeInterval? = nil, type: LeaderboardType = .score, username: String? = nil) async throws {
         // Check if already updating
         guard !Self.isUpdatingLeaderboard else {
@@ -257,6 +279,12 @@ final class LeaderboardService: ObservableObject {
         print("[Leaderboard] 🔄 Starting leaderboard update")
         print("[Leaderboard] 📊 Score: \(score), Level: \(level ?? -1), Type: \(type)")
         print("[Leaderboard] 👤 User: \(Auth.auth().currentUser?.uid ?? "unknown")")
+        
+        // Validate user profile completeness
+        guard validateUserProfile() else {
+            print("[Leaderboard] ❌ User profile incomplete - skipping leaderboard update")
+            throw LeaderboardError.invalidData
+        }
         
         // Check if user is guest
         let isGuest = UserDefaults.standard.bool(forKey: "isGuest")
@@ -281,8 +309,14 @@ final class LeaderboardService: ObservableObject {
         let username = username ?? UserDefaults.standard.string(forKey: "username") ?? "unknown"
         
         // Validate username length before writing to leaderboard
-        guard username.count >= 3 else {
+        guard username.count >= 1 else {
             print("[Leaderboard] ❌ Username too short (\(username.count) chars) - skipping leaderboard update")
+            throw LeaderboardError.invalidData
+        }
+        
+        // Ensure username is not "unknown" - this indicates missing username
+        guard username != "unknown" else {
+            print("[Leaderboard] ❌ Username not set - user needs to set username")
             throw LeaderboardError.invalidData
         }
         
@@ -808,6 +842,91 @@ final class LeaderboardService: ObservableObject {
                 print("[Leaderboard] ❌ Retry failed: \(error.localizedDescription)")
             }
         }
+    }
+    
+    // Add function to regenerate missing leaderboard entries
+    func regenerateMissingEntries() async throws {
+        print("[Leaderboard] 🔄 Starting regeneration of missing entries")
+        
+        guard validateUserProfile() else {
+            print("[Leaderboard] ❌ User profile incomplete - cannot regenerate entries")
+            throw LeaderboardError.invalidData
+        }
+        
+        guard let userId = Auth.auth().currentUser?.uid else {
+            print("[Leaderboard] ❌ No authenticated user")
+            throw LeaderboardError.notAuthenticated
+        }
+        
+        let username = UserDefaults.standard.string(forKey: "username") ?? "unknown"
+        let currentScore = max(0, UserDefaults.standard.integer(forKey: "highScore"))
+        let currentLevel = max(1, UserDefaults.standard.integer(forKey: "highestLevel"))
+        let currentTime = max(0, UserDefaults.standard.double(forKey: "bestTime"))
+        
+        // Define all leaderboard types and their data
+        let leaderboards: [(collection: String, data: [String: Any])] = [
+            ("classic_leaderboard", [
+                "userId": userId,
+                "username": username,
+                "score": currentScore,
+                "timestamp": FieldValue.serverTimestamp(),
+                "lastUpdate": FieldValue.serverTimestamp(),
+                "level": currentLevel,
+                "time": currentTime
+            ]),
+            ("achievement_leaderboard", [
+                "userId": userId,
+                "username": username,
+                "points": currentScore,
+                "timestamp": FieldValue.serverTimestamp(),
+                "lastUpdate": FieldValue.serverTimestamp(),
+                "level": currentLevel,
+                "time": currentTime
+            ]),
+            ("classic_timed_leaderboard", [
+                "userId": userId,
+                "username": username,
+                "time": currentTime,
+                "timestamp": FieldValue.serverTimestamp(),
+                "lastUpdate": FieldValue.serverTimestamp(),
+                "level": currentLevel,
+                "score": currentScore
+            ])
+        ]
+        
+        // Define all periods
+        let periods = ["daily", "weekly", "monthly", "alltime"]
+        
+        // Check and regenerate entries for all leaderboard types
+        for (collection, data) in leaderboards {
+            for period in periods {
+                do {
+                    let docRef = db.collection(collection)
+                        .document(period)
+                        .collection("scores")
+                        .document(userId)
+                    
+                    // Check if document exists
+                    let currentDoc = try await docRef.getDocument()
+                    
+                    if !currentDoc.exists {
+                        print("[Leaderboard] 🔄 Creating missing entry for \(collection)/\(period)")
+                        try await docRef.setData(data)
+                        print("[Leaderboard] ✅ Successfully created entry for \(collection)/\(period)")
+                        
+                        // Invalidate cache for this leaderboard
+                        LeaderboardCache.shared.invalidateCache(period: period)
+                    } else {
+                        print("[Leaderboard] ⏭️ Entry exists for \(collection)/\(period)")
+                    }
+                } catch {
+                    print("[Leaderboard] ❌ Error creating entry for \(collection)/\(period): \(error.localizedDescription)")
+                    throw error
+                }
+            }
+        }
+        
+        print("[Leaderboard] ✅ Completed regeneration of missing entries")
     }
 }
 

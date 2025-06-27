@@ -32,8 +32,6 @@ struct LaunchLoadingView: View {
     ]
     
     var body: some View {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
-        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
         ZStack {
             // Animated gradient background
             AnimatedGradient()
@@ -78,7 +76,7 @@ struct LaunchLoadingView: View {
                 }
                 .frame(width: 220, height: 16)
                 .padding(.vertical, 8)
-                Text("v\(version) (\(build))")
+                Text(AppVersion.formattedVersion)
                     .font(.headline)
                     .foregroundColor(.white.opacity(0.8))
                 Spacer()

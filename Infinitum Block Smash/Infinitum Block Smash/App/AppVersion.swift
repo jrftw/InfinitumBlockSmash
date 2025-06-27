@@ -66,14 +66,95 @@ import Foundation
 
 struct AppVersion {
     static let version = "1.0.8"
-    static let build = "1"
+    static let build = "2"
+    
+    // Environment detection
+    static var isSimulator: Bool {
+        #if targetEnvironment(simulator)
+        return true
+        #else
+        return false
+        #endif
+    }
+    
+    static var isTestFlight: Bool {
+        // More reliable TestFlight detection
+        #if DEBUG
+        return false
+        #else
+        // Check for sandbox receipt (TestFlight)
+        if let receiptURL = Bundle.main.appStoreReceiptURL {
+            return receiptURL.lastPathComponent == "sandboxReceipt"
+        }
+        // Fallback: Check if app is distributed via TestFlight
+        return Bundle.main.path(forResource: "embedded", ofType: "mobileprovision") != nil
+        #endif
+    }
+    
+    static var isDevelopmentBuild: Bool {
+        #if DEBUG
+        return true
+        #else
+        return false
+        #endif
+    }
+    
+    static var isAppStoreBuild: Bool {
+        #if DEBUG
+        return false
+        #else
+        // App Store builds have a production receipt
+        if let receiptURL = Bundle.main.appStoreReceiptURL {
+            return receiptURL.lastPathComponent == "receipt"
+        }
+        // If no receipt URL, it's likely a development build
+        return false
+        #endif
+    }
+    
+    // Comprehensive environment detection - ensures we always get the correct type
+    static var buildEnvironment: String {
+        if isSimulator {
+            return "Dev v\(version) (\(build))"
+        } else if isDevelopmentBuild {
+            return "Dev v\(version) (\(build))"
+        } else if isTestFlight {
+            return "Beta v\(version) (\(build))"
+        } else if isAppStoreBuild {
+            return "" // No suffix for App Store
+        } else {
+            // Fallback - if we can't determine, assume development
+            return "Dev v\(version) (\(build))"
+        }
+    }
+    
+    // Safe environment detection for UI display
+    static var shouldShowEnvironmentBadge: Bool {
+        return isSimulator || isDevelopmentBuild || isTestFlight
+    }
     
     static var fullVersion: String {
-        return "\(version) (\(build))"
+        var label = "\(version) (\(build))"
+        if isSimulator {
+            label += " - Dev"
+        } else if isDevelopmentBuild {
+            label += " - Dev"
+        } else if isTestFlight {
+            label += " - Beta"
+        }
+        return label
     }
     
     static var displayVersion: String {
-        return "Version \(version)"
+        var label = "Version \(version)"
+        if isSimulator {
+            label += " - Dev"
+        } else if isDevelopmentBuild {
+            label += " - Dev"
+        } else if isTestFlight {
+            label += " - Beta"
+        }
+        return label
     }
     
     static var buildNumber: Int {
@@ -85,6 +166,11 @@ struct AppVersion {
     }
     
     static let changelog: [String: [String]] = [
+        
+        "1.0.8 (Build 2)": [
+            "Performance optimizations",
+            "Bug Fixes and Improvements"
+        ],
         
         "1.0.8 (Build 1)": [
             "Performance optimizations",
@@ -313,7 +399,15 @@ struct AppVersion {
     ]
     
     static var formattedVersion: String {
-        "Version \(version) (Build \(build))"
+        var label = "Version \(version) (Build \(build))"
+        if isSimulator {
+            label += " - Dev"
+        } else if isDevelopmentBuild {
+            label += " - Dev"
+        } else if isTestFlight {
+            label += " - Beta"
+        }
+        return label
     }
     
     static var copyright: String {

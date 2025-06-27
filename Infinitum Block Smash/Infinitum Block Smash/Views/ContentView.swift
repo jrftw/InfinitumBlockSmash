@@ -144,9 +144,20 @@ struct ContentView: View {
     @State private var showingDebugManager = false
     @State private var onlineUsersObserver: NSObjectProtocol?
     @State private var dailyPlayersObserver: NSObjectProtocol?
+    @State private var showingGuestPlayAlert = false
+    @State private var showingProfileCompletion = false
+    @State private var showingGuestSignInAlert = false
     
     var isLoggedIn: Bool {
         !userID.isEmpty && (!username.isEmpty || isGuest)
+    }
+    
+    // Add profile completion check
+    private var needsProfileCompletion: Bool {
+        guard !isGuest else { return false }
+        let email = Auth.auth().currentUser?.email ?? ""
+        let username = UserDefaults.standard.string(forKey: "username") ?? ""
+        return email.isEmpty || username.isEmpty || username == "unknown"
     }
     
     var body: some View {
@@ -181,6 +192,17 @@ struct ContentView: View {
                             .minimumScaleFactor(0.8)
                             .lineLimit(1)
                         
+                        // Version indicator
+                        if AppVersion.shouldShowEnvironmentBadge {
+                            Text(AppVersion.buildEnvironment)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.orange)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 2)
+                                .background(Color.orange.opacity(0.2))
+                                .cornerRadius(8)
+                        }
+                        
                         HStack(spacing: 12) {
                             Text(onlineUsersCountText)
                                 .font(.system(size: 13, weight: .medium, design: .rounded))
@@ -211,80 +233,127 @@ struct ContentView: View {
                     VStack(spacing: 10) {
                         if gameState.hasSavedGame() {
                             MenuButton(title: "Resume Game", icon: "play.fill", onDelete: {
-                                gameState.deleteSavedGame()
+                                if !isGuest {
+                                    gameState.deleteSavedGame()
+                                }
                             }) {
-                                handleMainMenuInteraction()
-                                // Load the saved game when Resume is clicked
-                                Task {
-                                    do {
-                                        try await gameState.loadSavedGame()
-                                        Logger.shared.log("Successfully loaded saved game", category: .gameState, level: .info)
-                                        
-                                        // Check if it's a timed mode game and show appropriate view
-                                        if UserDefaults.standard.bool(forKey: "isTimedMode") {
-                                            showingClassicTimedView = true
-                                        } else {
+                                if isGuest {
+                                    showingGuestSignInAlert = true
+                                } else {
+                                    handleMainMenuInteraction()
+                                    // Load the saved game when Resume is clicked
+                                    Task {
+                                        do {
+                                            try await gameState.loadSavedGame()
+                                            Logger.shared.log("Successfully loaded saved game", category: .gameState, level: .info)
+                                            
+                                            // Check if it's a timed mode game and show appropriate view
+                                            if UserDefaults.standard.bool(forKey: "isTimedMode") {
+                                                showingClassicTimedView = true
+                                            } else {
+                                                showingGameView = true
+                                            }
+                                        } catch {
+                                            Logger.shared.log("Error loading saved game: \(error.localizedDescription)", category: .gameState, level: .error)
+                                            // If loading fails, clean up the invalid save and start a fresh game
+                                            gameState.deleteSavedGame()
+                                            gameState.resetGame()
                                             showingGameView = true
                                         }
-                                    } catch {
-                                        Logger.shared.log("Error loading saved game: \(error.localizedDescription)", category: .gameState, level: .error)
-                                        // If loading fails, clean up the invalid save and start a fresh game
-                                        gameState.deleteSavedGame()
-                                        gameState.resetGame()
-                                        showingGameView = true
                                     }
                                 }
                             }
+                            .opacity(isGuest ? 0.5 : 1.0)
                         }
                         
                         // Play Button (replaces Game Modes)
                         MenuButton(title: "Play", icon: "gamecontroller.fill") {
-                            handleMainMenuInteraction()
-                            // Check if there's a saved game and ask for confirmation
-                            if gameState.hasSavedGame() {
-                                showingNewGameConfirmation = true
+                            if isGuest {
+                                showingGuestSignInAlert = true
                             } else {
-                                showingGameModeSelection = true
+                                handleMainMenuInteraction()
+                                // Check if there's a saved game and ask for confirmation
+                                if gameState.hasSavedGame() {
+                                    showingNewGameConfirmation = true
+                                } else {
+                                    showingGameModeSelection = true
+                                }
                             }
                         }
+                        .opacity(isGuest ? 0.5 : 1.0)
                         
                         MenuButton(title: "Leaderboard", icon: "trophy.fill") {
-                            handleMainMenuInteraction()
-                            handleLeaderboardAccess()
+                            if isGuest {
+                                showingGuestSignInAlert = true
+                            } else {
+                                handleMainMenuInteraction()
+                                handleLeaderboardAccess()
+                            }
                         }
+                        .opacity(isGuest ? 0.5 : 1.0)
                         
                         MenuButton(title: "Statistics", icon: "chart.bar.fill") {
-                            handleMainMenuInteraction()
-                            showingStats = true
+                            if isGuest {
+                                showingGuestSignInAlert = true
+                            } else {
+                                handleMainMenuInteraction()
+                                showingStats = true
+                            }
                         }
+                        .opacity(isGuest ? 0.5 : 1.0)
                         
                         MenuButton(title: "Change Information", icon: "person.fill") {
-                            handleMainMenuInteraction()
-                            showingChangeInfo = true
+                            if isGuest {
+                                showingGuestSignInAlert = true
+                            } else {
+                                handleMainMenuInteraction()
+                                showingChangeInfo = true
+                            }
                         }
+                        .opacity(isGuest ? 0.5 : 1.0)
                         
                         MenuButton(title: "Store", icon: "cart.fill") {
-                            handleMainMenuInteraction()
-                            showingStore = true
+                            if isGuest {
+                                showingGuestSignInAlert = true
+                            } else {
+                                handleMainMenuInteraction()
+                                showingStore = true
+                            }
                         }
+                        .opacity(isGuest ? 0.5 : 1.0)
                         
                         MenuButton(title: "Announcements", icon: "bell.fill") {
-                            handleMainMenuInteraction()
-                            showingAnnouncements = true
+                            if isGuest {
+                                showingGuestSignInAlert = true
+                            } else {
+                                handleMainMenuInteraction()
+                                showingAnnouncements = true
+                            }
                         }
+                        .opacity(isGuest ? 0.5 : 1.0)
                         
                         MenuButton(title: "Settings", icon: "gear") {
-                            handleMainMenuInteraction()
-                            showingSettings = true
+                            if isGuest {
+                                showingGuestSignInAlert = true
+                            } else {
+                                handleMainMenuInteraction()
+                                showingSettings = true
+                            }
                         }
+                        .opacity(isGuest ? 0.5 : 1.0)
                         
                         // Device Simulation Debug (only in simulator and debug mode)
                         #if targetEnvironment(simulator)
                         if DebugManager.shouldShowDebugFeatures && DebugManager.shouldEnableDeviceSimulation {
                             MenuButton(title: "Device Simulation", icon: "iphone") {
-                                handleMainMenuInteraction()
-                                showingDeviceSimulation = true
+                                if isGuest {
+                                    showingGuestSignInAlert = true
+                                } else {
+                                    handleMainMenuInteraction()
+                                    showingDeviceSimulation = true
+                                }
                             }
+                            .opacity(isGuest ? 0.5 : 1.0)
                         }
                         #endif
                         
@@ -292,9 +361,14 @@ struct ContentView: View {
                         #if DEBUG
                         if DebugManager.shouldShowDebugFeatures {
                             MenuButton(title: "Debug Manager", icon: "wrench.and.screwdriver") {
-                                handleMainMenuInteraction()
-                                showingDebugManager = true
+                                if isGuest {
+                                    showingGuestSignInAlert = true
+                                } else {
+                                    handleMainMenuInteraction()
+                                    showingDebugManager = true
+                                }
                             }
+                            .opacity(isGuest ? 0.5 : 1.0)
                         }
                         #endif
                         
@@ -311,9 +385,14 @@ struct ContentView: View {
                 .padding(.top, 8)
                 .onChange(of: userID) { newValue in
                     if !newValue.isEmpty {
-                        // User logged in, load cloud data
-                        Task {
-                            await gameState.loadCloudData()
+                        // FIXED: Skip Firebase loading if we're resuming a local game
+                        if !gameState.isResumingGame {
+                            // User logged in, load cloud data
+                            Task {
+                                await gameState.loadCloudData()
+                            }
+                        } else {
+                            print("[ContentView] Skip Firebase load: Local save already restored")
                         }
                     }
                 }
@@ -361,6 +440,11 @@ struct ContentView: View {
             }
         }
         .onAppear {
+            // Check if user needs to complete profile
+            if isLoggedIn && needsProfileCompletion {
+                showingProfileCompletion = true
+            }
+            
             // Connect GameState to SceneDelegate
             if let sceneDelegate = UIApplication.shared.connectedScenes.first?.delegate as? SceneDelegate {
                 sceneDelegate.gameState = gameState
@@ -421,6 +505,9 @@ struct ContentView: View {
         .sheet(isPresented: $showingDebugManager) {
             DebugManagerView()
         }
+        .sheet(isPresented: $showingProfileCompletion) {
+            ProfileCompletionView()
+        }
         .alert("Start New Game?", isPresented: $showingNewGameConfirmation) {
             Button("No", role: .cancel) { }
             Button("Yes", role: .destructive) {
@@ -437,6 +524,14 @@ struct ContentView: View {
             Button("Cancel", role: .cancel) { }
         } message: {
             Text("Sign in or create an account to view the leaderboard")
+        }
+        .alert("Sign in Required", isPresented: $showingGuestSignInAlert) {
+            Button("Sign In") {
+                showingAuth = true
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Sign in or create an account to view this feature")
         }
         .fullScreenCover(isPresented: $showingGameModeSelection) {
             GameModeSelectionView(

@@ -74,6 +74,46 @@ import FirebaseFirestore
 import FirebaseAuth
 import StoreKit
 
+// MARK: - GridManager
+class GridManager {
+    static let shared = GridManager()
+    
+    private init() {}
+    
+    /// Serializes the current grid state to a string array
+    func serializeGrid(_ grid: [[BlockColor?]]) -> [[String]] {
+        return grid.map { row in
+            row.map { color in
+                color?.rawValue ?? "nil"
+            }
+        }
+    }
+    
+    /// Deserializes a string array back to a grid
+    func deserializeGrid(_ serializedGrid: [[String]]) -> [[BlockColor?]] {
+        return serializedGrid.map { row in
+            row.map { colorString in
+                colorString == "nil" ? nil : BlockColor(rawValue: colorString)
+            }
+        }
+    }
+    
+    /// Validates that a grid has actual blocks (not empty)
+    func hasBlocks(_ grid: [[String]]) -> Bool {
+        return grid.flatMap { $0 }.contains { $0 != "nil" }
+    }
+    
+    /// Gets the count of blocks in a grid
+    func blockCount(_ grid: [[String]]) -> Int {
+        return grid.flatMap { $0 }.filter { $0 != "nil" }.count
+    }
+    
+    /// Creates an empty grid
+    func createEmptyGrid() -> [[String]] {
+        return Array(repeating: Array(repeating: "nil", count: GameConstants.gridSize), count: GameConstants.gridSize)
+    }
+}
+
 // MARK: - OfflineQueueEntry
 struct OfflineQueueEntry: Codable {
     let progress: GameProgress
@@ -121,6 +161,8 @@ final class GameState: ObservableObject {
     @Published var isPaused: Bool = false
     @Published var targetFPS: Int = FPSManager.shared.getDisplayFPS(for: FPSManager.shared.targetFPS)
     @Published private(set) var isResumingGame: Bool = false
+    @Published var didRestoreFromLocal: Bool = false
+    @Published var isNewGame: Bool = true
     
     // Ad-related state
     @Published private(set) var levelsCompletedSinceLastAd = 0
@@ -287,6 +329,11 @@ final class GameState: ObservableObject {
     private var lastUndoTime: TimeInterval = 0
     private let undoDebounceInterval: TimeInterval = 0.1 // Prevent rapid undo operations
     
+    // Auto-save functionality
+    private var autoSaveTimer: Timer?
+    private let autoSaveInterval: TimeInterval = 60.0 // Save every minute
+    private var lastAutoSaveTime: Date = Date()
+    
     // MARK: - Initialization
     init() {
         // Run data migration if needed
@@ -322,11 +369,14 @@ final class GameState: ObservableObject {
         // Start play time timer
         startPlayTimeTimer()
         
+        // Start auto-save timer
+        startAutoSaveTimer()
+        
         // Perform initial device sync if user is logged in and auto-sync is enabled
         Task {
             if !UserDefaults.standard.bool(forKey: "isGuest") && UserDefaults.standard.bool(forKey: "autoSyncEnabled") {
                 do {
-                    try await FirebaseManager.shared.performInitialDeviceSync()
+                    try await FirebaseManager.shared.performInitialDeviceSync(for: self)
                     print("[GameState] Successfully performed initial device sync")
                 } catch {
                     print("[GameState] Error performing initial device sync: \(error.localizedDescription)")
@@ -344,6 +394,12 @@ final class GameState: ObservableObject {
         NotificationCenter.default.removeObserver(self)
         playTimeTimer?.invalidate()
         playTimeTimer = nil
+        
+        // Stop auto-save timer on main thread
+        DispatchQueue.main.async { [weak self] in
+            self?.stopAutoSaveTimer()
+        }
+        
         Task { [weak self] in
             guard let self = self else { return }
             await cleanupMemory()
@@ -379,6 +435,43 @@ final class GameState: ObservableObject {
         }
     }
     
+    private func startAutoSaveTimer() {
+        autoSaveTimer?.invalidate()
+        DispatchQueue.main.async {
+            self.autoSaveTimer = Timer.scheduledTimer(withTimeInterval: self.autoSaveInterval, repeats: true) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    await self?.performAutoSave()
+                }
+            }
+        }
+    }
+    
+    private func stopAutoSaveTimer() {
+        autoSaveTimer?.invalidate()
+        autoSaveTimer = nil
+    }
+    
+    private func performAutoSave() async {
+        // Only auto-save if game is active and not over
+        guard !isGameOver && !isPaused && canSaveGame() else {
+            return
+        }
+        
+        // Check if enough time has passed since last save
+        let timeSinceLastSave = Date().timeIntervalSince(lastAutoSaveTime)
+        guard timeSinceLastSave >= autoSaveInterval else {
+            return
+        }
+        
+        do {
+            try await saveProgressLocally()
+            lastAutoSaveTime = Date()
+            print("[AutoSave] ✅ Game auto-saved successfully")
+        } catch {
+            print("[AutoSave] ❌ Failed to auto-save: \(error.localizedDescription)")
+        }
+    }
+    
     // MARK: - Private Methods
     private func setupInitialGame() {
         print("[DEBUG] Setting up initial game - Level will be set to 1")
@@ -400,6 +493,7 @@ final class GameState: ObservableObject {
         usedShapes.removeAll(keepingCapacity: true)
         isPerfectLevel = true
         gameStartTime = Date()
+        isNewGame = false // Game is no longer new once it starts
         
         // Reset undo state
         undoStack.clear()
@@ -509,6 +603,8 @@ final class GameState: ObservableObject {
         undoCount = 0
         isPaused = false
         isResumingGame = false
+        didRestoreFromLocal = false
+        isNewGame = true
         
         // Reset session-specific stats
         resetSessionStats()
@@ -799,6 +895,12 @@ final class GameState: ObservableObject {
 
     // In tryPlaceBlockFromTray, save state before placement and reset undo after
     func tryPlaceBlockFromTray(_ block: Block, at position: CGPoint) -> Bool {
+        // FIXED: Mark game as started when player makes their first move
+        if isResumingGame {
+            markGameAsStarted()
+            print("[DEBUG] Game marked as started after first block placement")
+        }
+        
         let row = Int(position.y)
         let col = Int(position.x)
         
@@ -1967,30 +2069,28 @@ final class GameState: ObservableObject {
     }
     
     func loadSavedGame() async throws {
+        // FIXED: Only load from local storage - no Firebase fallback for game saves
+        guard let data = userDefaults.data(forKey: progressKey) else {
+            print("[GameState] No local saved game found")
+            // Post load failure notification
+            NotificationCenter.default.post(name: .gameStateLoadFailed, object: nil)
+            throw GameError.loadFailed(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "No saved game found"]))
+        }
+        
         do {
-            // First try to load from local storage
-            if let data = userDefaults.data(forKey: progressKey) {
-                let decoder = JSONDecoder()
-                let progress = try decoder.decode(GameProgress.self, from: data)
-                
-                // Update state on main thread
-                await MainActor.run {
-                    self.isResumingGame = true
-                    self.restoreGameState(from: progress)
-                }
-                
-                // Notify success
-                NotificationCenter.default.post(name: .gameStateLoaded, object: nil)
-                return
-            }
-            
-            // If no local save, try to load from Firebase
-            let progress = try await FirebaseManager.shared.loadGameProgress()
+            let decoder = JSONDecoder()
+            let progress = try decoder.decode(GameProgress.self, from: data)
             
             // Update state on main thread
             await MainActor.run {
                 self.isResumingGame = true
-                self.restoreGameState(from: progress)
+                do {
+                    try self.restoreGameState(from: progress)
+                } catch {
+                    print("[GameState] Error restoring game state: \(error.localizedDescription)")
+                    // Notify failure
+                    NotificationCenter.default.post(name: .gameStateLoadFailed, object: error)
+                }
             }
             
             // Notify success
@@ -2004,7 +2104,7 @@ final class GameState: ObservableObject {
     }
     
     // NEW: Centralized method to restore game state from GameProgress
-    private func restoreGameState(from progress: GameProgress) {
+    private func restoreGameState(from progress: GameProgress) throws {
         print("[GameState] Restoring game state from saved progress")
         print("[GameState] Progress details: score=\(progress.score), level=\(progress.level), blocksPlaced=\(progress.blocksPlaced)")
         print("[GameState] Grid has blocks: \(progress.grid.flatMap { $0 }.contains { $0 != "nil" })")
@@ -2037,6 +2137,8 @@ final class GameState: ObservableObject {
         score = progress.score
         temporaryScore = progress.temporaryScore
         level = progress.level
+        updateLevelRequirements()
+        print("[GameState] Updated level requirements after loading saved game")
         blocksPlaced = progress.blocksPlaced
         linesCleared = progress.linesCleared
         gamesCompleted = progress.gamesCompleted
@@ -2059,17 +2161,30 @@ final class GameState: ObservableObject {
         lastPlayDate = progress.lastPlayDate
         consecutiveDays = progress.consecutiveDays
         totalTime = progress.totalTime
+        didRestoreFromLocal = true // <--- FLAG TO PREVENT CLOUD OVERRIDE
+        self.isNewGame = false // <--- Mark as not a new game after local restore
         
         print("[GameState] Restored core state: score=\(score), level=\(level), blocksPlaced=\(blocksPlaced)")
         
-        // Convert serialized grid back to BlockColor array
-        grid = progress.grid.map { row in
-            row.map { colorString in
-                colorString == "nil" ? nil : BlockColor(rawValue: colorString)
-            }
+        // FIXED: Set the seed for the restored level to ensure consistent block generation
+        setSeed(for: level)
+        print("[GameState] Set seed for restored level \(level)")
+        
+        // Convert serialized grid back to BlockColor array using GridManager
+        let restoredGrid = GridManager.shared.deserializeGrid(progress.grid)
+        let gridBlockCount = GridManager.shared.blockCount(progress.grid)
+        
+        // Validate the restored grid
+        if gridBlockCount == 0 && (progress.score > 0 || progress.blocksPlaced > 0) {
+            print("[RESTORE] ⚠️ WARNING: Restored empty grid with game progress!")
+            print("[RESTORE] Score: \(progress.score), Blocks placed: \(progress.blocksPlaced)")
+            print("[RESTORE] This indicates the save was corrupted - ABORTING")
+            throw GameError.loadFailed(NSError(domain: "GameState", code: -1, userInfo: [NSLocalizedDescriptionKey: "Cannot restore empty grid with game progress"]))
         }
         
-        print("[GameState] Restored grid with \(grid.flatMap { $0 }.compactMap { $0 }.count) blocks")
+        grid = restoredGrid
+        
+        print("[GameState] Restored grid with \(gridBlockCount) blocks")
         
         // Restore tray - ensure it's valid
         if !progress.tray.isEmpty && progress.tray.count == 3 {
@@ -2140,11 +2255,11 @@ final class GameState: ObservableObject {
         
         print("[GameState] Loaded statistics - Blocks: \(blocksPlaced), Lines: \(linesCleared), Games: \(gamesCompleted), Perfect: \(perfectLevels), High Score: \(highScore), Highest Level: \(highestLevel)")
 
-        // Load from Firebase if user is logged in and auto-sync is enabled
-        if !UserDefaults.standard.bool(forKey: "isGuest") && autoSyncEnabled {
+        // FIXED: Skip Firebase loading if we're resuming a local game
+        if !UserDefaults.standard.bool(forKey: "isGuest") && autoSyncEnabled && !isResumingGame {
             Task {
                 do {
-                    let progress = try await FirebaseManager.shared.loadGameProgress()
+                    let progress = try await FirebaseManager.shared.loadGameProgress(for: self)
                     
                     // Take the higher values between local and cloud data
                     blocksPlaced = max(blocksPlaced, progress.blocksPlaced)
@@ -2163,6 +2278,8 @@ final class GameState: ObservableObject {
                     print("[GameState] Error loading statistics from Firebase: \(error.localizedDescription)")
                 }
             }
+        } else if isResumingGame {
+            print("[GameState] Skip Firebase statistics load: Local save already restored")
         }
     }
 
@@ -2175,25 +2292,26 @@ final class GameState: ObservableObject {
         
         print("[GameState] Saved statistics - Blocks: \(blocksPlaced), Lines: \(linesCleared), Games: \(gamesCompleted), Perfect: \(perfectLevels), High Score: \(highScore), Highest Level: \(highestLevel)")
 
-        // Create current progress
-        let currentProgress = GameProgress(
-            score: score,
-            level: level,
-            blocksPlaced: blocksPlaced,
-            linesCleared: linesCleared,
-            gamesCompleted: gamesCompleted,
-            perfectLevels: perfectLevels,
-            totalPlayTime: totalPlayTime,
-            highScore: highScore,
-            highestLevel: highestLevel,
-            grid: grid,
-            tray: tray,
-            lastSaveTime: Date()
-        )
+        // FIXED: Skip Firebase syncing if we're resuming a local game
+        if !UserDefaults.standard.bool(forKey: "isGuest") && autoSyncEnabled && !isResumingGame {
+            // Create current progress
+            let currentProgress = GameProgress(
+                score: score,
+                level: level,
+                blocksPlaced: blocksPlaced,
+                linesCleared: linesCleared,
+                gamesCompleted: gamesCompleted,
+                perfectLevels: perfectLevels,
+                totalPlayTime: totalPlayTime,
+                highScore: highScore,
+                highestLevel: highestLevel,
+                grid: grid,
+                tray: tray,
+                lastSaveTime: Date()
+            )
 
-        // Sync with Firebase if user is logged in and auto-sync is enabled
-        Task {
-            if !UserDefaults.standard.bool(forKey: "isGuest") && autoSyncEnabled {
+            // Sync with Firebase if user is logged in and auto-sync is enabled
+            Task {
                 let now = Date()
                 let lastSaveTime = userDefaults.object(forKey: "lastFirebaseSaveTime") as? Date ?? Date.distantPast
                 
@@ -2219,6 +2337,8 @@ final class GameState: ObservableObject {
                     }
                 }
             }
+        } else if isResumingGame {
+            print("[GameState] Skip Firebase statistics sync: Local save already restored")
         }
     }
 
@@ -2277,7 +2397,13 @@ final class GameState: ObservableObject {
 
     // Update offline queue sync method
     func syncOfflineQueue() async throws {
-        guard !UserDefaults.standard.bool(forKey: "isGuest") && autoSyncEnabled else { return }
+        // FIXED: Skip offline queue sync if we're resuming a local game
+        guard !UserDefaults.standard.bool(forKey: "isGuest") && autoSyncEnabled && !isResumingGame else { 
+            if isResumingGame {
+                print("[GameState] Skip offline queue sync: Local save already restored")
+            }
+            return 
+        }
         
         // Load offline queue
         loadOfflineQueue()
@@ -2353,8 +2479,14 @@ final class GameState: ObservableObject {
     }
     
     func loadCloudData() async {
+        // FIXED: Skip Firebase loading if we're resuming a local game
+        if isResumingGame {
+            print("[GameState] Skip Firebase load: Local save already restored")
+            return
+        }
+        
         do {
-            let progress = try await FirebaseManager.shared.loadGameProgress()
+            let progress = try await FirebaseManager.shared.loadGameProgress(for: self)
             // Since we're @MainActor, we don't need MainActor.run
             self.score = progress.score
             self.level = progress.level
@@ -2373,11 +2505,16 @@ final class GameState: ObservableObject {
     
     func saveProgress() async throws {
         do {
-            // Convert grid to a format Firebase can handle
-            let serializedGrid = grid.map { row in
-                row.map { color in
-                    color?.rawValue ?? "nil"
-                }
+            // CRITICAL: Snapshot the grid BEFORE any potential clearing
+            let gridSnapshot = GridManager.shared.serializeGrid(grid)
+            let gridBlockCount = GridManager.shared.blockCount(gridSnapshot)
+            
+            // Validate that we're not saving an empty grid when we have game progress
+            if gridBlockCount == 0 && (score > 0 || blocksPlaced > 0) {
+                print("[SAVE] ⚠️ WARNING: Attempting to save empty grid with game progress!")
+                print("[SAVE] Score: \(score), Blocks placed: \(blocksPlaced)")
+                print("[SAVE] This indicates the grid was cleared before save - ABORTING")
+                throw GameError.saveFailed(NSError(domain: "GameState", code: -1, userInfo: [NSLocalizedDescriptionKey: "Cannot save empty grid with game progress"]))
             }
             
             // Get current UserDefaults values for settings
@@ -2407,7 +2544,7 @@ final class GameState: ObservableObject {
                 totalPlayTime: totalPlayTime,
                 highScore: highScore,
                 highestLevel: highestLevel,
-                grid: serializedGrid,
+                grid: gridSnapshot,
                 tray: tray,
                 lastSaveTime: Date(),
                 // NEW: Additional game state
@@ -2442,16 +2579,12 @@ final class GameState: ObservableObject {
                 undoStack: undoStackMoves
             )
             
-            // Save locally first
-            try await saveProgressLocally(progress)
+            print("[SAVE] ✅ Saving game with level \(level), score \(score), grid blocks \(gridBlockCount)")
             
-            // Try to save to Firebase, but continue even if it fails
-            do {
-                try await FirebaseManager.shared.saveGameProgress(progress)
-            } catch {
-                print("[GameState] Firebase save failed: \(error.localizedDescription)")
-                // Continue with local save even if Firebase save fails
-            }
+            // FIXED: Only save locally - no Firebase for game saves
+            try await saveProgressLocally(progress)
+            print("[GameState] Game save completed locally only")
+            
         } catch {
             // Notify failure
             NotificationCenter.default.post(name: .gameStateSaveFailed, object: error)
@@ -2485,11 +2618,16 @@ final class GameState: ObservableObject {
         print("  - tray count: \(tray.count)")
         print("  - tray blocks: \(tray.map { "\($0.color.rawValue)-\($0.shape.rawValue)" })")
         
-        // Convert grid to a format for local storage
-        let serializedGrid = grid.map { row in
-            row.map { color in
-                color?.rawValue ?? "nil"
-            }
+        // CRITICAL: Snapshot the grid BEFORE any potential clearing
+        let gridSnapshot = GridManager.shared.serializeGrid(grid)
+        let gridBlockCount = GridManager.shared.blockCount(gridSnapshot)
+        
+        // Validate that we're not saving an empty grid when we have game progress
+        if gridBlockCount == 0 && (score > 0 || blocksPlaced > 0) {
+            print("[SAVE] ⚠️ WARNING: Attempting to save empty grid with game progress!")
+            print("[SAVE] Score: \(score), Blocks placed: \(blocksPlaced)")
+            print("[SAVE] This indicates the grid was cleared before save - ABORTING")
+            throw GameError.saveFailed(NSError(domain: "GameState", code: -1, userInfo: [NSLocalizedDescriptionKey: "Cannot save empty grid with game progress"]))
         }
         
         // Get current UserDefaults values for settings
@@ -2519,7 +2657,7 @@ final class GameState: ObservableObject {
             totalPlayTime: totalPlayTime,
             highScore: highScore,
             highestLevel: highestLevel,
-            grid: serializedGrid,
+            grid: gridSnapshot,
             tray: tray,
             lastSaveTime: Date(),
             // Additional game state
@@ -2559,7 +2697,7 @@ final class GameState: ObservableObject {
         print("  - temporaryScore: \(progress.temporaryScore)")
         print("  - level: \(progress.level)")
         print("  - blocksPlaced: \(progress.blocksPlaced)")
-        print("  - grid blocks: \(progress.grid.flatMap { $0 }.contains { $0 != "nil" })")
+        print("  - grid blocks: \(gridBlockCount)")
         print("  - tray count: \(progress.tray.count)")
         print("  - tray blocks: \(progress.tray.map { "\($0.color.rawValue)-\($0.shape.rawValue)" })")
         print("  - isNewGame: \(progress.isNewGame)")
@@ -2626,7 +2764,15 @@ final class GameState: ObservableObject {
         tray = []
         score = 0
         temporaryScore = 0
-        level = 1
+        
+        // FIXED: Don't reset level if we're resuming a game
+        if !isResumingGame {
+            level = 1
+            print("[DEBUG] Reset level to 1 (new game)")
+        } else {
+            print("[DEBUG] Keeping level at \(level) (resuming game)")
+        }
+        
         isGameOver = false
         isPaused = false
         previousGrid = nil
@@ -3755,10 +3901,15 @@ final class GameState: ObservableObject {
     func ensureProperInitialization() {
         print("[DEBUG] Ensuring proper game initialization...")
         
-        // Check if level is correct
-        if level != 1 {
-            print("[DEBUG] Level is \(level), resetting to 1")
+        // FIXED: Don't reset level if we're resuming a game
+        // Only reset level to 1 for truly new games
+        if level != 1 && !isResumingGame {
+            print("[DEBUG] Level is \(level) and not resuming, resetting to 1")
             level = 1
+        } else if isResumingGame {
+            print("[DEBUG] Resuming game - keeping level at \(level)")
+            updateLevelRequirements()
+            print("[DEBUG] Level requirements updated for resumed game")
         }
         
         // Check if tray is properly filled
@@ -3768,18 +3919,20 @@ final class GameState: ObservableObject {
             refillTray(skipGameStateCheck: true)
         }
         
-        // Check if grid is empty
-        let gridBlockCount = grid.flatMap { $0 }.compactMap { $0 }.count
-        if gridBlockCount > 0 {
-            print("[DEBUG] Grid has \(gridBlockCount) blocks, clearing")
-            grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
-        }
-        
-        // Check if score is reset
-        if score != 0 || temporaryScore != 0 {
-            print("[DEBUG] Score not reset, clearing")
-            score = 0
-            temporaryScore = 0
+        // Check if grid is empty (only for new games, not resumed games)
+        if !isResumingGame {
+            let gridBlockCount = grid.flatMap { $0 }.compactMap { $0 }.count
+            if gridBlockCount > 0 {
+                print("[DEBUG] Grid has \(gridBlockCount) blocks, clearing")
+                grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
+            }
+            
+            // Check if score is reset (only for new games)
+            if score != 0 || temporaryScore != 0 {
+                print("[DEBUG] Score not reset, clearing")
+                score = 0
+                temporaryScore = 0
+            }
         }
         
         // Check if game state flags are correct
@@ -3789,7 +3942,7 @@ final class GameState: ObservableObject {
             levelComplete = false
         }
         
-        print("[DEBUG] Game initialization check complete - Level: \(level), Tray: \(tray.count), Score: \(score)")
+        print("[DEBUG] Game initialization check complete - Level: \(level), Tray: \(tray.count), Score: \(score), IsResuming: \(isResumingGame)")
         
         // Notify delegate of any changes
         delegate?.gameStateDidUpdate()
@@ -3831,6 +3984,18 @@ final class GameState: ObservableObject {
     func startNewGame() {
         print("[GameState] Starting new game - clearing all previous state")
         
+        // Check if user profile is complete (for non-guest users)
+        if !UserDefaults.standard.bool(forKey: "isGuest") {
+            let email = Auth.auth().currentUser?.email ?? ""
+            let username = UserDefaults.standard.string(forKey: "username") ?? ""
+            
+            if email.isEmpty || username.isEmpty || username == "unknown" {
+                print("[GameState] ❌ User profile incomplete - cannot start game")
+                // This will trigger the profile completion view in ContentView
+                return
+            }
+        }
+        
         // Delete any existing saved game
         deleteSavedGame()
         
@@ -3847,66 +4012,17 @@ final class GameState: ObservableObject {
         
         // Reset to completely fresh state
         resetGame()
-        
-        // Ensure we start at exactly level 1 with no previous data
-        level = 1
-        score = 0
-        temporaryScore = 0
-        isGameOver = false
-        isPaused = false
-        levelComplete = false
-        isResumingGame = false
-        
-        // Clear grid completely
-        grid = Array(repeating: Array(repeating: nil, count: GameConstants.gridSize), count: GameConstants.gridSize)
-        
-        // Generate fresh tray
-        tray = []
-        refillTray(skipGameStateCheck: true)
-        
-        // Reset all game state flags
-        canUndo = false
-        adUndoCount = 3
-        showingAchievementNotification = false
-        currentAchievement = nil
-        isPerfectLevel = true
-        undoCount = 0
-        currentChain = 0
-        usedColors.removeAll()
-        usedShapes.removeAll()
-        totalTime = 0
-        gameStartTime = Date()
-        
-        // Clear undo stack
-        undoStack.clear()
-        
-        // Reset ad-related state
-        levelsCompletedSinceLastAd = 0
-        adsWatchedThisGame = 0
-        hasUsedContinueAd = false
-        
-        // Reset hint state
-        hintManager.reset()
-        
-        // Clear scoring breakdown
-        scoringBreakdown.removeAll()
-        currentLevelBreakdown.removeAll()
-        
-        // Set fresh seed for new game
-        setSeed(for: level)
-        
-        // Validate fresh state
-        validateNewGameState()
-        
-        // Notify delegate
-        delegate?.gameStateDidUpdate()
-        
-        print("[GameState] New game started successfully - all state reset to fresh")
     }
     
     /// Validates that the new game state is properly initialized
     private func validateNewGameState() {
-        // Validate level
+        // FIXED: Don't validate level for resumed games
+        if isResumingGame {
+            print("[GameState] Skipping new game validation - resuming saved game")
+            return
+        }
+        
+        // Validate level (only for new games)
         guard level == 1 else {
             print("[ERROR] New game level is not 1: \(level)")
             level = 1
@@ -4034,12 +4150,20 @@ final class GameState: ObservableObject {
     /// Performs a comprehensive load with validation
     func loadSavedGameWithValidation() async throws {
         try await loadSavedGame()
+        updateLevelRequirements()
+        print("[GameState] Updated level requirements after loading saved game with validation")
         
         guard validateLoadedGameState() else {
-            // If validation fails, reset to a safe state
-            print("[GameState] Loaded state validation failed, resetting to safe state")
-            startNewGame()
-            throw GameError.loadFailed(NSError(domain: "GameState", code: -1, userInfo: [NSLocalizedDescriptionKey: "Loaded game state validation failed"]))
+            // If validation fails, don't reset to new game if we're resuming
+            if isResumingGame {
+                print("[GameState] Loaded state validation failed for resumed game - throwing error instead of resetting")
+                throw GameError.loadFailed(NSError(domain: "GameState", code: -1, userInfo: [NSLocalizedDescriptionKey: "Loaded game state validation failed for resumed game"]))
+            } else {
+                // Only reset to new game if this wasn't a resumed game
+                print("[GameState] Loaded state validation failed, resetting to safe state")
+                startNewGame()
+                throw GameError.loadFailed(NSError(domain: "GameState", code: -1, userInfo: [NSLocalizedDescriptionKey: "Loaded game state validation failed"]))
+            }
         }
     }
     
@@ -4098,5 +4222,165 @@ final class GameState: ObservableObject {
     func markGameAsStarted() {
         isResumingGame = false
         print("[GameState] Game marked as started - resuming flag reset")
+    }
+    
+    /// Ensures game state is saved before any destructive operations
+    func saveBeforeGridClear() async {
+        // Only save if we have actual game progress
+        guard canSaveGame() else {
+            print("[SAVE] Skipping pre-clear save - no valid game state")
+            return
+        }
+        
+        do {
+            try await saveProgressLocally()
+            print("[SAVE] ✅ Pre-clear save completed successfully")
+        } catch {
+            print("[SAVE] ❌ Pre-clear save failed: \(error.localizedDescription)")
+        }
+    }
+}
+
+// MARK: - GameState Restore Patch for Cursor
+extension GameState {
+    
+    // Ensure all level-specific settings are reapplied after load
+    private func patchRestoredGameState(_ progress: GameProgress) {
+        self.level = progress.level
+        self.setSeed(for: level)
+        self.updateLevelRequirements()
+        self.tray = progress.tray
+        self.score = progress.score
+        self.temporaryScore = progress.temporaryScore
+        self.blocksPlaced = progress.blocksPlaced
+        self.currentChain = progress.currentChain
+        self.isPerfectLevel = progress.isPerfectLevel
+        self.isResumingGame = true
+        self.isNewGame = false
+        self.levelComplete = false
+        
+        // CRITICAL: Restore grid using GridManager
+        let restoredGrid = GridManager.shared.deserializeGrid(progress.grid)
+        let gridBlockCount = GridManager.shared.blockCount(progress.grid)
+        
+        // Validate the restored grid
+        if gridBlockCount == 0 && (progress.score > 0 || progress.blocksPlaced > 0) {
+            print("[PATCH] ⚠️ WARNING: Restored empty grid with game progress!")
+            print("[PATCH] Score: \(progress.score), Blocks placed: \(progress.blocksPlaced)")
+            print("[PATCH] This indicates the save was corrupted - ABORTING")
+            return
+        }
+        
+        self.grid = restoredGrid
+        
+        print("[Patch] Restored level \(level) with seed + requirements + tray count: \(tray.count)")
+        print("[Patch] Score: \(score), Blocks placed: \(blocksPlaced), Grid blocks: \(gridBlockCount)")
+    }
+    
+    // Override the main load function to include proper patching
+    func loadSavedGameFromLocal() async {
+        guard let data = UserDefaults.standard.data(forKey: "gameProgress") else {
+            print("[Load] ❌ No saved game found in local storage.")
+            return
+        }
+        
+        do {
+            let decoder = JSONDecoder()
+            let progress = try decoder.decode(GameProgress.self, from: data)
+            await MainActor.run {
+                self.patchRestoredGameState(progress)
+                self.scheduleUpdate()
+                self.delegate?.gameStateDidUpdate()
+                print("[Load] ✅ Game state fully restored from local save.")
+            }
+        } catch {
+            print("[Load] ❌ Failed to decode saved game: \(error.localizedDescription)")
+        }
+    }
+
+    // Call this to manually trigger a local save
+    func saveGameToLocal() {
+        // CRITICAL: Snapshot the grid BEFORE any potential clearing
+        let gridSnapshot = GridManager.shared.serializeGrid(grid)
+        let gridBlockCount = GridManager.shared.blockCount(gridSnapshot)
+        
+        // Validate that we're not saving an empty grid when we have game progress
+        if gridBlockCount == 0 && (score > 0 || blocksPlaced > 0) {
+            print("[SAVE] ⚠️ WARNING: Attempting to save empty grid with game progress!")
+            print("[SAVE] Score: \(score), Blocks placed: \(blocksPlaced)")
+            print("[SAVE] This indicates the grid was cleared before save - ABORTING")
+            return
+        }
+        
+        // Get current UserDefaults values for settings
+        let previewEnabled = UserDefaults.standard.bool(forKey: "previewEnabled")
+        let previewHeightOffset = UserDefaults.standard.double(forKey: "previewHeightOffset")
+        let isTimedMode = UserDefaults.standard.bool(forKey: "isTimedMode")
+        let soundEnabled = UserDefaults.standard.bool(forKey: "soundEnabled")
+        let hapticsEnabled = UserDefaults.standard.bool(forKey: "hapticsEnabled")
+        let musicVolume = UserDefaults.standard.double(forKey: "musicVolume")
+        let sfxVolume = UserDefaults.standard.double(forKey: "sfxVolume")
+        let difficulty = UserDefaults.standard.string(forKey: "difficulty") ?? "normal"
+        let theme = UserDefaults.standard.string(forKey: "theme") ?? "auto"
+        let autoSave = UserDefaults.standard.bool(forKey: "autoSave")
+        let placementPrecision = UserDefaults.standard.double(forKey: "placementPrecision")
+        let blockDragOffset = UserDefaults.standard.double(forKey: "blockDragOffset")
+        
+        // Get undo stack (limit to last 5 moves for storage efficiency)
+        let undoStackMoves = Array(undoStack.allMoves.suffix(5))
+        
+        let progress = GameProgress(
+            score: self.score,
+            level: self.level,
+            blocksPlaced: self.blocksPlaced,
+            linesCleared: self.linesCleared,
+            gamesCompleted: self.gamesCompleted,
+            perfectLevels: self.perfectLevels,
+            totalPlayTime: self.totalPlayTime,
+            highScore: self.highScore,
+            highestLevel: self.highestLevel,
+            grid: gridSnapshot,
+            tray: self.tray,
+            lastSaveTime: Date(),
+            temporaryScore: self.temporaryScore,
+            currentChain: self.currentChain,
+            usedColors: self.usedColors,
+            usedShapes: self.usedShapes,
+            isPerfectLevel: self.isPerfectLevel,
+            undoCount: self.undoCount,
+            adUndoCount: self.adUndoCount,
+            hasUsedContinueAd: self.hasUsedContinueAd,
+            levelsCompletedSinceLastAd: self.levelsCompletedSinceLastAd,
+            adsWatchedThisGame: self.adsWatchedThisGame,
+            isPaused: self.isPaused,
+            targetFPS: self.targetFPS,
+            gameStartTime: self.gameStartTime,
+            lastPlayDate: self.lastPlayDate,
+            consecutiveDays: self.consecutiveDays,
+            totalTime: self.totalTime,
+            previewEnabled: previewEnabled,
+            previewHeightOffset: previewHeightOffset,
+            isTimedMode: isTimedMode,
+            soundEnabled: soundEnabled,
+            hapticsEnabled: hapticsEnabled,
+            musicVolume: musicVolume,
+            sfxVolume: sfxVolume,
+            difficulty: difficulty,
+            theme: theme,
+            autoSave: autoSave,
+            placementPrecision: placementPrecision,
+            blockDragOffset: blockDragOffset,
+            undoStack: undoStackMoves
+        )
+        
+        do {
+            let encoder = JSONEncoder()
+            let data = try encoder.encode(progress)
+            UserDefaults.standard.set(data, forKey: "gameProgress")
+            UserDefaults.standard.set(true, forKey: "hasSavedGame")
+            print("[Save] ✅ Game state saved locally with level \(progress.level), tray \(progress.tray.count), grid blocks \(gridBlockCount)")
+        } catch {
+            print("[Save] ❌ Failed to encode game state: \(error.localizedDescription)")
+        }
     }
 }
