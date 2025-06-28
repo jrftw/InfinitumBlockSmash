@@ -60,6 +60,7 @@
 
 import Foundation
 import Combine
+import SwiftUI
 
 class StartupManager: ObservableObject {
     @Published var isReady: Bool = false
